@@ -1,0 +1,53 @@
+model_list:
+  # --- LOCAL MODELS (via Ollama) ---
+  - model_name: local/gemma3         # Default — gemma3:4b for 8GB M1
+    litellm_params:
+      model: ollama/gemma3:4b
+      api_base: http://localhost:11434
+
+  - model_name: local/gemma3-lite    # Constrained hardware fallback
+    litellm_params:
+      model: ollama/gemma3:4b
+      api_base: http://localhost:11434
+
+  - model_name: local/llama3         # Alt — better for tool-calling / code
+    litellm_params:
+      model: ollama/llama3:8b
+      api_base: http://localhost:11434
+
+  - model_name: local/mistral        # Emergency fallback
+    litellm_params:
+      model: ollama/mistral
+      api_base: http://localhost:11434
+
+  # --- CLOUD MODELS ---
+  - model_name: cloud/gemini-pro           # Primary cloud model (orchestrator + all workers)
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: gemini/gemini-1.5-pro      # Direct alias (used by onyx-client.ts CLOUD_MODEL env)
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: cloud/claude-sonnet        # Fallback / specialty tasks
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: cloud/groq-llama           # Fast inference option
+    litellm_params:
+      model: groq/llama3-70b-8192
+      api_key: os.environ/GROQ_API_KEY
+
+router_settings:
+  rpm_limit: 100
+
+litellm_settings:
+  max_budget: 5.0
+  budget_duration: 1d
+
+# IMPORTANT: When a user creates a new department with a custom model_name,
+# validate it against this list before saving. Reject with:
+# "Model 'X' is not configured in LiteLLM. Add it to litellm_config.yaml first."

@@ -1,0 +1,75 @@
+# Crost — Onyx Lite Profile
+# Resource-constrained Docker Compose (no heavy indexing services)
+# Run with: docker compose -f docker-compose.onyx-lite.yml up -d
+#
+# Prerequisites:
+#   1. Clone Onyx submodule: git submodule add https://github.com/onyx-dot-app/onyx.git onyx
+#   2. Copy .env.example to .env and fill in values
+#   3. Ollama must be running on host at port 11434
+
+version: "3.8"
+
+services:
+  onyx-backend:
+    image: onyxdotapp/onyx-backend:latest
+    environment:
+      - AUTH_TYPE=disabled
+      - POSTGRES_HOST=relational_db
+      - VESPA_DEPLOYMENT_ZIP=/app/vespa-app.zip
+      - MODEL_SERVER_HOST=inference_model_server
+      - LITELLM_EXTRA_HEADERS={}
+      - ENV_SEED_CONFIGURATION={}
+    depends_on:
+      - relational_db
+      - inference_model_server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  onyx-web-server:
+    image: onyxdotapp/onyx-web-server:latest
+    environment:
+      - INTERNAL_URL=http://onyx-backend:8080
+    depends_on:
+      - onyx-backend
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+
+  inference_model_server:
+    image: onyxdotapp/onyx-model-server:latest
+    environment:
+      - MIN_THREADS_ML_MODELS=1
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+
+  relational_db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=onyx
+      - POSTGRES_PASSWORD=onyx_local
+      - POSTGRES_DB=onyx
+    volumes:
+      - onyx_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    environment:
+      - GOOGLE_AI_STUDIO_API_KEY=${GOOGLE_AI_STUDIO_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  onyx_postgres_data:

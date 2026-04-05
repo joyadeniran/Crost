@@ -1,0 +1,88 @@
+# Crost — Minimal Profile for 8GB M1 Macs
+# Skips onyx-model-server (inference handled by Ollama on host via LiteLLM)
+# Run with: docker compose -f docker-compose.minimal.yml up -d
+#
+# Prerequisites:
+#   1. Ollama running on host: ollama serve (and model pulled: ollama pull gemma3:4b)
+#   2. Copy .env.example → .env and fill GOOGLE_AI_STUDIO_API_KEY etc.
+
+version: "3.8"
+
+services:
+  onyx-backend:
+    image: onyxdotapp/onyx-backend:latest
+    environment:
+      - AUTH_TYPE=disabled
+      - POSTGRES_HOST=relational_db
+      - POSTGRES_USER=onyx
+      - POSTGRES_PASSWORD=onyx_local
+      - POSTGRES_DB=onyx
+      - VESPA_DEPLOYMENT_ZIP=/app/vespa-app.zip
+      # Point Onyx model inference to LiteLLM (which routes to Ollama on host)
+      - MODEL_SERVER_HOST=litellm
+      - MODEL_SERVER_PORT=4000
+      - LITELLM_EXTRA_HEADERS={}
+      - ENV_SEED_CONFIGURATION={}
+    depends_on:
+      - relational_db
+      - litellm
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 900M
+
+  onyx-web-server:
+    image: onyxdotapp/onyx-web-server:latest
+    environment:
+      - INTERNAL_URL=http://onyx-backend:8080
+    depends_on:
+      - onyx-backend
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+
+  relational_db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=onyx
+      - POSTGRES_PASSWORD=onyx_local
+      - POSTGRES_DB=onyx
+    volumes:
+      - onyx_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    environment:
+      - GOOGLE_AI_STUDIO_API_KEY=${GOOGLE_AI_STUDIO_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    # Allows containers to reach Ollama running on the host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+
+volumes:
+  onyx_postgres_data:

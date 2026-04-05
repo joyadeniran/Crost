@@ -1,0 +1,137 @@
+'use client'
+
+import { usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { ModeToggle } from '@/components/ui/ModeToggle'
+import { useCrostStore } from '@/lib/store'
+
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard':               'Agent Office',
+  '/dashboard/approvals':     'Approval Feed',
+  '/dashboard/memos':         'Company Memos',
+  '/dashboard/settings':      'Settings',
+  '/dashboard/event-log':     'Event Log',
+  '/dashboard/departments/new': 'New Department',
+}
+
+function BellIcon() {
+  return (
+    <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+      <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+    </svg>
+  )
+}
+
+export function Topbar() {
+  const pathname = usePathname()
+  const pendingCount = useCrostStore(s => s.pendingApprovalCount)
+
+  // Match dept pages — extract slug for richer title
+  const isDeptPage = pathname.startsWith('/dashboard/departments/') && pathname !== '/dashboard/departments/new'
+  const isDeptSettings = isDeptPage && pathname.endsWith('/settings')
+  const title = isDeptSettings
+    ? 'Department Settings'
+    : isDeptPage
+    ? 'Department'
+    : PAGE_TITLES[pathname] ?? 'Crost'
+
+  return (
+    <div style={{
+      height: 52,
+      minHeight: 52,
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--bg-2)',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 20px',
+      gap: 12,
+    }}>
+      {/* Title */}
+      <span style={{
+        fontFamily: 'var(--font-syne, Syne)',
+        fontWeight: 600,
+        fontSize: 14,
+        color: 'var(--text)',
+        flex: 1,
+      }}>
+        {title}
+      </span>
+
+      {/* Right controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ModeToggle />
+
+        {/* Bell */}
+        <Link
+          href="/dashboard/approvals"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-2)',
+            textDecoration: 'none',
+            position: 'relative',
+            transition: 'all 0.15s',
+          }}
+        >
+          <BellIcon />
+          {pendingCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: -4,
+              right: -4,
+              width: 16,
+              height: 16,
+              background: 'var(--red)',
+              borderRadius: 8,
+              fontSize: 9,
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              border: '2px solid var(--bg-2)',
+            }}>
+              {pendingCount}
+            </span>
+          )}
+        </Link>
+
+        {/* Settings */}
+        <Link
+          href="/dashboard/settings"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-2)',
+            textDecoration: 'none',
+            transition: 'all 0.15s',
+          }}
+        >
+          <GearIcon />
+        </Link>
+      </div>
+    </div>
+  )
+}
