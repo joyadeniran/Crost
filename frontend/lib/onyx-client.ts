@@ -18,11 +18,9 @@ import type {
 const ONYX_API_URL = process.env.ONYX_API_URL ?? 'http://localhost:8080'
 const ONYX_API_KEY = process.env.ONYX_API_KEY ?? ''
 
-// Cloud model used for orchestrator and marketing (better reasoning + creativity)
-const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-1.5-pro'
-// Cloud model for data-focused workers (sales, ops)
-const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-1.5-pro'
-// LiteLLM proxy URL (routes cloud/local calls)
+// llama-3.3-70b-versatile: 128k context, better instruction following than llama3-70b-8192
+const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile'
+const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
 const LITELLM_URL = process.env.LITELLM_URL ?? 'http://localhost:4000'
 const LITELLM_KEY = process.env.LITELLM_KEY ?? process.env.GEMINI_API_KEY ?? ''
 
@@ -153,32 +151,42 @@ async function getMemoBrief(departmentSlug: string): Promise<string> {
   }
 }
 
-// ─── Direct Gemini API call ───────────────────────────────────────────────────
-// Calls Google Gemini directly via REST — no LiteLLM required for cloud mode.
-// Model name must be bare (e.g. 'gemini-1.5-pro'), not 'gemini/gemini-1.5-pro'.
+// ─── Direct LLM Providers ─────────────────────────────────────────────────────
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+async function callGroq(modelName: string, prompt: string, systemNote?: string): Promise<{ content: string; tokensUsed: number }> {
+  const apiKey = process.env.GROQ_API_KEY
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set')
 
-function resolveGeminiModelName(model: string): string {
-  // Strip any 'gemini/' or 'cloud/' prefix — API wants bare model name
-  return model
-    .replace(/^gemini\//, '')
-    .replace(/^cloud\/gemini-/, 'gemini-')
-    .replace(/^cloud\//, '')
-    || 'gemini-1.5-pro'
+  const messages = []
+  if (systemNote) messages.push({ role: 'system', content: systemNote })
+  messages.push({ role: 'user', content: prompt })
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model: modelName, messages, temperature: 0.3 }),
+  })
+  
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Groq API error ${res.status}: ${errText}`)
+  }
+  
+  const data = await res.json()
+  return {
+    content: data.choices?.[0]?.message?.content ?? '',
+    tokensUsed: data.usage?.total_tokens ?? 0
+  }
 }
 
-async function callLLM(
-  model: string,
-  prompt: string,
-  _systemNote?: string
-): Promise<{ content: string; tokensUsed: number }> {
-  const apiKey = LITELLM_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY || ''
-  if (!apiKey) throw new Error('No Gemini API key configured. Set GEMINI_API_KEY in .env.local')
-
-  const modelName = resolveGeminiModelName(model)
-  const url = `${GEMINI_API_BASE}/${modelName}:generateContent?key=${apiKey}`
-
+async function callGemini(modelName: string, prompt: string): Promise<{ content: string; tokensUsed: number }> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set')
+  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
@@ -195,77 +203,161 @@ async function callLLM(
     throw new Error(`Gemini API error ${res.status}: ${errText}`)
   }
 
-  const data = await res.json() as {
-    candidates?: Array<{ content: { parts: Array<{ text: string }> } }>
-    usageMetadata?: { totalTokenCount: number }
+  const data = await res.json()
+  return {
+    content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+    tokensUsed: data.usageMetadata?.totalTokenCount ?? 0
   }
+}
 
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  const tokensUsed = data.usageMetadata?.totalTokenCount ?? 0
-
-  return { content, tokensUsed }
+async function callLLM(
+  model: string,
+  prompt: string,
+  systemNote?: string
+): Promise<{ content: string; tokensUsed: number }> {
+  // Route to the correct provider REST API manually since LiteLLM isn't running
+  if (model.startsWith('groq/')) {
+    return callGroq(model.replace('groq/', ''), prompt, systemNote)
+  }
+  
+  if (model.startsWith('gemini/') || model.startsWith('cloud/')) {
+    const modelName = model
+      .replace(/^gemini\//, '')
+      .replace(/^cloud\/gemini-/, 'gemini-')
+      .replace(/^cloud\//, '') || 'gemini-1.5-pro'
+    return callGemini(modelName, prompt)
+  }
+  
+  throw new Error(`Unsupported direct LLM model format: ${model}`)
 }
 
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-const ORCHESTRATOR_SYSTEM_NOTE = `You MUST respond with valid JSON only. No prose before or after. No markdown code blocks. Raw JSON only.`
+const ORCHESTRATOR_SYSTEM_NOTE = `You MUST respond with valid JSON only. No prose before or after. No markdown code blocks. Raw JSON only.
+
+Your response must match this schema exactly:
+
+{
+  "goal": "the founder's original input verbatim",
+  "risk_note": "one sentence mandatory risk assessment — NEVER null or empty",
+  "data_gathered": {
+    "sales": "summary of sales data, or null",
+    "marketing": "summary of marketing data, or null",
+    "ops": "summary of ops data, or null"
+  },
+  "tasks": [
+    {
+      "id": "uuid-v4",
+      "dept": "sales",
+      "action": "snake_case_action_name",
+      "label": "Human readable label shown to founder",
+      "reasoning": "Why this task serves the goal — NEVER null or empty",
+      "params": {},
+      "risk_level": "low",
+      "model": "groq/llama-3.3-70b-versatile",
+      "depends_on": []
+    }
+  ]
+}
+
+FIELD RULES:
+- "dept" must be exactly one of: "sales", "marketing", "ops" — no other values
+- "risk_level" must be exactly one of: "low", "medium", "high", "critical"
+- "risk_note" must be a non-empty string — never null
+- "reasoning" on every task must be a non-empty string — never null
+- "params" must be an object — never null
+- "depends_on" must be an array — empty array if no dependencies`
 
 /**
  * Validates the orchestrator's JSON output against the spec schema.
  * Returns null if invalid — caller must handle gracefully.
  */
-function parseOrchestratorResponse(raw: string): OrchestratorPlan | null {
-  // Strip any accidental markdown code fences
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
+type ParseResult =
+  | { ok: true; plan: OrchestratorPlan }
+  | { ok: false; reason: string; rawPreview: string }
+
+function parseOrchestratorResponse(raw: string): ParseResult {
+  // Strategy 1: try the full response as JSON (ideal case — model followed instructions)
+  // Strategy 2: extract the first {...} block (handles prose before/after JSON)
+  // Strategy 3: strip markdown fences anywhere in the string and re-try
+  let jsonStr = raw.trim()
+
+  // Strip markdown code fences anywhere (not just at start)
+  jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+
+  // If it still doesn't start with {, find the first { ... }
+  if (!jsonStr.startsWith('{')) {
+    const firstBrace = jsonStr.indexOf('{')
+    const lastBrace = jsonStr.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1)
+    }
+  }
 
   let parsed: Partial<OrchestratorPlan> & { tasks?: Partial<OrchestratorTask>[] }
   try {
-    parsed = JSON.parse(cleaned)
+    parsed = JSON.parse(jsonStr)
   } catch {
-    console.error('[parseOrchestratorResponse] JSON parse failed:', cleaned.slice(0, 200))
-    return null
+    const preview = raw.slice(0, 400)
+    console.error('[parseOrchestratorResponse] JSON parse failed. Raw preview:', preview)
+    return { ok: false, reason: `JSON parse failed. Model response: ${preview}`, rawPreview: preview }
   }
 
-  // risk_note is MANDATORY per spec
   if (!parsed.risk_note || parsed.risk_note.trim() === '') {
-    console.error('[parseOrchestratorResponse] Missing or empty risk_note')
-    return null
+    return { ok: false, reason: 'risk_note is missing or empty', rawPreview: jsonStr.slice(0, 200) }
   }
 
   if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
-    console.error('[parseOrchestratorResponse] No tasks array')
-    return null
+    return { ok: false, reason: 'tasks array is missing or empty', rawPreview: jsonStr.slice(0, 200) }
   }
 
   const validDepts: WorkerDept[] = ['sales', 'marketing', 'ops']
   const validRisks = ['low', 'medium', 'high', 'critical']
 
   for (const t of parsed.tasks) {
+    // Normalise common field-name variations the model might use
+    const raw = t as unknown as Record<string, unknown>
+    if (!t.dept) {
+      // "department", "departments", "department_slug", "team"
+      t.dept = (raw.department ?? raw.department_slug ?? raw.team ?? raw.worker ?? '') as WorkerDept
+    }
+    if (!t.action)     t.action     = String(raw.action_type ?? raw.task_action ?? raw.type ?? '')
+    if (!t.label)      t.label      = String(raw.title ?? raw.name ?? raw.description ?? t.action)
+    if (!t.reasoning)  t.reasoning  = String(raw.rationale ?? raw.justification ?? raw.reason ?? '')
+    if (!t.risk_level) t.risk_level = String(raw.risk ?? raw.priority ?? 'medium') as typeof t.risk_level
+
+    // Normalise dept to lowercase
+    if (typeof t.dept === 'string') t.dept = t.dept.toLowerCase() as WorkerDept
+
+    // Auto-fill missing reasoning rather than rejecting the whole plan
     if (!t.reasoning || t.reasoning.trim() === '') {
-      console.error(`[parseOrchestratorResponse] Task "${t.action}" missing reasoning — rejecting plan`)
-      return null
+      t.reasoning = `Task assigned to ${t.dept || 'department'} as part of the plan.`
     }
+
     if (!t.dept || !validDepts.includes(t.dept as WorkerDept)) {
-      console.error(`[parseOrchestratorResponse] Task has invalid dept: ${t.dept}`)
-      return null
+      return { ok: false, reason: `Task has invalid dept: "${t.dept}". Must be sales, marketing, or ops.`, rawPreview: jsonStr.slice(0, 200) }
     }
-    if (!t.risk_level || !validRisks.includes(t.risk_level)) {
-      console.error(`[parseOrchestratorResponse] Task has invalid risk_level: ${t.risk_level}`)
-      return null
+
+    // Auto-fix invalid risk levels
+    if (!validRisks.includes(t.risk_level as string)) {
+      t.risk_level = 'medium'
     }
-    // Ensure required fields exist
-    if (!t.id) t.id = crypto.randomUUID()
-    if (!t.params) t.params = {}
+
+    if (!t.id)         t.id         = crypto.randomUUID()
+    if (!t.params)     t.params     = {}
     if (!t.depends_on) t.depends_on = []
-    if (!t.model) t.model = CLOUD_MODEL
+    if (!t.model)      t.model      = CLOUD_MODEL
   }
 
   return {
-    goal: parsed.goal ?? '',
-    risk_note: parsed.risk_note,
-    data_gathered: parsed.data_gathered ?? { sales: null, marketing: null, ops: null },
-    tasks: parsed.tasks as OrchestratorTask[],
+    ok: true,
+    plan: {
+      goal: parsed.goal ?? '',
+      risk_note: parsed.risk_note,
+      data_gathered: parsed.data_gathered ?? { sales: null, marketing: null, ops: null },
+      tasks: parsed.tasks as OrchestratorTask[],
+    },
   }
 }
 
@@ -310,18 +402,22 @@ export async function runOrchestratorTask(
 
   const { content, tokensUsed } = await callLLM(CLOUD_MODEL, prompt, ORCHESTRATOR_SYSTEM_NOTE)
 
-  const plan = parseOrchestratorResponse(content)
-  if (!plan) {
+  const result = parseOrchestratorResponse(content)
+  if (!result.ok) {
+    const failReason = result.reason
+    console.error('[runOrchestratorTask] Parse failed:', failReason, '\nRaw preview:', result.rawPreview)
     await logEvent({
       event_type: 'task_failed',
       department_slug: 'orchestrator',
       goal_id: goalId,
-      description: 'Orchestrator returned invalid plan — JSON schema validation failed',
-      metadata: { raw_response_preview: content.slice(0, 300) },
+      description: `Orchestrator plan rejected: ${failReason}`,
+      metadata: { reason: failReason, raw_preview: result.rawPreview },
     })
-    await supabase.from('goals').update({ status: 'failed' }).eq('id', goalId)
-    throw new Error('Orchestrator returned an invalid plan. Check logs.')
+    await supabase.from('goals').update({ status: 'failed', outcome: failReason }).eq('id', goalId)
+    throw new Error(failReason)
   }
+
+  const { plan } = result
 
   // Persist plan to goals table
   await supabase.from('goals').update({
@@ -591,6 +687,11 @@ Execute this task exactly as specified. Do not expand scope. If you need approva
     })
   }
 
+  // Extract and save artifact if result is substantial
+  if (workerResult.status === 'completed' && Object.keys(workerResult.result).length > 0) {
+    await extractAndSaveArtifact(deptRow, task, workerResult, goalId)
+  }
+
   // Mark department idle
   await supabase
     .from('departments')
@@ -608,6 +709,79 @@ Execute this task exactly as specified. Do not expand scope. If you need approva
   })
 
   return workerResult
+}
+
+/**
+ * Heuristically extracts a permanent artifact from a worker's raw result.
+ * Saves to the 'artifacts' table and logs the event.
+ */
+async function extractAndSaveArtifact(
+  dept: { id: string; name: string; slug: string },
+  task: WorkerTask,
+  workerResult: WorkerResult,
+  goalId?: string
+) {
+  const supabase = createServerSupabaseClient()
+  const result = workerResult.result
+  
+  let artifactType: 'document' | 'image' | 'code' | 'data' | 'spreadsheet' = 'document'
+  let title = task.label
+  let body = ''
+  let metadata = result
+  let previewUrl = null
+
+  // Marketing specific extraction
+  if (dept.slug === 'marketing') {
+    const drafts = (result.drafts as any[]) || []
+    if (drafts.length > 0) {
+      const first = drafts[0]
+      body = first.content || ''
+      title = `Draft: ${task.label}`
+      if (first.type === 'image' || first.image_url) {
+        artifactType = 'image'
+        previewUrl = first.image_url || null
+      }
+    }
+  } 
+  // Sales specific extraction
+  else if (dept.slug === 'sales') {
+    artifactType = 'data'
+    title = `Report: ${task.label}`
+    body = JSON.stringify(result, null, 2)
+  }
+  // Ops specific extraction
+  else if (dept.slug === 'ops') {
+    artifactType = 'data'
+    title = `Ops Audit: ${task.label}`
+    body = JSON.stringify(result, null, 2)
+  }
+
+  // Fallback for generic document actions
+  if (task.action === 'create_document') {
+    artifactType = 'document'
+  }
+
+  // Only save if we actually have content to show
+  if (body || previewUrl || Object.keys(metadata).length > 0) {
+    await supabase.from('artifacts').insert({
+      goal_id: goalId || null,
+      department_id: dept.id,
+      department_slug: dept.slug,
+      artifact_type: artifactType,
+      title: title,
+      body: body || null,
+      metadata: metadata,
+      preview_url: previewUrl,
+    })
+
+    await logEvent({
+      event_type: 'artifact_created',
+      department_slug: dept.slug,
+      goal_id: goalId,
+      description: `Artifact created: ${title}`,
+      metadata: { artifact_type: artifactType, goal_id: goalId },
+    })
+  }
 }
 
 // ─── Event logger ─────────────────────────────────────────────────────────────

@@ -4,7 +4,6 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider'
 import { LiveDepartmentGrid } from '@/components/departments/LiveDepartmentGrid'
 import { DashboardActions } from '@/components/departments/DashboardActions'
-import { SyncAllButton } from '@/components/departments/SyncAllButton'
 import { WarRoom } from '@/components/war-room/WarRoom'
 import { Department } from '@/types'
 
@@ -109,7 +108,16 @@ export default async function DashboardPage() {
           }}>
             {departments.length} DEPARTMENTS
           </span>
-          {unsyncedCount > 0 && <SyncAllButton />}
+          {unsyncedCount > 0 && (
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--red)',
+              letterSpacing: '0.06em',
+            }}>
+              ⚠ {unsyncedCount} unsynced
+            </span>
+          )}
         </div>
         <DashboardActions />
       </div>

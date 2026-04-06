@@ -18,7 +18,9 @@ if (!supabaseAnonKey) {
 }
 
 // Client-side Supabase client (uses anon key, respects RLS)
-export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache }) }
+})
 
 // Server-side Supabase client (uses service role key, bypasses RLS)
 // ONLY use in API routes and server components — never expose to the browser
@@ -30,6 +32,9 @@ export function createServerSupabaseClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache })
     }
   })
 }
@@ -54,5 +59,8 @@ export async function createSupabaseServerComponentClient() {
         }
       },
     },
+    global: {
+      fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache })
+    }
   })
 }

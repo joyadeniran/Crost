@@ -45,6 +45,7 @@ export type EventType =
   | 'department_deleted'
   | 'model_pulled'
   | 'constitution_updated'
+  | 'artifact_created'
 
 export interface Department {
   id: string
@@ -101,6 +102,19 @@ export interface CompanyMemo {
   onyx_index_id: string | null
   created_at: string
   read_by: string[]
+}
+
+export interface Artifact {
+  id: string
+  goal_id: string | null
+  department_id: string | null
+  department_slug: string
+  artifact_type: 'image' | 'document' | 'code' | 'data' | 'spreadsheet'
+  title: string
+  body: string | null
+  metadata: Record<string, unknown>
+  preview_url: string | null
+  created_at: string
 }
 
 export interface EventLogEntry {

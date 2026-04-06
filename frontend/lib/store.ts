@@ -32,52 +32,62 @@ interface CrostStore {
   updateDepartmentStatus: (id: string, status: Department['status'], currentTask?: string | null) => void
 }
 
-export const useCrostStore = create<CrostStore>((set) => ({
-  // Initial state
-  departments: [],
-  envMode: 'cloud',
-  pendingApprovalCount: 0,
-  isLoading: true,
-  activeGoal: null,
-  isSubmittingGoal: false,
+import { persist } from 'zustand/middleware'
 
-  // Setters
-  setDepartments: (departments) => set({ departments }),
-  setEnvMode: (envMode) => set({ envMode }),
-  setPendingApprovalCount: (pendingApprovalCount) => set({ pendingApprovalCount }),
-  setIsLoading: (isLoading) => set({ isLoading }),
+export const useCrostStore = create<CrostStore>()(
+  persist(
+    (set) => ({
+      // Initial state
+      departments: [],
+      envMode: 'cloud',
+      pendingApprovalCount: 0,
+      isLoading: true,
+      activeGoal: null,
+      isSubmittingGoal: false,
 
-  // Goal setters
-  setActiveGoal: (activeGoal) => set({ activeGoal }),
-  updateActiveGoal: (updates) =>
-    set((state) => ({
-      activeGoal: state.activeGoal ? { ...state.activeGoal, ...updates } : null,
-    })),
-  setIsSubmittingGoal: (isSubmittingGoal) => set({ isSubmittingGoal }),
+      // Setters
+      setDepartments: (departments) => set({ departments }),
+      setEnvMode: (envMode) => set({ envMode }),
+      setPendingApprovalCount: (pendingApprovalCount) => set({ pendingApprovalCount }),
+      setIsLoading: (isLoading) => set({ isLoading }),
 
-  // Upsert department (Realtime INSERT/UPDATE)
-  upsertDepartment: (department) =>
-    set((state) => {
-      const existing = state.departments.findIndex((d) => d.id === department.id)
-      if (existing >= 0) {
-        const updated = [...state.departments]
-        updated[existing] = department
-        return { departments: updated }
-      }
-      return { departments: [...state.departments, department] }
+      // Goal setters
+      setActiveGoal: (activeGoal) => set({ activeGoal }),
+      updateActiveGoal: (updates) =>
+        set((state) => ({
+          activeGoal: state.activeGoal ? { ...state.activeGoal, ...updates } : null,
+        })),
+      setIsSubmittingGoal: (isSubmittingGoal) => set({ isSubmittingGoal }),
+
+      // Upsert department (Realtime INSERT/UPDATE)
+      upsertDepartment: (department) =>
+        set((state) => {
+          const existing = state.departments.findIndex((d) => d.id === department.id)
+          if (existing >= 0) {
+            const updated = [...state.departments]
+            updated[existing] = department
+            return { departments: updated }
+          }
+          return { departments: [...state.departments, department] }
+        }),
+
+      // Remove department (Realtime DELETE)
+      removeDepartment: (id) =>
+        set((state) => ({
+          departments: state.departments.filter((d) => d.id !== id),
+        })),
+
+      // Update department status + current_task (live task updates)
+      updateDepartmentStatus: (id, status, currentTask = null) =>
+        set((state) => ({
+          departments: state.departments.map((d) =>
+            d.id === id ? { ...d, status, current_task: currentTask } : d
+          ),
+        })),
     }),
-
-  // Remove department (Realtime DELETE)
-  removeDepartment: (id) =>
-    set((state) => ({
-      departments: state.departments.filter((d) => d.id !== id),
-    })),
-
-  // Update department status + current_task (live task updates)
-  updateDepartmentStatus: (id, status, currentTask = null) =>
-    set((state) => ({
-      departments: state.departments.map((d) =>
-        d.id === id ? { ...d, status, current_task: currentTask } : d
-      ),
-    })),
-}))
+    {
+      name: 'crost-store',
+      partialize: (state) => ({ activeGoal: state.activeGoal }),
+    }
+  )
+)

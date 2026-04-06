@@ -67,6 +67,35 @@ export function CreateDepartmentWizard({ onClose }: Props) {
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [modelName, setModelName] = useState('local/gemma3')
 
+  // Load from draft
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem('crost-wizard-draft')
+      if (d) {
+        const p = JSON.parse(d)
+        if (p.step) setStep(p.step)
+        if (p.name) setName(p.name)
+        if (p.slug) setSlug(p.slug)
+        if (p.slugManual !== undefined) setSlugManual(p.slugManual)
+        if (p.icon) setIcon(p.icon)
+        if (p.color) setColor(p.color)
+        if (p.personaPrompt) setPersonaPrompt(p.personaPrompt)
+        if (p.capabilities) setCapabilities(p.capabilities)
+        if (p.customCap !== undefined) setCustomCap(p.customCap)
+        if (p.selectedTools) setSelectedTools(p.selectedTools)
+        if (p.modelName) setModelName(p.modelName)
+      }
+    } catch {}
+  }, [])
+
+  // Save to draft
+  useEffect(() => {
+    localStorage.setItem('crost-wizard-draft', JSON.stringify({
+      step, name, slug, slugManual, icon, color, personaPrompt,
+      capabilities, customCap, selectedTools, modelName
+    }))
+  }, [step, name, slug, slugManual, icon, color, personaPrompt, capabilities, customCap, selectedTools, modelName])
+
   // Auto-generate slug from name
   useEffect(() => {
     if (!slugManual && name) setSlug(toSlug(name))
@@ -124,6 +153,7 @@ export function CreateDepartmentWizard({ onClose }: Props) {
         setError(json.error ?? 'Something went wrong.')
         return
       }
+      localStorage.removeItem('crost-wizard-draft')
       onClose()
       router.refresh()
     } finally {
@@ -138,72 +168,157 @@ export function CreateDepartmentWizard({ onClose }: Props) {
     return true
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--bg-3)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-dm-sans, sans-serif)',
+    fontSize: 13,
+    padding: '10px 12px',
+    outline: 'none',
+    boxSizing: 'border-box'
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl">
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      background: 'rgba(0, 0, 0, 0.7)',
+      backdropFilter: 'blur(8px)',
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 560,
+        borderRadius: 'var(--radius)',
+        border: '1px solid var(--border)',
+        background: 'var(--bg)',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-zinc-800">
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg-2)'
+        }}>
           <div>
-            <h2 className="text-lg font-bold text-white">New Department</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Step {step} of 4</p>
+            <h2 style={{
+              fontFamily: 'var(--font-syne, Syne)',
+              fontWeight: 700,
+              fontSize: 18,
+              color: 'var(--text)',
+              marginBottom: 4
+            }}>
+              New Department
+            </h2>
+            <p style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-3)',
+              letterSpacing: '0.04em'
+            }}>
+              STEP {step} OF 4
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-500 hover:text-white text-xl leading-none transition-colors"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-3)',
+              fontSize: 24,
+              cursor: 'pointer',
+              lineHeight: 1,
+              padding: 0
+            }}
           >
             ×
           </button>
         </div>
 
-        {/* Progress */}
-        <div className="flex gap-1 px-6 py-3">
+        {/* Progress bar */}
+        <div style={{ display: 'flex', gap: 4, padding: '16px 24px' }}>
           {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                s <= step ? 'bg-indigo-500' : 'bg-zinc-700'
-              }`}
+              style={{
+                height: 4,
+                flex: 1,
+                borderRadius: 2,
+                background: s <= step ? 'var(--accent)' : 'var(--bg-3)',
+                transition: 'background 0.3s ease'
+              }}
             />
           ))}
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4 min-h-[320px]">
+        <div style={{ padding: '0 24px 24px', minHeight: 340 }}>
 
           {/* Step 1: Identity */}
           {step === 1 && (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1">Department name</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                  Department Name
+                </label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Legal, Research, Customer Success"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 text-white px-3 py-2.5 text-sm
-                             placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  style={inputStyle}
+                  autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1">URL slug</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                  URL Slug
+                </label>
                 <input
                   value={slug}
                   onChange={(e) => { setSlug(e.target.value); setSlugManual(true) }}
                   placeholder="e.g. legal"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 text-white px-3 py-2.5 text-sm
-                             placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  style={{ ...inputStyle, fontFamily: 'var(--font-dm-mono, monospace)' }}
                 />
-                <p className="text-xs text-zinc-500 mt-1">/dashboard/departments/{slug || '…'}</p>
+                <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                  /dashboard/departments/{slug || '…'}
+                </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">Icon</label>
-                <div className="flex gap-2 flex-wrap">
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 10 }}>
+                  Icon
+                </label>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {ICON_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => setIcon(opt.value)}
-                      className={`h-10 w-10 rounded-lg text-xl flex items-center justify-center transition-colors ${
-                        icon === opt.value ? 'bg-indigo-600 ring-2 ring-indigo-400' : 'bg-zinc-800 hover:bg-zinc-700'
-                      }`}
+                      style={{
+                        height: 46,
+                        width: 46,
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: 22,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: icon === opt.value ? 'var(--accent)' : 'var(--bg-3)',
+                        border: icon === opt.value ? '1px solid rgba(255,255,255,0.2)' : '1px solid var(--border)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
                     >
                       {opt.label}
                     </button>
@@ -211,16 +326,25 @@ export function CreateDepartmentWizard({ onClose }: Props) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">Color</label>
-                <div className="flex gap-2">
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 10 }}>
+                  Brand Color
+                </label>
+                <div style={{ display: 'flex', gap: 12 }}>
                   {COLOR_OPTIONS.map((c) => (
                     <button
                       key={c}
                       onClick={() => setColor(c)}
-                      style={{ backgroundColor: c }}
-                      className={`h-7 w-7 rounded-full transition-transform ${
-                        color === c ? 'scale-125 ring-2 ring-white' : ''
-                      }`}
+                      style={{
+                        backgroundColor: c,
+                        height: 32,
+                        width: 32,
+                        borderRadius: '50%',
+                        border: color === c ? '2px solid white' : '2px solid transparent',
+                        transform: color === c ? 'scale(1.15)' : 'scale(1)',
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
                     />
                   ))}
                 </div>
@@ -230,50 +354,67 @@ export function CreateDepartmentWizard({ onClose }: Props) {
 
           {/* Step 2: Persona */}
           {step === 2 && (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1">
-                  Persona prompt
-                  <span className="ml-2 text-xs text-zinc-500">({personaPrompt.length}/50 min)</span>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                  <span>Persona Prompt</span>
+                  <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: personaPrompt.length < 50 ? 'var(--red)' : 'var(--text-3)' }}>
+                    {personaPrompt.length}/50 min
+                  </span>
                 </label>
                 <textarea
                   value={personaPrompt}
                   onChange={(e) => setPersonaPrompt(e.target.value)}
-                  rows={5}
+                  rows={6}
                   placeholder="You are the [Department] Head. Describe responsibilities, rules, and what this agent should always or never do…"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 text-white px-3 py-2.5 text-sm
-                             placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">Capabilities</label>
-                <div className="flex flex-wrap gap-2 mb-2">
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 10 }}>
+                  Core Capabilities
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                   {PRESET_CAPABILITIES.map((cap) => (
                     <button
                       key={cap}
                       onClick={() => toggleCap(cap)}
-                      className={`text-xs rounded-lg px-2.5 py-1 transition-colors ${
-                        capabilities.includes(cap)
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                      }`}
+                      style={{
+                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontSize: 11,
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: capabilities.includes(cap) ? 'var(--accent)' : 'var(--bg-3)',
+                        color: capabilities.includes(cap) ? '#000' : 'var(--text-2)',
+                        border: '1px solid',
+                        borderColor: capabilities.includes(cap) ? 'transparent' : 'var(--border)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
                     >
                       {cap.replace(/_/g, ' ')}
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: 10 }}>
                   <input
                     value={customCap}
                     onChange={(e) => setCustomCap(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addCustomCap()}
-                    placeholder="Custom capability…"
-                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 text-white px-3 py-1.5 text-xs
-                               placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="add_custom_capability..."
+                    style={{ ...inputStyle, padding: '8px 12px' }}
                   />
                   <button
                     onClick={addCustomCap}
-                    className="rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs px-3 py-1.5 transition-colors"
+                    style={{
+                      background: 'var(--bg-3)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0 16px',
+                      fontSize: 13,
+                      cursor: 'pointer'
+                    }}
                   >
                     Add
                   </button>
@@ -284,53 +425,73 @@ export function CreateDepartmentWizard({ onClose }: Props) {
 
           {/* Step 3: Tools & Model */}
           {step === 3 && (
-            <div className="space-y-5">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">Tools</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 12 }}>
+                  Select Tools
+                </label>
                 {tools.length === 0 ? (
-                  <p className="text-xs text-zinc-500">No tools configured yet. Add them in Settings.</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No tools configured yet. Add them in Settings.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {tools.map((tool) => (
-                      <label
-                        key={tool.id}
-                        className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          selectedTools.includes(tool.id)
-                            ? 'border-indigo-500 bg-indigo-950'
-                            : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
-                        } ${!tool.is_configured ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedTools.includes(tool.id)}
-                          onChange={() => tool.is_configured && toggleTool(tool.id)}
-                          className="accent-indigo-500"
-                          disabled={!tool.is_configured}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white">{tool.label}</p>
-                          <p className="text-xs text-zinc-500 truncate">{tool.description}</p>
-                        </div>
-                        <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
-                          tool.risk_level === 'critical' ? 'bg-red-900 text-red-300' :
-                          tool.risk_level === 'high'     ? 'bg-orange-900 text-orange-300' :
-                          tool.risk_level === 'medium'   ? 'bg-yellow-900 text-yellow-300' :
-                          'bg-green-900 text-green-300'
-                        }`}>
-                          {tool.risk_level}
-                        </span>
-                      </label>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {tools.map((tool) => {
+                      const isSelected = selectedTools.includes(tool.id)
+                      const isConf = tool.is_configured
+                      return (
+                        <label
+                          key={tool.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 14,
+                            background: isSelected ? 'rgba(0, 212, 170, 0.05)' : 'var(--bg-3)',
+                            border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '12px 16px',
+                            cursor: isConf ? 'pointer' : 'not-allowed',
+                            opacity: isConf ? 1 : 0.5,
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => isConf && toggleTool(tool.id)}
+                            disabled={!isConf}
+                            style={{ accentColor: 'var(--accent)', cursor: 'inherit', width: 16, height: 16 }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', margin: 0 }}>{tool.label}</p>
+                            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {tool.description}
+                            </p>
+                          </div>
+                          <span style={{
+                            fontSize: 10,
+                            fontFamily: 'var(--font-dm-mono, monospace)',
+                            padding: '3px 6px',
+                            borderRadius: 4,
+                            background: tool.risk_level === 'critical' ? 'var(--red)' : 
+                                        tool.risk_level === 'high' ? 'var(--amber)' :
+                                        tool.risk_level === 'medium' ? 'var(--amber)' : 'var(--bg-2)',
+                            color: tool.risk_level !== 'low' ? '#000' : 'var(--text-3)'
+                          }}>
+                            {tool.risk_level}
+                          </span>
+                        </label>
+                      )
+                    })}
                   </div>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1">Model</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                  Assign Model
+                </label>
                 <select
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 text-white px-3 py-2.5 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  style={{ ...inputStyle, cursor: 'pointer' }}
                 >
                   {MODEL_OPTIONS.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
@@ -340,66 +501,123 @@ export function CreateDepartmentWizard({ onClose }: Props) {
             </div>
           )}
 
-          {/* Step 4: Review */}
+          {/* Step 4: Final Review */}
           {step === 4 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div
-                  className="flex h-14 w-14 items-center justify-center rounded-xl text-2xl shrink-0"
-                  style={{ backgroundColor: color + '33', color }}
-                >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 64,
+                  height: 64,
+                  borderRadius: 16,
+                  backgroundColor: color + '20',
+                  color: color,
+                  fontSize: 28,
+                  flexShrink: 0
+                }}>
                   {ICON_OPTIONS.find((o) => o.value === icon)?.label ?? '💼'}
                 </div>
                 <div>
-                  <p className="font-bold text-white text-lg">{name}</p>
-                  <p className="text-sm text-zinc-500 font-mono">/{slug}</p>
+                  <h3 style={{ fontFamily: 'var(--font-syne, Syne)', fontSize: 22, fontWeight: 700, margin: '0 0 2px', color: 'var(--text)' }}>
+                    {name}
+                  </h3>
+                  <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+                    /{slug}
+                  </p>
                 </div>
               </div>
-              <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-sm text-zinc-300 max-h-28 overflow-y-auto">
-                <p className="whitespace-pre-wrap leading-relaxed">{personaPrompt}</p>
+
+              <div style={{
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '12px 14px',
+                fontSize: 13,
+                color: 'var(--text-2)',
+                lineHeight: 1.5,
+                maxHeight: 120,
+                overflowY: 'auto'
+              }}>
+                <span style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 4, fontFamily: 'var(--font-dm-mono, monospace)' }}>PROMPT</span>
+                {personaPrompt}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {capabilities.map((c) => (
-                  <span key={c} className="text-xs bg-indigo-900/50 text-indigo-300 rounded px-2 py-0.5">
-                    {c.replace(/_/g, ' ')}
-                  </span>
-                ))}
+
+              <div>
+                <span style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-dm-mono, monospace)' }}>CAPABILITIES</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {capabilities.map((c) => (
+                    <span key={c} style={{
+                      fontSize: 11,
+                      fontFamily: 'var(--font-dm-mono, monospace)',
+                      background: 'rgba(0, 212, 170, 0.1)',
+                      color: 'var(--accent)',
+                      padding: '4px 8px',
+                      borderRadius: 4
+                    }}>
+                      {c.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">Model</span>
-                <span className="text-zinc-300">{MODEL_OPTIONS.find((m) => m.value === modelName)?.label}</span>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+                <span style={{ color: 'var(--text-3)' }}>Model</span>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{MODEL_OPTIONS.find((m) => m.value === modelName)?.label}</span>
               </div>
+              
               {selectedTools.length > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">Tools</span>
-                  <span className="text-zinc-300">{selectedTools.join(', ')}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-3)', flexShrink: 0, paddingRight: 16 }}>Tools</span>
+                  <span style={{ color: 'var(--text)', textAlign: 'right' }}>
+                    {tools.filter(t => selectedTools.includes(t.id)).map(t => t.label).join(', ')}
+                  </span>
                 </div>
               )}
+
               {error && (
-                <p className="text-sm text-red-400 rounded-lg bg-red-900/30 px-3 py-2">{error}</p>
+                <div style={{ background: 'var(--red)', color: '#fff', fontSize: 13, padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
+                  ⚠ {error}
+                </div>
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between px-6 py-4 border-t border-zinc-800">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 24px',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--bg-2)'
+        }}>
           {step > 1 ? (
             <button
               onClick={() => setStep((s) => s - 1)}
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-3)',
+                fontSize: 13,
+                cursor: 'pointer',
+                fontWeight: 500
+              }}
             >
               ← Back
             </button>
           ) : (
-            <span />
+            <div />
           )}
+
           {step < 4 ? (
             <button
               onClick={() => setStep((s) => s + 1)}
               disabled={!canProceed()}
-              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-5 py-2
-                         transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-primary-crost"
+              style={{ opacity: canProceed() ? 1 : 0.5 }}
             >
               Continue →
             </button>
@@ -407,10 +625,14 @@ export function CreateDepartmentWizard({ onClose }: Props) {
             <button
               onClick={submit}
               disabled={submitting || !canProceed()}
-              className="rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-5 py-2
-                         transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary-crost"
+              style={{ 
+                opacity: (submitting || !canProceed()) ? 0.5 : 1,
+                background: '#00d4aa',
+                color: '#000',
+              }}
             >
-              {submitting ? 'Creating…' : 'Create Department'}
+              {submitting ? 'Creating...' : 'Create Department'}
             </button>
           )}
         </div>

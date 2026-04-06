@@ -36,6 +36,18 @@ function GoalInput({
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem('crost-draft-goal')
+      if (d) setValue(d)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (value.trim()) localStorage.setItem('crost-draft-goal', value)
+    else localStorage.removeItem('crost-draft-goal')
+  }, [value])
+
   const handleSubmit = () => {
     const trimmed = value.trim()
     if (!trimmed || isLoading) return
@@ -556,11 +568,26 @@ export function WarRoom() {
           border: '1px solid rgba(239,68,68,0.3)',
           borderRadius: 'var(--radius)',
           padding: '12px 16px',
-          fontFamily: 'var(--font-dm-sans, sans-serif)',
-          fontSize: 13,
-          color: '#f87171',
         }}>
-          ⚠ Orchestrator failed to generate a plan. Try rephrasing your goal.
+          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: '#f87171', marginBottom: 4 }}>
+            ⚠ Orchestrator failed to generate a plan.
+          </div>
+          {activeGoal.outcome && (
+            <div style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: '#f87171',
+              opacity: 0.7,
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {activeGoal.outcome}
+            </div>
+          )}
+          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
+            Try rephrasing your goal, or check the event log for details.
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Department } from '@/types'
 
@@ -32,12 +32,64 @@ export function DeptSettingsForm({ dept }: Props) {
   const [capabilities, setCapabilities] = useState((dept.capabilities as string[]).join(', '))
   const [restrictions, setRestrictions] = useState((dept.restrictions as string[]).join(', '))
   const [modelKey, setModelKey] = useState(`${dept.model_provider}::${dept.model_name}`)
+  
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [hasDraft, setHasDraft] = useState(false)
+
+  // Load draft
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem(`crost-dept-draft-${dept.slug}`)
+      if (d) {
+        const p = JSON.parse(d)
+        setPersona(p.persona ?? dept.persona_prompt)
+        setToneOverride(p.toneOverride ?? dept.tone_override ?? '')
+        setTools(p.tools ?? dept.tools as string[])
+        setCapabilities(p.capabilities ?? (dept.capabilities as string[]).join(', '))
+        setRestrictions(p.restrictions ?? (dept.restrictions as string[]).join(', '))
+        setModelKey(p.modelKey ?? `${dept.model_provider}::${dept.model_name}`)
+        setHasDraft(true)
+      }
+    } catch {}
+  }, [dept.slug])
+
+  // Save draft
+  useEffect(() => {
+    const draft = { persona, toneOverride, tools, capabilities, restrictions, modelKey }
+    // Only save if it differs from the original dept props to avoid cluttering storage
+    const isDefault = persona === dept.persona_prompt && 
+                     toneOverride === (dept.tone_override ?? '') &&
+                     JSON.stringify(tools) === JSON.stringify(dept.tools) &&
+                     capabilities === (dept.capabilities as string[]).join(', ') &&
+                     restrictions === (dept.restrictions as string[]).join(', ') &&
+                     modelKey === `${dept.model_provider}::${dept.model_name}`
+    
+    if (!isDefault) {
+      localStorage.setItem(`crost-dept-draft-${dept.slug}`, JSON.stringify(draft))
+      setHasDraft(true)
+    } else {
+      localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
+      setHasDraft(false)
+    }
+  }, [persona, toneOverride, tools, capabilities, restrictions, modelKey, dept.slug])
+
+  const discardDraft = () => {
+    if (confirm('Discard all unsaved changes for this department?')) {
+      setPersona(dept.persona_prompt)
+      setToneOverride(dept.tone_override ?? '')
+      setTools(dept.tools as string[])
+      setCapabilities((dept.capabilities as string[]).join(', '))
+      setRestrictions((dept.restrictions as string[]).join(', '))
+      setModelKey(`${dept.model_provider}::${dept.model_name}`)
+      localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
+      setHasDraft(false)
+    }
+  }
 
   const toggleTool = (tool: string) => {
     setTools(prev => prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool])
@@ -69,6 +121,10 @@ export function DeptSettingsForm({ dept }: Props) {
       })
       const json = await res.json() as { error?: string }
       if (!res.ok) throw new Error(json.error ?? 'Save failed')
+      
+      localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
+      setHasDraft(false)
+      
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
       router.refresh()
@@ -256,6 +312,22 @@ export function DeptSettingsForm({ dept }: Props) {
         >
           {saving ? 'Saving…' : 'Save Changes'}
         </button>
+        {hasDraft && !saving && (
+          <button
+            onClick={discardDraft}
+            style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-3)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            DISCARD CHANGES
+          </button>
+        )}
         {success && (
           <span style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
             ✓ Saved

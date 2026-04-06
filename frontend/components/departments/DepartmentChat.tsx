@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useLocalStorage } from '@/lib/hooks'
 import type { Department } from '@/types'
 
 interface Message {
@@ -16,15 +17,18 @@ interface Props {
 }
 
 export function DepartmentChat({ department: dept }: Props) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
+  const [messages, setMessages, messagesReady, clearMessages] = useLocalStorage<Message[]>(`crost-chat-msgs-${dept.slug}`, [])
+  const [input, setInput, inputReady, clearInput] = useLocalStorage<string>(`crost-chat-input-${dept.slug}`, '')
+  const [sessionId, setSessionId, sessionReady, clearSession] = useLocalStorage<string | undefined>(`crost-chat-session-${dept.slug}`, undefined)
+
   const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | undefined>()
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (messagesReady) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, messagesReady])
 
   const isRunnable = dept.activation_stage === 'active' && dept.onyx_persona_id && dept.onyx_persona_id !== 'SYNC_FAILED'
 
@@ -64,6 +68,14 @@ export function DepartmentChat({ department: dept }: Props) {
     }
   }
 
+  const handleClear = () => {
+    if (confirm('Clear entire chat history for this department?')) {
+      clearMessages()
+      clearSession()
+      clearInput()
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
@@ -94,59 +106,93 @@ export function DepartmentChat({ department: dept }: Props) {
       borderRadius: 'var(--radius)',
       display: 'flex',
       flexDirection: 'column',
-      minHeight: 360,
+      minHeight: 440,
     }}>
+      {/* Header with Clear */}
+      <div style={{
+        padding: '10px 14px',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.04em' }}>
+          LIVE CHAT — {dept.name.toUpperCase()}
+        </span>
+        {messages.length > 0 && (
+          <button
+            onClick={handleClear}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-3)',
+              fontSize: 9,
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              opacity: 0.7
+            }}
+          >
+            CLEAR HISTORY
+          </button>
+        )}
+      </div>
+
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-3)' }}>
-            <p style={{ fontSize: 12, marginBottom: 4 }}>Ask {dept.name} anything.</p>
-            <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)' }}>
+        {(!messagesReady) ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-3)', fontSize: 11 }}>
+            Restoring history...
+          </div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
+            <p style={{ fontSize: 13, marginBottom: 6, color: 'var(--text-2)' }}>Ask {dept.name} anything.</p>
+            <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, maxWidth: 300, margin: '0 auto' }}>
               Constitution is always prepended. Irreversible actions go to the Approval Feed.
             </p>
           </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-            <div style={{
-              maxWidth: '85%',
-              borderRadius: 10,
-              padding: '10px 14px',
-              fontSize: 12,
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-              background: msg.role === 'user'
-                ? 'var(--accent)'
-                : msg.error
-                ? 'rgba(255,77,109,0.1)'
-                : 'var(--bg-3)',
-              color: msg.role === 'user'
-                ? '#000'
-                : msg.error
-                ? 'var(--red)'
-                : 'var(--text-2)',
-              border: msg.error ? '1px solid rgba(255,77,109,0.25)' : 'none',
-            }}>
-              {msg.content}
-              {msg.approvalRequested && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,179,71,0.3)' }}>
-                  <a
-                    href="/dashboard/approvals"
-                    style={{
-                      fontFamily: 'var(--font-dm-mono, monospace)',
-                      fontSize: 10,
-                      color: 'var(--amber)',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    → Approval requested — review in Approval Feed
-                  </a>
-                </div>
-              )}
+        ) : (
+          messages.map((msg, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '85%',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontSize: 12,
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                background: msg.role === 'user'
+                  ? 'var(--accent)'
+                  : msg.error
+                  ? 'rgba(255,77,109,0.1)'
+                  : 'var(--bg-3)',
+                color: msg.role === 'user'
+                  ? '#000'
+                  : msg.error
+                  ? 'var(--red)'
+                  : 'var(--text-2)',
+                border: msg.error ? '1px solid rgba(255,77,109,0.25)' : 'none',
+              }}>
+                {msg.content}
+                {msg.approvalRequested && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,179,71,0.3)' }}>
+                    <a
+                      href="/dashboard/approvals"
+                      style={{
+                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontSize: 10,
+                        color: 'var(--amber)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      → Approval requested — review in Approval Feed
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
 
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
@@ -177,11 +223,11 @@ export function DepartmentChat({ department: dept }: Props) {
         alignItems: 'flex-end',
       }}>
         <textarea
-          value={input}
+          value={inputReady ? input : ''}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={`Task for ${dept.name}… (Enter to send)`}
-          disabled={loading}
+          disabled={loading || !inputReady}
           rows={2}
           style={{
             flex: 1,
@@ -195,14 +241,14 @@ export function DepartmentChat({ department: dept }: Props) {
             padding: '8px 10px',
             outline: 'none',
             lineHeight: 1.5,
-            opacity: loading ? 0.5 : 1,
+            opacity: (loading || !inputReady) ? 0.5 : 1,
           }}
           onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
           onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
         />
         <button
           onClick={send}
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !inputReady}
           className="btn-primary-crost"
           style={{ padding: '8px 16px' }}
         >

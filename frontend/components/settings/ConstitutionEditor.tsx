@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -22,6 +22,21 @@ export function ConstitutionEditor({ constitution }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem('crost-const-draft')
+      if (d) {
+        const p = JSON.parse(d)
+        if (p.extras) setExtras(p.extras)
+        if (p.newClause) setNewClause(p.newClause)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('crost-const-draft', JSON.stringify({ extras, newClause }))
+  }, [extras, newClause])
 
   const addClause = () => {
     if (!newClause.trim()) return
