@@ -1,18 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ModeToggle } from '@/components/ui/ModeToggle'
 import { useCrostStore } from '@/lib/store'
+import { NotificationDropdown } from './NotificationDropdown'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':               'Agent Office',
   '/dashboard/approvals':     'Approval Feed',
   '/dashboard/memos':         'Company Memos',
   '/dashboard/settings':      'Settings',
+  '/dashboard/constitution':  'Constitution',
+  '/dashboard/artifacts':     'Artifacts',
   '/dashboard/event-log':     'Event Log',
-  '/dashboard/departments/new': 'New Department',
 }
 
 function BellIcon() {
@@ -35,7 +38,8 @@ function GearIcon() {
 export function Topbar() {
   const pathname = usePathname()
   const pendingCount = useCrostStore(s => s.pendingApprovalCount)
-
+  const [showNotifications, setShowNotifications] = useState(false)
+  
   // Match dept pages — extract slug for richer title
   const isDeptPage = pathname.startsWith('/dashboard/departments/') && pathname !== '/dashboard/departments/new'
   const isDeptSettings = isDeptPage && pathname.endsWith('/settings')
@@ -71,46 +75,53 @@ export function Topbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ModeToggle />
 
-        {/* Bell */}
-        <Link
-          href="/dashboard/approvals"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--bg-3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-2)',
-            textDecoration: 'none',
-            position: 'relative',
-            transition: 'all 0.15s',
-          }}
-        >
-          <BellIcon />
-          {pendingCount > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: -4,
-              right: -4,
-              width: 16,
-              height: 16,
-              background: 'var(--red)',
-              borderRadius: 8,
-              fontSize: 9,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+        {/* Bell with Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: `1px solid ${showNotifications ? 'var(--accent)' : 'var(--border)'}`,
+              background: 'var(--bg-3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
-              border: '2px solid var(--bg-2)',
-            }}>
-              {pendingCount}
-            </span>
+              color: showNotifications ? 'var(--accent)' : 'var(--text-2)',
+              cursor: 'pointer',
+              position: 'relative',
+              transition: 'all 0.15s',
+              outline: 'none'
+            }}
+          >
+            <BellIcon />
+            {pendingCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                width: 16,
+                height: 16,
+                background: 'var(--red)',
+                borderRadius: 8,
+                fontSize: 9,
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                border: '2px solid var(--bg-2)',
+              }}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+          
+          {showNotifications && (
+            <NotificationDropdown onClose={() => setShowNotifications(false)} />
           )}
-        </Link>
+        </div>
 
         {/* Settings */}
         <Link

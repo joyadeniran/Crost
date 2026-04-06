@@ -40,6 +40,8 @@ interface Props {
 
 export function EventLogClient({ events: initial }: Props) {
   const [events, setEvents] = useState<EventLogEntry[]>(initial)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(initial.length === 50)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [deptFilter, setDeptFilter] = useState<string>('all')
@@ -49,11 +51,34 @@ export function EventLogClient({ events: initial }: Props) {
     const channel = supabaseClient
       .channel('event-log-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'event_log' }, (payload) => {
-        setEvents(prev => [payload.new as EventLogEntry, ...prev].slice(0, 200))
+        setEvents(prev => [payload.new as EventLogEntry, ...prev])
       })
       .subscribe()
     return () => { supabaseClient.removeChannel(channel) }
   }, [])
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+
+    // Fetch next 50
+    const lastEvent = events[events.length - 1]
+    const { data, error } = await supabaseClient
+      .from('event_log')
+      .select('*')
+      .lt('created_at', lastEvent.created_at)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error loading more events:', error)
+    } else {
+      const more = data as EventLogEntry[]
+      if (more.length < 50) setHasMore(false)
+      setEvents(prev => [...prev, ...more])
+    }
+    setLoadingMore(false)
+  }
 
   // Unique dept slugs for filter
   const deptOptions = useMemo(() => {
@@ -122,7 +147,7 @@ export function EventLogClient({ events: initial }: Props) {
           padding: '6px 4px',
           alignSelf: 'center',
         }}>
-          {filtered.length} event{filtered.length !== 1 ? 's' : ''}
+          {filtered.length} {filtered.length === 1 ? 'event' : 'events'}
         </span>
       </div>
 
@@ -137,6 +162,7 @@ export function EventLogClient({ events: initial }: Props) {
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius)',
           overflow: 'hidden',
+          marginBottom: 16
         }}>
           {filtered.map((ev, idx) => {
             const color = EVENT_COLOR[ev.event_type] ?? 'var(--text-3)'
@@ -197,6 +223,42 @@ export function EventLogClient({ events: initial }: Props) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            style={{
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--text)',
+              fontSize: 10,
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              padding: '8px 24px',
+              cursor: loadingMore ? 'default' : 'pointer',
+              opacity: loadingMore ? 0.7 : 1,
+              transition: 'all 0.15s'
+            }}
+          >
+            {loadingMore ? 'LOADING…' : 'LOAD MORE ACTIVITIES'}
+          </button>
+        </div>
+      )}
+
+      {!hasMore && events.length > 5 && (
+        <div style={{ 
+          textAlign: 'center', 
+          fontSize: 10, 
+          color: 'var(--text-4)', 
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          marginBottom: 40
+        }}>
+          END OF LOG
         </div>
       )}
     </>

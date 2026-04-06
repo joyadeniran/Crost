@@ -2,10 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CreateDepartmentWizard } from './CreateDepartmentWizard'
+import Link from 'next/link'
 
 export function DashboardActions() {
-  const [wizardOpen, setWizardOpen] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const router = useRouter()
@@ -50,14 +49,14 @@ export function DashboardActions() {
         {syncing ? '⟳ Syncing…' : syncMsg ?? '⟳ Sync'}
       </button>
 
-      <button
-        onClick={() => setWizardOpen(true)}
+      <Link
+        href="/dashboard/departments/new"
         className="btn-primary-crost"
+        style={{ textDecoration: 'none' }}
       >
         <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
         New Department
-      </button>
-      {wizardOpen && <CreateDepartmentWizard onClose={() => setWizardOpen(false)} />}
+      </Link>
     </div>
   )
 }

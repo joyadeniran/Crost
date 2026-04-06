@@ -183,23 +183,21 @@ export function CreateDepartmentWizard({ onClose }: Props) {
 
   return (
     <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 100,
+      width: '100%',
+      maxWidth: 680,
+      margin: '0 auto',
+      padding: '40px 20px',
+      minHeight: 'calc(100vh - 100px)',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
-      background: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(8px)',
+      flexDirection: 'column',
+      gap: 32
     }}>
       <div style={{
         width: '100%',
-        maxWidth: 560,
         borderRadius: 'var(--radius)',
         border: '1px solid var(--border)',
         background: 'var(--bg)',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+        boxShadow: '0 4px 30px rgba(0,0,0,0.1)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -503,7 +501,21 @@ export function CreateDepartmentWizard({ onClose }: Props) {
 
           {/* Step 4: Final Review */}
           {step === 4 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ 
+                background: 'var(--bg-3)',
+                padding: '16px',
+                borderRadius: 'var(--radius-sm)',
+                borderLeft: '4px solid var(--accent)',
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontSize: 10,
+                color: 'var(--accent)',
+                letterSpacing: '0.04em'
+              }}>
+                PROTOCOL: AGENT_INSTANTIATION_v1.0
+                <br/>STATUS: AWAITING_FOUNDER_COMMIT
+              </div>
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{
                   display: 'flex',
@@ -515,70 +527,86 @@ export function CreateDepartmentWizard({ onClose }: Props) {
                   backgroundColor: color + '20',
                   color: color,
                   fontSize: 28,
-                  flexShrink: 0
+                  flexShrink: 0,
+                  border: `1px solid ${color}40`
                 }}>
                   {ICON_OPTIONS.find((o) => o.value === icon)?.label ?? '💼'}
                 </div>
                 <div>
-                  <h3 style={{ fontFamily: 'var(--font-syne, Syne)', fontSize: 22, fontWeight: 700, margin: '0 0 2px', color: 'var(--text)' }}>
+                  <h3 style={{ fontFamily: 'var(--font-syne, Syne)', fontSize: 24, fontWeight: 700, margin: '0 0 2px', color: 'var(--text)' }}>
                     {name}
                   </h3>
-                  <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-                    /{slug}
+                  <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+                    PROJECT_SLUG: {slug}
                   </p>
                 </div>
               </div>
 
-              <div style={{
-                background: 'var(--bg-3)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '12px 14px',
-                fontSize: 13,
-                color: 'var(--text-2)',
-                lineHeight: 1.5,
-                maxHeight: 120,
-                overflowY: 'auto'
-              }}>
-                <span style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 4, fontFamily: 'var(--font-dm-mono, monospace)' }}>PROMPT</span>
-                {personaPrompt}
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{
+                  background: 'var(--bg-3)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '16px',
+                  fontSize: 13,
+                  color: 'var(--text-2)',
+                  lineHeight: 1.6,
+                }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-4)', display: 'block', marginBottom: 8, fontFamily: 'var(--font-dm-mono, monospace)' }}>MISSION_DIRECTIVE</span>
+                  {personaPrompt}
+                </div>
 
-              <div>
-                <span style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-dm-mono, monospace)' }}>CAPABILITIES</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {capabilities.map((c) => (
                     <span key={c} style={{
-                      fontSize: 11,
+                      fontSize: 10,
                       fontFamily: 'var(--font-dm-mono, monospace)',
-                      background: 'rgba(0, 212, 170, 0.1)',
+                      background: 'rgba(0, 212, 170, 0.08)',
                       color: 'var(--accent)',
+                      border: '1px solid rgba(0, 212, 170, 0.2)',
                       padding: '4px 8px',
                       borderRadius: 4
                     }}>
-                      {c.replace(/_/g, ' ')}
+                      {c.toUpperCase()}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
-                <span style={{ color: 'var(--text-3)' }}>Model</span>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{MODEL_OPTIONS.find((m) => m.value === modelName)?.label}</span>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr', 
+                gap: 20, 
+                padding: '16px', 
+                background: 'var(--bg-2)', 
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)' 
+              }}>
+                 <div>
+                   <span style={{ fontSize: 9, color: 'var(--text-4)', fontWeight: 600, fontFamily: 'var(--font-dm-mono, monospace)' }}>ENGINE</span>
+                   <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>
+                      {MODEL_OPTIONS.find((m) => m.value === modelName)?.label}
+                   </div>
+                 </div>
+                 <div>
+                   <span style={{ fontSize: 9, color: 'var(--text-4)', fontWeight: 600, fontFamily: 'var(--font-dm-mono, monospace)' }}>TOOLS_INTEGRATED</span>
+                   <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>
+                      {selectedTools.length} MODULES
+                   </div>
+                 </div>
               </div>
-              
-              {selectedTools.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-3)', flexShrink: 0, paddingRight: 16 }}>Tools</span>
-                  <span style={{ color: 'var(--text)', textAlign: 'right' }}>
-                    {tools.filter(t => selectedTools.includes(t.id)).map(t => t.label).join(', ')}
-                  </span>
-                </div>
-              )}
 
               {error && (
-                <div style={{ background: 'var(--red)', color: '#fff', fontSize: 13, padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
-                  ⚠ {error}
+                <div style={{ 
+                  background: 'rgba(239, 68, 68, 0.1)', 
+                  color: 'var(--red)', 
+                  fontSize: 12, 
+                  padding: '12px 16px', 
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  fontFamily: 'var(--font-dm-mono, monospace)'
+                }}>
+                  PROTOCOL_ERROR: {error}
                 </div>
               )}
             </div>

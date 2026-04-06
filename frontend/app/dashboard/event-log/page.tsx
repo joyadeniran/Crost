@@ -11,7 +11,7 @@ export default async function EventLogPage() {
     .from('event_log')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(50)
 
   const events = (data ?? []) as EventLogEntry[]
 
@@ -22,7 +22,7 @@ export default async function EventLogPage() {
           Event Log
         </h1>
         <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Full activity history — last 200 events
+          Full activity history — actions, tokens, and system updates
         </p>
       </div>
 

@@ -324,6 +324,7 @@ function PlanCard({
   onDispatch,
   onReject,
   onHold,
+  onDismiss,
   decisions,
   onApproveAll,
 }: {
@@ -331,6 +332,7 @@ function PlanCard({
   onDispatch: (taskId: string) => void
   onReject: (taskId: string) => void
   onHold: (taskId: string) => void
+  onDismiss: () => void
   decisions: Record<string, TaskDecision>
   onApproveAll: () => void
 }) {
@@ -437,12 +439,32 @@ function PlanCard({
         <div style={{
           padding: '10px 16px',
           borderTop: '1px solid var(--border)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
-          fontSize: 10,
-          color: '#4ade80',
-          letterSpacing: '0.06em',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}>
-          ✓ ALL TASKS ACTIONED
+          <div style={{
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 10,
+            color: '#4ade80',
+            letterSpacing: '0.06em',
+          }}>
+            ✓ ALL TASKS ACTIONED
+          </div>
+          <button 
+            onClick={onDismiss}
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: 'var(--text-3)',
+              fontSize: 9,
+              padding: '3px 8px',
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              cursor: 'pointer'
+            }}>
+            DISMISS
+          </button>
         </div>
       )}
     </div>
@@ -541,6 +563,18 @@ export function WarRoom() {
   const isPlanning = activeGoal && ['pending', 'planning'].includes(activeGoal.status)
   const hasPlan = activeGoal && activeGoal.orchestrator_plan && activeGoal.status !== 'failed'
 
+  // Automatically clear active goal when all tasks are actioned
+  useEffect(() => {
+    if (!hasPlan || !activeGoal.orchestrator_plan) return
+    const pending = activeGoal.orchestrator_plan.tasks.filter(t => !decisions[t.id]).length
+    if (pending === 0 && Object.keys(decisions).length > 0) {
+      const timer = setTimeout(() => {
+        setActiveGoal(null)
+      }, 5000) // Clear after 5 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [hasPlan, activeGoal?.orchestrator_plan, decisions, setActiveGoal])
+
   return (
     <div style={{ marginBottom: 24 }}>
       <GoalInput
@@ -558,6 +592,7 @@ export function WarRoom() {
           onDispatch={handleDispatch}
           onReject={handleReject}
           onHold={handleHold}
+          onDismiss={() => setActiveGoal(null)}
           onApproveAll={handleApproveAll}
         />
       )}

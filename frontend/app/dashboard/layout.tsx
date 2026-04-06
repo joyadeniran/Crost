@@ -6,6 +6,7 @@ import { SidebarNav } from '@/components/dashboard/SidebarNav'
 import { Topbar } from '@/components/dashboard/Topbar'
 import { LiveEventsPanel } from '@/components/dashboard/LiveEventsPanel'
 import { LayoutStoreHydrator } from '@/components/providers/LayoutStoreHydrator'
+import { Logo } from '@/components/ui/Logo'
 import type { EventLogEntry } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -43,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <aside className="crost-sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="logo-mark">C</div>
+          <Logo size={28} />
           <span className="logo-text">Crost</span>
           <span style={{
             marginLeft: 'auto',
