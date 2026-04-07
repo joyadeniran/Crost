@@ -15,6 +15,7 @@ export default async function DashboardPage() {
       .from('departments')
       .select('*')
       .neq('activation_stage', 'deprecated')
+      .neq('slug', 'orchestrator')
       .order('created_at'),
     supabase.from('approval_queue').select('id').eq('status', 'pending'),
     supabase

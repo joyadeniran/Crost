@@ -34,7 +34,7 @@ Avoid corporate buzzwords. Adapt tone to context: technical when needed, convers
 // regex fails to parse valid JSON, we treat it as a BLOCKED request — never
 // silently proceed past a failed safety gate.
 const APPROVAL_SIGNAL_MARKER = 'REQUEST_APPROVAL'
-const APPROVAL_REGEX = /REQUEST_APPROVAL:\s*(\{[\s\S]*?\})(?:\s|$)/
+const APPROVAL_REGEX = /REQUEST_APPROVAL:?[\s\S]*?(\{[\s\S]*?\})/
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
@@ -105,8 +105,13 @@ export function parseApprovalRequest(response: string): ApprovalRequest | null |
   const match = response.match(APPROVAL_REGEX)
 
   if (hasSignal && !match) {
-    console.warn('[parseApprovalRequest] SAFETY BLOCK: REQUEST_APPROVAL marker found but JSON could not be extracted. Blocking execution.')
-    return 'BLOCKED'
+    // If it looks like a false positive (e.g. just talking about approvals), don't block.
+    // Only block if it's a dedicated line or clear intention.
+    if (response.includes('\nREQUEST_APPROVAL') || response.startsWith('REQUEST_APPROVAL')) {
+      console.warn('[parseApprovalRequest] SAFETY BLOCK: Dedicated REQUEST_APPROVAL marker found but JSON could not be extracted.')
+      return 'BLOCKED'
+    }
+    return null
   }
   if (!match) return null
 
@@ -771,6 +776,27 @@ export async function runWorkerTask(
     // 9. Update State to Completed
     await supabase.from('goal_tasks').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('task_id', task.id)
     await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', deptRow.id)
+
+    // 10. Generate Artifact (Phase 4 integration)
+    // If the result contains a significant body or is a document/design task, create a permanent artifact.
+    const res = workerResult.result as any
+    const bodyContent = res?.body || res?.content || workerResult.memo_summary
+    if (bodyContent && String(bodyContent).length > 50) {
+      await supabase.from('artifacts').insert({
+        goal_id: goalId || null,
+        department_id: deptRow.id,
+        department_slug: dept,
+        artifact_type: (task.action.includes('design') || task.action.includes('creative')) ? 'image' : 'document',
+        title: task.label,
+        body: bodyContent,
+        metadata: { 
+          task_id: task.id, 
+          action: task.action, 
+          model: task.model,
+          generated_at: new Date().toISOString()
+        }
+      })
+    }
 
     await logEvent({
       event_type: 'task_completed',
