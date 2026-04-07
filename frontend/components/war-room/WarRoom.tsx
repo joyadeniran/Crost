@@ -3,10 +3,10 @@
 // components/war-room/WarRoom.tsx
 // The War Room: goal input + live plan card + per-task approve/reject.
 // This is the core of the founder→orchestrator→worker loop.
-
+import { supabaseClient } from '@/lib/supabase'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
-import type { Goal, OrchestratorTask, RiskLevel } from '@/types'
+import type { Goal, OrchestratorTask, RiskLevel, Department } from '@/types'
 
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
@@ -16,11 +16,33 @@ const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string
   critical: { bg: 'rgba(239,68,68,0.12)',  text: '#f87171', border: 'rgba(239,68,68,0.3)' },
 }
 
-const DEPT_COLOURS: Record<string, string> = {
-  sales:     '#6366f1',
-  marketing: '#ec4899',
-  ops:       '#14b8a6',
+// Default fallback if dept not found in store
+const DEFAULT_DEPT_COLOUR = '#6366f1'
+const DEFAULT_DEPT_ICON = '🏢'
+
+// Map legacy icon-name strings → emoji for departments created before the wizard change
+const ICON_MAP: Record<string, string> = {
+  'briefcase':   '💼',
+  'code':        '💻',
+  'code-2':      '💻',
+  'megaphone':   '📣',
+  'handshake':   '🤝',
+  'bar-chart-2': '📊',
+  'chart':       '📊',
+  'settings-2':  '⚙️',
+  'ops':         '⚙️',
+  'shield':      '🛡️',
+  'flask':       '🧪',
+  'globe':       '🌐',
+  'users':       '👥',
+  'zap':         '⚡',
+  'dollar-sign': '💰',
 }
+
+function resolveIcon(icon: string): string {
+  return ICON_MAP[icon] ?? icon
+}
+
 
 // ─── GoalInput ────────────────────────────────────────────────────────────────
 
@@ -190,15 +212,24 @@ function TaskApprovalItem({
   onApprove,
   onReject,
   onHold,
+  departments,
 }: {
   task: OrchestratorTask
   decision: TaskDecision
-  onApprove: () => void
+  onApprove: (overrides?: { label?: string; reasoning?: string }) => void
   onReject: () => void
   onHold: () => void
+  departments: Department[]
 }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedLabel, setEditedLabel] = useState(task.label)
+  const [editedReasoning, setEditedReasoning] = useState(task.reasoning)
+
   const risk = RISK_COLOURS[task.risk_level]
-  const deptColour = DEPT_COLOURS[task.dept] ?? '#6366f1'
+  
+  const deptData = departments.find(d => d.slug === task.dept)
+  const deptColour = deptData?.color ?? DEFAULT_DEPT_COLOUR
+  const deptIcon = resolveIcon(deptData?.icon ?? DEFAULT_DEPT_ICON)
 
   const decisionLabel: Record<NonNullable<TaskDecision>, string> = {
     approved: '✓ DISPATCHED',
@@ -232,19 +263,42 @@ function TaskApprovalItem({
           textTransform: 'uppercase',
           flexShrink: 0,
         }}>
+          <span style={{
+            marginRight: 4,
+            fontSize: 12,
+          }}>
+            {deptIcon}
+          </span>
           {task.dept}
         </span>
 
-        {/* Label */}
-        <span style={{
-          fontFamily: 'var(--font-dm-sans, sans-serif)',
-          fontSize: 13,
-          color: 'var(--text)',
-          fontWeight: 500,
-          flex: 1,
-        }}>
-          {task.label}
-        </span>
+        {/* Label or Edit Field */}
+        {isEditing ? (
+          <input
+            value={editedLabel}
+            onChange={(e) => setEditedLabel(e.target.value)}
+            style={{
+              flex: 1,
+              background: 'var(--bg-3)',
+              border: '1px solid var(--accent)',
+              borderRadius: 4,
+              color: 'var(--text)',
+              fontSize: 13,
+              padding: '2px 8px',
+              fontFamily: 'var(--font-dm-sans, sans-serif)',
+            }}
+          />
+        ) : (
+          <span style={{
+            fontFamily: 'var(--font-dm-sans, sans-serif)',
+            fontSize: 13,
+            color: 'var(--text)',
+            fontWeight: 500,
+            flex: 1,
+          }}>
+            {task.label}
+          </span>
+        )}
 
         {/* Risk badge */}
         <span style={{
@@ -263,17 +317,37 @@ function TaskApprovalItem({
         </span>
       </div>
 
-      {/* Reasoning — always visible, never collapsed per spec */}
-      <div style={{
-        fontFamily: 'var(--font-dm-sans, sans-serif)',
-        fontSize: 12,
-        color: 'var(--text-2)',
-        lineHeight: 1.5,
-        marginBottom: 10,
-        paddingLeft: 2,
-      }}>
-        {task.reasoning}
-      </div>
+      {/* Reasoning or Edit Field */}
+      {isEditing ? (
+        <textarea
+          value={editedReasoning}
+          onChange={(e) => setEditedReasoning(e.target.value)}
+          rows={3}
+          style={{
+            width: '100%',
+            background: 'var(--bg-3)',
+            border: '1px solid var(--accent)',
+            borderRadius: 4,
+            color: 'var(--text-2)',
+            fontSize: 12,
+            padding: '4px 8px',
+            fontFamily: 'var(--font-dm-sans, sans-serif)',
+            marginBottom: 10,
+            resize: 'none',
+          }}
+        />
+      ) : (
+        <div style={{
+          fontFamily: 'var(--font-dm-sans, sans-serif)',
+          fontSize: 12,
+          color: 'var(--text-2)',
+          lineHeight: 1.5,
+          marginBottom: 10,
+          paddingLeft: 2,
+        }}>
+          {task.reasoning}
+        </div>
+      )}
 
       {/* Action buttons or decision indicator */}
       {decision ? (
@@ -287,15 +361,47 @@ function TaskApprovalItem({
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={onApprove} style={btnStyle('#4ade80', '#4ade8022')}>
-            Approve
-          </button>
-          <button onClick={onReject} style={btnStyle('#f87171', '#f8717122')}>
-            Reject
-          </button>
-          <button onClick={onHold} style={btnStyle('var(--text-3)', 'var(--bg-3)')}>
-            Hold
-          </button>
+          {isEditing ? (
+            <>
+              <button 
+                onClick={() => {
+                  onApprove({ label: editedLabel, reasoning: editedReasoning })
+                  setIsEditing(false)
+                }} 
+                style={btnStyle('#4ade80', '#4ade8022')}
+              >
+                Save & Approve
+              </button>
+              <button 
+                onClick={() => {
+                  setIsEditing(false)
+                  setEditedLabel(task.label)
+                  setEditedReasoning(task.reasoning)
+                }} 
+                style={btnStyle('var(--text-3)', 'var(--bg-3)')}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => onApprove()} style={btnStyle('#4ade80', '#4ade8022')}>
+                Approve
+              </button>
+              <button 
+                onClick={() => setIsEditing(true)} 
+                style={btnStyle('#6366f1', '#6366f122')}
+              >
+                Edit
+              </button>
+              <button onClick={onReject} style={btnStyle('#f87171', '#f8717122')}>
+                Reject
+              </button>
+              <button onClick={onHold} style={btnStyle('var(--text-3)', 'var(--bg-3)')}>
+                Hold
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -327,14 +433,16 @@ function PlanCard({
   onDismiss,
   decisions,
   onApproveAll,
+  departments,
 }: {
   goal: Goal
-  onDispatch: (taskId: string) => void
+  onDispatch: (taskId: string, overrides?: { label?: string; reasoning?: string }) => void
   onReject: (taskId: string) => void
   onHold: (taskId: string) => void
   onDismiss: () => void
   decisions: Record<string, TaskDecision>
   onApproveAll: () => void
+  departments: Department[]
 }) {
   const plan = goal.orchestrator_plan
   if (!plan) return null
@@ -427,9 +535,10 @@ function PlanCard({
             key={task.id}
             task={task}
             decision={decisions[task.id] ?? null}
-            onApprove={() => onDispatch(task.id)}
+            onApprove={(overrides) => onDispatch(task.id, overrides)}
             onReject={() => onReject(task.id)}
             onHold={() => onHold(task.id)}
+            departments={departments}
           />
         ))}
       </div>
@@ -471,10 +580,274 @@ function PlanCard({
   )
 }
 
+// ─── SynthesisReportCard (Phase 4) ────────────────────────────────────────────
+
+function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss: () => void }) {
+  const [report, setReport] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchReport() {
+      try {
+        const { data: memos } = await supabaseClient
+          .from('company_memos')
+          .select('*')
+          .eq('goal_id', goalId)
+          .eq('source_type', 'orchestrator')
+          .order('created_at', { ascending: false })
+          .limit(1)
+        
+        if (memos && memos.length > 0) {
+          setReport(memos[0])
+        }
+      } catch (err) {
+        console.error('[SynthesisReportCard] Failed to fetch report:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchReport()
+  }, [goalId])
+
+  if (isLoading) return <div style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>Synthesizing results...</div>
+  if (!report) return null
+
+  return (
+    <div style={{
+      background: 'var(--bg-2)',
+      border: '1px solid var(--accent)',
+      borderRadius: 'var(--radius)',
+      padding: '24px',
+      marginTop: 20,
+      position: 'relative',
+      overflow: 'hidden',
+      boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+    }}>
+      {/* Background Glow */}
+      <div style={{
+        position: 'absolute',
+        top: -100,
+        right: -100,
+        width: 300,
+        height: 300,
+        background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'var(--accent)',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            display: 'block',
+            marginBottom: 4,
+          }}>
+            Strategic Synthesis
+          </span>
+          <h3 style={{ 
+            fontFamily: 'var(--font-dm-sans, sans-serif)', 
+            fontSize: 20, 
+            fontWeight: 600,
+            color: 'var(--text)',
+            margin: 0,
+          }}>
+            Orc Report
+          </h3>
+        </div>
+        <button 
+          onClick={onDismiss}
+          style={{
+            background: 'var(--bg-3)',
+            border: 'none',
+            color: 'var(--text-3)',
+            fontSize: 18,
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: 4,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="markdown-content" style={{
+        fontFamily: 'var(--font-dm-sans, sans-serif)',
+        fontSize: 14,
+        color: 'var(--text-2)',
+        lineHeight: 1.6,
+        whiteSpace: 'pre-wrap',
+      }}>
+        {report.body}
+      </div>
+
+      <div style={{
+        marginTop: 24,
+        paddingTop: 16,
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+      }}>
+        <div style={{
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 14,
+        }}>
+          🧠
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
+          <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Chief of Staff Pass</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── OrcDialogue (Phase 5) ────────────────────────────────────────────────────
+
+function OrcDialogue({ goal, onResponse }: { goal: Goal, onResponse: (text?: string, skip?: boolean) => void }) {
+  const [input, setInput] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const messages = goal.orc_conversation || []
+
+  const handleSend = async () => {
+    if (!input.trim()) return
+    setIsSending(true)
+    await onResponse(input)
+    setInput('')
+    setIsSending(false)
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-2)',
+      border: '1px solid var(--accent)',
+      borderRadius: 'var(--radius)',
+      padding: '24px',
+      marginTop: 20,
+      boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+    }}>
+      <div style={{ marginBottom: 16 }}>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: 'var(--accent)',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          display: 'block',
+          marginBottom: 4,
+        }}>
+          Chief of Staff Clarification
+        </span>
+        <h3 style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+          Orc is thinking...
+        </h3>
+      </div>
+
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 12, 
+        maxHeight: 300, 
+        overflowY: 'auto',
+        marginBottom: 20,
+        paddingRight: 8,
+      }}>
+        {messages.map((m, idx) => (
+          <div key={idx} style={{
+            alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '85%',
+            background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-3)',
+            color: m.role === 'user' ? 'white' : 'var(--text)',
+            padding: '10px 14px',
+            borderRadius: 12,
+            borderBottomRightRadius: m.role === 'user' ? 2 : 12,
+            borderBottomLeftRadius: m.role === 'assistant' ? 2 : 12,
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}>
+            {m.content}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        <input 
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Answer Orc's question..."
+          style={{
+            flex: 1,
+            background: 'var(--bg-1)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '10px 14px',
+            color: 'var(--text)',
+            fontSize: 13,
+            outline: 'none',
+          }}
+          disabled={isSending}
+        />
+        <button 
+          onClick={handleSend}
+          disabled={isSending || !input.trim()}
+          style={{
+            background: 'var(--accent)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            padding: '0 20px',
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: 'pointer',
+            opacity: (isSending || !input.trim()) ? 0.5 : 1,
+          }}
+        >
+          Send
+        </button>
+      </div>
+
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
+        <button 
+          onClick={() => onResponse(undefined, true)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-3)',
+            fontSize: 11,
+            textDecoration: 'underline',
+            cursor: 'pointer',
+          }}
+        >
+          Skip & Draft Plan Anyway
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── WarRoom (main export) ────────────────────────────────────────────────────
 
 export function WarRoom() {
-  const { activeGoal, setActiveGoal, updateActiveGoal, isSubmittingGoal, setIsSubmittingGoal } = useCrostStore()
+  const { 
+    activeGoal, 
+    setActiveGoal, 
+    updateActiveGoal, 
+    isSubmittingGoal, 
+    setIsSubmittingGoal,
+    departments,
+  } = useCrostStore()
   const [decisions, setDecisions] = useState<Record<string, TaskDecision>>({})
 
   // Clear decisions when a new goal is set
@@ -524,14 +897,34 @@ export function WarRoom() {
     }
   }, [setActiveGoal, setIsSubmittingGoal])
 
-  const handleDispatch = useCallback(async (taskId: string) => {
+  const handleDialogueResponse = useCallback(async (message?: string, skip?: boolean) => {
+    if (!activeGoal) return
+    try {
+      const res = await fetch(`/api/goals/${activeGoal.id}/dialogue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, force_plan: skip }),
+      })
+      if (res.ok) {
+        // Optimistically flip to planning or keep at clarifying while polling
+        setActiveGoal({ ...activeGoal, status: 'planning' })
+      }
+    } catch (err) {
+      console.error('[handleDialogueResponse]', err)
+    }
+  }, [activeGoal, setActiveGoal])
+
+  const handleDispatch = useCallback(async (taskId: string, overrides?: { label?: string; reasoning?: string }) => {
     if (!activeGoal) return
     setDecisions(d => ({ ...d, [taskId]: 'approved' }))
     try {
       await fetch(`/api/goals/${activeGoal.id}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId }),
+        body: JSON.stringify({ 
+          task_id: taskId,
+          ...(overrides && { task_override: overrides })
+        }),
       })
     } catch (err) {
       console.error('[WarRoom] dispatch failed', err)
@@ -585,7 +978,14 @@ export function WarRoom() {
 
       {isPlanning && <PlanningIndicator />}
 
-      {hasPlan && activeGoal && (
+      {activeGoal?.status === 'clarifying' && (
+        <OrcDialogue 
+          goal={activeGoal} 
+          onResponse={handleDialogueResponse} 
+        />
+      )}
+
+      {hasPlan && activeGoal && !['completed', 'clarifying'].includes(activeGoal.status) && (
         <PlanCard
           goal={activeGoal}
           decisions={decisions}
@@ -594,6 +994,14 @@ export function WarRoom() {
           onHold={handleHold}
           onDismiss={() => setActiveGoal(null)}
           onApproveAll={handleApproveAll}
+          departments={departments}
+        />
+      )}
+
+      {activeGoal?.status === 'completed' && (
+        <SynthesisReportCard 
+          goalId={activeGoal.id} 
+          onDismiss={() => setActiveGoal(null)}
         />
       )}
 

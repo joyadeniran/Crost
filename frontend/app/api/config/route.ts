@@ -20,11 +20,16 @@ export async function PATCH(req: NextRequest) {
     // Verify the key exists and is founder-editable
     const { data: existing, error: fetchErr } = await supabase
       .from('system_config')
-      .select('is_founder_editable')
+      .select('key, is_founder_editable')
       .eq('key', key)
       .single()
 
+    console.log(`[PATCH /api/config] Checking key: "${key}". Found:`, !!existing, 'Error:', fetchErr?.message)
+
     if (fetchErr || !existing) {
+      // List available keys for debugging
+      const { data: allKeys } = await supabase.from('system_config').select('key')
+      console.log(`[PATCH /api/config] Available keys:`, allKeys?.map(k => k.key))
       return NextResponse.json({ error: `Config key "${key}" not found.` }, { status: 404 })
     }
     if (!existing.is_founder_editable) {

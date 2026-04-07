@@ -6,8 +6,11 @@ export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 export type ModelProvider = 'local' | 'gemini' | 'claude' | 'groq'
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'expired' | 'failed'
 export type MemoPriority = 'low' | 'normal' | 'high' | 'urgent'
-export type GoalStatus = 'pending' | 'planning' | 'awaiting_approval' | 'executing' | 'completed' | 'failed'
-export type WorkerDept = 'sales' | 'marketing' | 'ops'
+export type GoalStatus = 'pending' | 'clarifying' | 'planning' | 'awaiting_approval' | 'executing' | 'completed' | 'failed'
+// WorkerDept is intentionally a string — not a union — so new departments created
+// in the database work without a code change or deploy. The 3 canonical MVP slugs
+// are (sales, marketing, ops) but the system must not hardcode them.
+export type WorkerDept = string
 
 export type ActionType =
   | 'send_email'
@@ -46,6 +49,17 @@ export type EventType =
   | 'model_pulled'
   | 'constitution_updated'
   | 'artifact_created'
+  // Orc supervision events
+  | 'orc_status_check'
+  | 'orc_rebalance'
+  | 'orc_escalation'
+  | 'orc_stall_detected'
+  | 'goal_closed'
+  | 'goal_post_mortem_written'
+  | 'goal_received'
+  | 'plan_drafted'
+  | 'plan_approved'
+  | 'token_budget_blocked'
 
 export interface Department {
   id: string
@@ -102,6 +116,11 @@ export interface CompanyMemo {
   onyx_index_id: string | null
   created_at: string
   read_by: string[]
+  // Provenance & confidence (migration 011)
+  source_type: 'founder' | 'agent' | 'orchestrator' | 'external' | 'system'
+  confidence: number              // [0.0–1.0]. Legacy memos default to 0.5
+  based_on: string[]             // data sources used when writing this memo
+  confidence_decay_days: number  // days after which memo is flagged as stale by Orc
 }
 
 export interface Artifact {
@@ -167,16 +186,13 @@ export interface OrchestratorTask {
   risk_level: RiskLevel
   model: string
   depends_on: string[]
+  expected_deliverable: string // What Orc expects this worker to produce
 }
 
 export interface OrchestratorPlan {
   goal: string
   risk_note: string          // MANDATORY — never null or empty
-  data_gathered: {
-    sales: string | null
-    marketing: string | null
-    ops: string | null
-  }
+  data_gathered: Record<string, string | null>
   tasks: OrchestratorTask[]
 }
 
@@ -188,6 +204,43 @@ export interface Goal {
   risk_note: string | null
   status: GoalStatus
   outcome: string | null
+  orc_conversation?: { role: 'user' | 'assistant', content: string, ts: string }[]
+  created_at: string
+  updated_at: string
+  // Orc upgrade fields (migration 011)
+  env_mode_snapshot: 'local' | 'cloud' | null  // locked at first dispatch
+  orc_session_id: string | null                 // Onyx chat session for persistent Orc
+  last_status_check: string | null
+  supervision_interval_seconds: number
+}
+
+// GoalTask — a single task row within a goal (replaces orchestrator_plan.tasks flat JSON)
+export type GoalTaskStatus =
+  | 'pending'
+  | 'approved'
+  | 'pending_dependency'
+  | 'dispatched'
+  | 'completed'
+  | 'failed'
+  | 'rejected'
+  | 'expired'
+
+export interface GoalTask {
+  id: string
+  goal_id: string
+  task_id: string             // orchestrator-assigned UUID, unique per goal
+  dept_slug: string           // open string — not restricted to 3 hardcoded slugs
+  action: string
+  label: string
+  reasoning: string
+  params: Record<string, unknown>
+  risk_level: RiskLevel
+  depends_on: string[]        // task_ids that must complete before this dispatches
+  model: string
+  status: GoalTaskStatus
+  assigned_at: string | null
+  completed_at: string | null
+  orc_notes: Array<{ ts: string; note: string; action_taken: string }>
   created_at: string
   updated_at: string
 }
@@ -197,6 +250,7 @@ export interface WorkerTask {
   action: string
   label: string
   reasoning: string
+  expected_deliverable: string
   params: Record<string, unknown>
   risk_level: RiskLevel
   model: string
@@ -209,4 +263,7 @@ export interface WorkerResult {
   memo_summary: string
   errors: string[]
   flags?: string[]           // ops only
+  // Confidence provenance — written to company_memos on every result
+  confidence?: number        // [0.0–1.0], defaults to 0.5 if not provided by worker
+  based_on?: string[]        // data sources the worker used
 }

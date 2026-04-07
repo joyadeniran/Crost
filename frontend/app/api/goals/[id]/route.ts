@@ -2,7 +2,7 @@
 // PATCH /api/goals/[id]  — update goal status (e.g. mark as executing/completed)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { z } from 'zod'
 
 type Params = { params: { id: string } }
@@ -40,6 +40,8 @@ const UpdateGoalSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
+    // Auth gate removed for local founder access
+
     const body = await req.json()
     const parsed = UpdateGoalSchema.parse(body)
     const supabase = createServerSupabaseClient()

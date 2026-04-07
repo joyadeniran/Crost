@@ -12,6 +12,9 @@ const EVENT_COLORS: Record<string, string> = {
   approval_approved:   '#00d4aa',
   approval_rejected:   '#ff4d6d',
   memo_written:        '#a855f7',
+  plan_drafted:        '#a855f7', // Orchestrator Violet
+  orc_rebalance:       '#fbbf24', // Amber for coordination
+  orc_stall_detected:  '#ef4444', // Red for stalls
   mode_switched:       '#64748b',
   department_created:  '#00d4aa',
   department_updated:  '#4da6ff',
@@ -35,8 +38,10 @@ interface Props {
 export function LiveEventsPanel({ initial }: Props) {
   const [events, setEvents] = useState<EventLogEntry[]>(initial)
   const [newId, setNewId] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const channel = supabaseClient
       .channel('event-log-live')
       .on(
@@ -89,7 +94,7 @@ export function LiveEventsPanel({ initial }: Props) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="event-desc">{ev.description}</div>
               <div className="event-meta">
-                <span>{timeAgo(ev.created_at)}</span>
+                <span>{mounted ? timeAgo(ev.created_at) : '...'}</span>
                 {ev.department_slug && ev.department_slug !== 'system' && (
                   <span style={{ color: 'var(--text-3)' }}>{ev.department_slug}</span>
                 )}
