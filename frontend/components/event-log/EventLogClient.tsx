@@ -17,6 +17,7 @@ const EVENT_COLOR: Partial<Record<EventType, string>> = {
   action_execution_failed: 'var(--red)',
   memo_written:        'var(--blue)',
   tool_called:         'var(--blue)',
+  tool_executed:       'var(--accent)',
   unauthorised_tool_call: 'var(--red)',
   error:               'var(--red)',
   mode_switched:       'var(--amber)',
@@ -30,7 +31,7 @@ const EVENT_COLOR: Partial<Record<EventType, string>> = {
 const EVENT_TYPE_OPTIONS: EventType[] = [
   'task_started', 'task_completed', 'task_failed',
   'approval_requested', 'approval_approved', 'approval_rejected',
-  'action_executed', 'memo_written', 'tool_called',
+  'action_executed', 'memo_written', 'tool_called', 'tool_executed',
   'department_created', 'department_updated', 'error',
 ]
 

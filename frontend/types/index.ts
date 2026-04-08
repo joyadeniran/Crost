@@ -36,6 +36,7 @@ export type EventType =
   | 'action_execution_failed'
   | 'memo_written'
   | 'tool_called'
+  | 'tool_executed'
   | 'unauthorised_tool_call'
   | 'error'
   | 'mode_switched'
@@ -217,13 +218,12 @@ export interface Goal {
 // GoalTask — a single task row within a goal (replaces orchestrator_plan.tasks flat JSON)
 export type GoalTaskStatus =
   | 'pending'
+  | 'planned'
   | 'approved'
-  | 'pending_dependency'
-  | 'dispatched'
+  | 'running'
   | 'completed'
   | 'failed'
-  | 'rejected'
-  | 'expired'
+  | 'needs_data'
 
 export interface GoalTask {
   id: string
@@ -258,11 +258,13 @@ export interface WorkerTask {
 
 export interface WorkerResult {
   task_id: string
-  status: 'completed' | 'failed' | 'needs_approval'
+  status: 'completed' | 'failed' | 'needs_approval' | 'needs_data'
   result: Record<string, unknown>
   memo_summary: string
   errors: string[]
   flags?: string[]           // ops only
+  // MCP Extension
+  tool_request?: { tool: string, params: Record<string, any> }
   // Confidence provenance — written to company_memos on every result
   confidence?: number        // [0.0–1.0], defaults to 0.5 if not provided by worker
   based_on?: string[]        // data sources the worker used

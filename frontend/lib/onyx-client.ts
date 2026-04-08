@@ -24,6 +24,19 @@ const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b
 const LITELLM_URL = process.env.LITELLM_URL ?? 'http://localhost:4000'
 const LITELLM_KEY = process.env.LITELLM_KEY ?? process.env.GEMINI_API_KEY ?? ''
 
+export function getModel(taskType: 'planning' | 'execution' | 'analysis' | 'summarization'): string {
+  if (process.env.ENV_MODE === 'local') {
+    return process.env.LOCAL_MODEL ?? 'groq/llama-3.3-70b-versatile'
+  }
+  const MODELS: Record<string, string> = {
+    planning: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
+    execution: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile',
+    analysis: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
+    summarization: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
+  }
+  return MODELS[taskType] || MODELS.execution
+}
+
 // Default fallback tone when local_identity not yet set
 const DEFAULT_LOCAL_IDENTITY = `Write professionally and clearly. Be direct, warm, and human.
 Avoid corporate buzzwords. Adapt tone to context: technical when needed, conversational when appropriate.`
@@ -47,7 +60,8 @@ export async function buildFinalPrompt(
   task: string,
   capabilities: string[] = [],
   restrictions: string[] = [],
-  departmentSlug?: string
+  departmentSlug?: string,
+  goalId?: string
 ): Promise<string> {
   const supabase = createServerSupabaseClient()
 
@@ -65,7 +79,13 @@ export async function buildFinalPrompt(
     : DEFAULT_LOCAL_IDENTITY
 
   // Memo brief — always fresh, never cached
-  const memoBrief = departmentSlug ? await getMemoBrief(departmentSlug) : ''
+  let memoBrief = departmentSlug ? await getMemoBrief(departmentSlug) : ''
+  if (goalId) {
+    const goalMemos = await getMemos(goalId)
+    if (goalMemos) {
+      memoBrief = memoBrief ? `${memoBrief}\n\n${goalMemos}` : goalMemos
+    }
+  }
 
   const capLine = capabilities.length > 0
     ? `CAPABILITIES\n${capabilities.map(c => `- ${c}`).join('\n')}`
@@ -174,6 +194,32 @@ async function getMemoBrief(departmentSlug: string): Promise<string> {
   }
 }
 
+async function getMemos(goalId: string, lastN: number = 10): Promise<string> {
+  try {
+    const supabase = createServerSupabaseClient()
+    const { data: memos } = await supabase
+      .from('company_memos')
+      .select('title, body, priority, from_department, confidence, source_type')
+      .eq('goal_id', goalId)
+      .order('created_at', { ascending: false })
+      .limit(lastN)
+
+    if (!memos || memos.length === 0) return ''
+
+    return memos
+      .map(m => {
+        const confidenceTag = m.confidence != null ? ` [confidence: ${m.confidence.toFixed(2)}]` : ''
+        const sourceTag = m.source_type ? ` [source: ${m.source_type}]` : ''
+        // Truncate to prevent token limit crashes on workers (16k limit typically)
+        const bodyContent = m.body.length > 800 ? m.body.slice(0, 800) + '... [body truncated for context size]' : m.body
+        return `[GOAL MEMO][${m.priority.toUpperCase()}${confidenceTag}${sourceTag}] ${m.title} (from: ${m.from_department})\n${bodyContent}`
+      })
+      .join('\n\n')
+  } catch {
+    return ''
+  }
+}
+
 // ─── Direct LLM Providers ─────────────────────────────────────────────────────
 
 async function callGroq(modelName: string, prompt: string, systemNote?: string): Promise<{ content: string; tokensUsed: number }> {
@@ -239,7 +285,7 @@ async function callLLM(
   systemNote?: string
 ): Promise<{ content: string; tokensUsed: number }> {
   // Normalize Orchestrator abstract model strings ("cloud" / "local") to concrete models
-  if (model === 'cloud') model = CLOUD_MODEL_WORKER
+  if (model === 'cloud') model = getModel('execution')
   if (model === 'local') model = process.env.LOCAL_MODEL ?? 'groq/llama-3.3-70b-versatile'
 
   // Route to the correct provider REST API manually since LiteLLM isn't running
@@ -284,7 +330,7 @@ export async function checkTokenBudget(): Promise<
         .gt('tokens_used', 0),
     ])
 
-    const limit = Number(limitRow?.value ?? 50000)
+    const limit = Number(limitRow?.value ?? 1000000)
     const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.tokens_used ?? 0), 0)
 
     if (tokensUsed >= limit) {
@@ -476,7 +522,7 @@ export async function runOrchestratorTask(
 
     const formatMemos = (memos: any[]) =>
       memos && memos.length > 0
-        ? memos.map(m => `[${m.priority}][confidence:${(m.confidence ?? 0.5).toFixed(2)}] ${m.title}: ${m.body.slice(0, 200)}...`).join('\n')
+        ? memos.map(m => `[${m.priority}][confidence:${(m.confidence ?? 0.5).toFixed(2)}] ${m.title}: ${String(m.body || '').slice(0, 800)}...`).join('\n')
         : 'No recent memos.'
 
     // 4. Build Context
@@ -518,10 +564,11 @@ Plan across multiple departments if needed. Coordinate their deliverables. Ensur
       prompt,
       orchestratorDept?.capabilities ?? [],
       orchestratorDept?.restrictions ?? [],
-      orchestratorDept?.slug
+      orchestratorDept?.slug,
+      goalId
     )
 
-    const { content, tokensUsed } = await callLLM(CLOUD_MODEL, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE)
+    const { content, tokensUsed } = await callLLM(getModel('planning'), finalPrompt, ORCHESTRATOR_SYSTEM_NOTE)
 
     // 6. Parse result
     const result = parseOrchestratorResponse(content)
@@ -705,7 +752,7 @@ export async function runWorkerTask(
     restrictions: (deptRow.restrictions ?? []).join(", "),
   }
 
-  const taskPrompt = `COHERENCE_BLOCK:\n${JSON.stringify(coherenceBlock, null, 2)}\n\nTASK:\nID: ${task.id}\nAction: ${task.action}\nLabel: ${task.label}\nReasoning: ${task.reasoning}\nParams: ${JSON.stringify(task.params)}\n\nIMPORTANT: Response MUST be JSON with "confidence", "based_on", "memo_summary", and "result" fields.`
+  const taskPrompt = `COHERENCE_BLOCK:\n${JSON.stringify(coherenceBlock, null, 2)}\n\nTASK:\nID: ${task.id}\nAction: ${task.action}\nLabel: ${task.label}\nReasoning: ${task.reasoning}\nParams: ${JSON.stringify(task.params)}\n\nIMPORTANT: Response MUST be JSON conforming exactly to this schema:\n{\n  "summary": "String summarizing what you did",\n  "insights": ["Array of string insights"],\n  "risks": ["Array of strings"],\n  "confidence": 0.9,\n  "needs_more_data": false,\n  "missing_data": ["Optional list of missing context"],\n  "tool_request": { "tool": "name", "params": {} },\n  "next_actions": ["Optional list of recommended actions"]\n}\n\nIf you need external data or real-world action, populate 'tool_request'. Do NOT simulate data.`
 
   try {
     const prompt = await buildFinalPrompt(
@@ -713,11 +760,12 @@ export async function runWorkerTask(
       taskPrompt,
       deptRow.capabilities ?? [],
       deptRow.restrictions ?? [],
-      deptRow.slug
+      deptRow.slug,
+      goalId
     )
 
     // 5. LLM Call
-    const model = task.model || CLOUD_MODEL_WORKER
+    const model = task.model || getModel('execution')
     const { content, tokensUsed } = await callLLM(model, prompt)
 
     // 6. Handle Approvals
@@ -751,13 +799,68 @@ export async function runWorkerTask(
 
     // 7. Parse Result JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/)
-    const workerResult: WorkerResult = jsonMatch ? JSON.parse(jsonMatch[0]) : {
+    let workerResult: WorkerResult = {
+      task_id: task.id,
       status: 'completed',
       result: { raw: content },
       memo_summary: content.slice(0, 200),
       errors: []
     }
-    workerResult.task_id = task.id
+
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (parsed.needs_more_data) {
+          workerResult.status = 'needs_data'
+          workerResult.memo_summary = `BLOCKED (Needs Data): ${(parsed.missing_data || []).join(', ')}`
+        } else {
+          workerResult.status = 'completed'
+          workerResult.memo_summary = parsed.summary || content.slice(0, 200)
+        }
+        workerResult.result = parsed
+        ;(workerResult as any).confidence = parsed.confidence
+        ;(workerResult as any).based_on = parsed.insights || []
+        
+        // 7.1 Handle MCP Tool Execution
+        if (parsed.tool_request?.tool) {
+          try {
+            const toolRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tools/execute`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...parsed.tool_request,
+                goal_id: goalId,
+                task_id: task.id,
+                department_slug: dept,
+                department_id: deptRow.id
+              })
+            })
+            
+            if (toolRes.ok) {
+              const toolData = await toolRes.json()
+              workerResult.tool_request = parsed.tool_request
+              workerResult.memo_summary = `[TOOL EXECUTION: ${parsed.tool_request.tool}] ${workerResult.memo_summary}\n\nResult: ${JSON.stringify(toolData.data)}`
+              
+              await logEvent({
+                event_type: 'tool_executed' as any,
+                department_slug: dept,
+                goal_id: goalId,
+                description: `Executed tool: ${parsed.tool_request.tool}`,
+                metadata: { tool: parsed.tool_request.tool, result: toolData.data }
+              })
+            } else {
+              const err = await toolRes.text()
+              workerResult.errors.push(`Tool ${parsed.tool_request.tool} failed: ${err}`)
+            }
+          } catch (toolErr: any) {
+            console.error('MCP Engine call failed:', toolErr)
+            workerResult.errors.push(`MCP Engine call failed: ${toolErr.message}`)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse final worker json result:', e)
+      }
+    }
 
     // 8. Write Memo
     if (workerResult.memo_summary) {
@@ -773,8 +876,8 @@ export async function runWorkerTask(
       })
     }
 
-    // 9. Update State to Completed
-    await supabase.from('goal_tasks').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('task_id', task.id)
+    // 9. Update State based on Worker Status
+    await supabase.from('goal_tasks').update({ status: workerResult.status, completed_at: new Date().toISOString() }).eq('task_id', task.id)
     await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', deptRow.id)
 
     // 10. Generate Artifact (Phase 4 integration)
@@ -798,13 +901,40 @@ export async function runWorkerTask(
       })
     }
 
-    await logEvent({
-      event_type: 'task_completed',
-      department_slug: dept,
-      goal_id: goalId,
-      description: `Completed: ${task.label}`,
-      tokens_used: tokensUsed
-    })
+    if (workerResult.status === 'needs_data') {
+      const missingElements = (workerResult.result as any).missing_data?.join(', ') || 'Clarification required.'
+      
+      // Alert the founder by appending to orc_conversation and setting goal status to clarifying
+      const { data: currentGoal } = await supabase.from('goals').select('orc_conversation').eq('id', goalId).single()
+      const newConvo = currentGoal?.orc_conversation || []
+      
+      newConvo.push({
+        role: 'assistant',
+        content: `**[${deptRow.name} Blocked]** We need more information to proceed with "${task.label}".\n\n**Missing Data:** ${missingElements}`,
+        ts: new Date().toISOString()
+      })
+
+      await supabase.from('goals').update({ 
+        status: 'clarifying',
+        orc_conversation: newConvo 
+      }).eq('id', goalId)
+
+      await logEvent({
+        event_type: 'task_blocked',
+        department_slug: dept,
+        goal_id: goalId,
+        description: `Blocked (Needs Data): ${task.label}`,
+        tokens_used: tokensUsed
+      })
+    } else {
+      await logEvent({
+        event_type: 'task_completed',
+        department_slug: dept,
+        goal_id: goalId,
+        description: `Completed: ${task.label}`,
+        tokens_used: tokensUsed
+      })
+    }
 
     return workerResult
 

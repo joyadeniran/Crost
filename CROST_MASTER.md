@@ -1,6 +1,6 @@
 # Project Crost: Master Source of Truth
 **Version:** 2.0 (Chief of Staff Edition)
-**Last Updated:** April 2026
+**Last Updated:** April 8, 2026
 **Purpose:** The single, definitive record of the Crost project. This file replaces all previous roadmap, spec, and context documents.
 
 ---
@@ -32,6 +32,10 @@ Crost allows a hybrid cloud/local execution model. The Orchestrator can run on c
 | **Founder Overrides** | 3 | ✅ Done | UI allows editing task labels/reasoning before dispatch. |
 | **Strategic Synthesis** | 4 | ✅ Done | Orc automatically generates post-mortem reports upon goal completion. |
 | **Dialogue Mode** | 5 | ✅ Done | Interactive clarification phase with persistent conversation history. |
+| **Intelligence Architecture v5.0** | 5.5 | ✅ Done | Strict model routing, bounded context memo injection, and strict JSON output schemas. |
+| **MCP & Tools System v1** | 6.0 | ✅ Done | Lightweight Model Context Protocol layer for fetching data and executing mock actions. |
+| **Artifacts & Notifications** | 6.5 | ✅ Done | Dedicated Artifacts gallery and Inbox hub with decoupled settings. |
+| **Waitlist & Landing v2** | 6.8 | ✅ Done | Brevo-powered waitlist, premium scroll animations, and mobile-responsive landing. |
 
 ---
 
@@ -45,6 +49,7 @@ Crost allows a hybrid cloud/local execution model. The Orchestrator can run on c
 | **Router** | LiteLLM | Smart local/cloud model switching. |
 | **Local LLM** | Ollama | `gemma3:12b` (default), `llama3:8b` (fallback). |
 | **Cloud LLM** | Gemini 1.5 Pro | Primary planning and reasoning brain. |
+| **Tool Engine** | Next.js API Route | Lightweight MCP registry for `get_data`, `save_doc`, etc. |
 | **Jobs** | Node.js Worker | Supervision loop, goal closure, and auto-reporting. |
 
 ---
@@ -103,7 +108,11 @@ During end-to-end testing, a parsing bug was resolved where trailing appended st
 3. **Coherence via Context**: Pass the full founder goal to every worker to prevent silo drift.
 4. **Soft Deprecation**: Departments are deprecated (hidden) rather than deleted to preserve audit trails.
 5. **Local-First Sensitive Data**: Sales/Ops default to local mode; Marketing defaults to cloud for creativity.
-6. **Mobile Criticality (Dispatch)**: Future high-stakes approvals (spend/delete) will require desktop confirmation.
+6. **Token Protection & Truncation**: Memo bodies are truncated to 800 chars internally to prevent worker crashes on huge contexts.
+7. **Active Re-clarification**: If a worker hits `needs_data`, it dynamically updates `orc_conversation` and flips the goal back to `clarifying`, actively asking the founder for missing pieces.
+8. **Mobile Criticality (Dispatch)**: Future high-stakes approvals (spend/delete) will require desktop confirmation.
+9. **Execution Safety (Gate)**: MCP Tool calls are awaited synchronously to ensure the execution result is captured in the department's memo before the task is marked completed.
+10. **Aesthetic Premium**: Vanilla CSS is used for custom layouts to ensure a unique, non-generic look (wow factor).
 
 ---
 
@@ -120,6 +129,7 @@ During end-to-end testing, a parsing bug was resolved where trailing appended st
 11: `orc_upgrade` (Goals, tasks, memos)
 12: `rls_policies` (Security)
 14: `dialogue_mode` (Clarifying status, conversation history)
+15: `v5_task_states` (Execution state machine handling: needs_data, planned, running)
 
 ---
 
@@ -133,6 +143,10 @@ During end-to-end testing, a parsing bug was resolved where trailing appended st
 ### Phase 7: Dispatch (Mobile)
 - **Voice Briefing**: "Walkie-talkie" mode for founders to receive status updates while mobile.
 - **Push Approvals**: Critical tasks pushed to phone via Cloudflare Tunnel.
+
+### Phase 8: Scaling & Multi-Org
+- **Department Auto-Creation**: Orc suggests creating new departments based on repeating task patterns.
+- **Organization Switcher**: Handle multiple founder entities/businesses within one Crost instance.
 
 ---
 
