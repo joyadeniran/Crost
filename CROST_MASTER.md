@@ -255,13 +255,20 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 - `render.yaml` (worker service)
 - `package.json` (root)
 
-- **Problem**: Worker service crashed on startup with "cannot find module at scripts/worker.ts"
-- **Root Cause**: Worker was trying to run from `frontend/` directory but `npx tsx` couldn't resolve node_modules
-- **Fix**: 
-  - Updated `buildCommand` to install dependencies at both root and frontend: `npm ci && npm ci --prefix frontend`
-  - Updated `startCommand` to run from repo root with proper module resolution: `npx tsx scripts/worker.ts`
-  - Added `tsx` to root `package.json` devDependencies (required for running TypeScript at repo root)
-- **Impact**: Worker can now properly resolve all modules from both root and frontend node_modules
+- **Problem 1**: Worker crashed with "cannot find module at scripts/worker.ts" on initial Render deploy
+  - **Root Cause**: Worker running from wrong directory; path resolution failed
+  - **First Fix**: Set `rootDir: .` and changed startCommand to `npx tsx scripts/worker.ts`
+  - **Result**: Path fixed but `npx tsx` still couldn't find modules
+
+- **Problem 2**: Worker crashed again with "Cannot find module 'dotenv'"
+  - **Root Cause**: `npx tsx` doesn't guarantee access to project `node_modules`
+  - **Final Fix**:
+    - Added `"worker": "tsx scripts/worker.ts"` script to root `package.json`
+    - Updated `startCommand` to `npm run worker` (npm ensures proper module resolution)
+    - Ensured `tsx`, `dotenv`, and dependencies in root `package.json` (moved from devDependencies to main dependencies)
+    - Set `buildCommand: npm ci && npm ci --prefix frontend` (installs at both levels)
+
+- **Impact**: Worker now executes with proper NODE_PATH and module resolution via npm script context
 
 ### ESLint Rule Removal
 **File**: `frontend/.eslintrc.json`

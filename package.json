@@ -1,6 +1,9 @@
 {
   "name": "crost-scripts",
   "version": "1.0.0",
+  "scripts": {
+    "worker": "tsx scripts/worker.ts"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
     "dotenv": "^17.4.1",
