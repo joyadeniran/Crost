@@ -11,7 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
-import { runWorkerTask, logEvent } from '@/lib/onyx-client'
+import { runWorkerTask, logEvent } from '@/lib/llm-client'
+import { getModelForTask } from '@/lib/model-routing'
 import type { OrchestratorTask, WorkerDept, WorkerTask } from '@/types'
 import { z } from 'zod'
 
@@ -266,6 +267,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       metadata: { task_id, goal_id: goal.id, dept: task.dept, env_mode_snapshot: envModeSnapshot, modified: isModified },
     })
 
+    // Resolve model using user's BYOK config, fallback to Orc's assignment
+    let modelForTask = finalTask.model
+    try {
+      const userModelConfig = await getModelForTask(goal.created_by, finalTask.action)
+      if (userModelConfig && userModelConfig.model) {
+        modelForTask = userModelConfig.model
+      }
+    } catch (err) {
+      console.warn('[dispatch] Failed to resolve user model config, using Orc assignment:', err)
+    }
+
     // Shape the OrchestratorTask into a WorkerTask
     const workerTask: WorkerTask = {
       id: finalTask.id,
@@ -275,7 +287,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       expected_deliverable: (finalTask as any).expected_deliverable || finalTask.label,
       params: finalTask.params,
       risk_level: finalTask.risk_level,
-      model: finalTask.model,
+      model: modelForTask,
     }
 
     // Dispatch to worker asynchronously — return immediately, UI polls dept status
