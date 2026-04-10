@@ -2,12 +2,12 @@
   "name": "crost-scripts",
   "version": "1.0.0",
   "dependencies": {
-    "@supabase/supabase-js": "^2.103.0"
+    "@supabase/supabase-js": "^2.103.0",
+    "dotenv": "^17.4.1",
+    "tsx": "^4.21.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0",
-    "dotenv": "^17.4.1",
-    "pg": "^8.20.0",
-    "tsx": "^4.7.0"
+    "@types/pg": "^8.20.0"
   }
 }
