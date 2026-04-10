@@ -2,7 +2,7 @@
   "name": "crost-scripts",
   "version": "1.0.0",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@supabase/supabase-js": "^2.103.0"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
