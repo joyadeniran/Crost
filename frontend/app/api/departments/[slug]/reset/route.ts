@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 interface Params { params: { slug: string } }
 
 export async function POST(_req: NextRequest, { params }: Params) {

@@ -16,6 +16,8 @@ import { getModelForTask } from '@/lib/model-routing'
 import type { OrchestratorTask, WorkerDept, WorkerTask } from '@/types'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 type Params = { params: { id: string } }
 
 const DispatchSchema = z.object({

@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runOrcReport } from '@/lib/llm-client'
 
+export const dynamic = 'force-dynamic'
+
 type Params = { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {

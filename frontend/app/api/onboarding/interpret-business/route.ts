@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callLLM, CLOUD_MODEL } from '@/lib/llm-client'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const { description } = await req.json()

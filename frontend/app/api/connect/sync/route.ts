@@ -3,6 +3,8 @@ import { createSupabaseServerComponentClient, createServerSupabaseClient } from 
 import { NextResponse } from "next/server";
 import { TOP_TOOLS, SUPPORTED_TOOLKITS } from "@/lib/composio-tools";
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/connect/sync
  * Synchronizes Composio connection status with Crost database.

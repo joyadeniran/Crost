@@ -3,6 +3,8 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 type Params = { params: { id: string } }
 
 export async function GET(_req: NextRequest, { params }: Params) {

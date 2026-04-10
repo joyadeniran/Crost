@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 // Model defaults (Always cloud)
 const CLOUD_DEFAULTS = { model_provider: 'groq', model_name: 'groq/llama-3.3-70b-versatile' } as const
 

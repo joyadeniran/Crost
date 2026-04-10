@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 const ToolRequestSchema = z.object({
   tool: z.string(),
   params: z.record(z.any()).default({}),

@@ -10,26 +10,26 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// Validate client-side env vars (throw at startup if missing)
-if (!supabaseUrl) {
-  throw new Error('[Crost] NEXT_PUBLIC_SUPABASE_URL is not set. Check your .env.local file.')
-}
-if (!supabaseAnonKey) {
-  throw new Error('[Crost] NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Check your .env.local file.')
-}
-
 // Client-side Supabase client (uses anon key, automatically syncs auth with cookies for SSR)
-export const supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
-  global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache }) }
-})
+export const supabaseClient = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+  {
+    global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache }) }
+  }
+)
 
 // Server-side Supabase client (uses service role key, bypasses RLS)
 // ONLY use in API routes and server components — never expose to the browser
 export function createServerSupabaseClient() {
-  if (!supabaseServiceKey) {
-    throw new Error('[Crost] SUPABASE_SERVICE_ROLE_KEY is not set. Required for server-side operations.')
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    throw new Error('[Crost] NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set. Required for server-side operations.')
   }
-  return createClient(supabaseUrl!, supabaseServiceKey, {
+
+  return createClient(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -42,9 +42,16 @@ export function createServerSupabaseClient() {
 
 // Server component client with cookie-based auth (for authenticated routes)
 export async function createSupabaseServerComponentClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) {
+    throw new Error('[Crost] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set.')
+  }
+
   const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
-  return createServerClient(supabaseUrl!, supabaseAnonKey!, {
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()

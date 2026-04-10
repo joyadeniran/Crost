@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/llm-client'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 const DialogueSchema = z.object({
   message: z.string().optional(),
   force_plan: z.boolean().optional(),

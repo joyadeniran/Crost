@@ -6,6 +6,8 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { RESERVED_SLUGS } from '@/lib/department-lifecycle'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const authClient = await createSupabaseServerComponentClient()
