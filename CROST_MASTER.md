@@ -250,6 +250,19 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
   - `fetch-timeout=300000` (5min overall timeout)
 - **Impact**: `npm ci` survives transient Render network blips instead of failing immediately
 
+### Worker Service Module Resolution
+**Files**: 
+- `render.yaml` (worker service)
+- `package.json` (root)
+
+- **Problem**: Worker service crashed on startup with "cannot find module at scripts/worker.ts"
+- **Root Cause**: Worker was trying to run from `frontend/` directory but `npx tsx` couldn't resolve node_modules
+- **Fix**: 
+  - Updated `buildCommand` to install dependencies at both root and frontend: `npm ci && npm ci --prefix frontend`
+  - Updated `startCommand` to run from repo root with proper module resolution: `npx tsx scripts/worker.ts`
+  - Added `tsx` to root `package.json` devDependencies (required for running TypeScript at repo root)
+- **Impact**: Worker can now properly resolve all modules from both root and frontend node_modules
+
 ### ESLint Rule Removal
 **File**: `frontend/.eslintrc.json`
 - **Issue**: Rule `@typescript-eslint/no-explicit-any` referenced undefined plugin; caused 60+ file build failures
