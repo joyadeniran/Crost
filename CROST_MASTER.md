@@ -283,6 +283,15 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 2. **File**: `frontend/app/api/onboarding/first-goal/route.ts`
    - Fixed: Added explicit type annotation `(task: any)` in `.map()` callback
 
+### Frontend Module Resolution Cache
+**File**: `render.yaml` (web service buildCommand)
+
+- **Problem**: Build fails with "Can't resolve '@/components/...'" errors for files that exist
+- **Root Cause**: Stale `.next` build cache contains outdated module metadata
+- **Fix**: Added `rm -rf .next` to buildCommand before `npm run build`
+- **Updated Command**: `npm ci && rm -rf .next && npm run build`
+- **Impact**: Fresh build without cached module resolution errors
+
 ---
 
 ## 8.2 Build Verification
