@@ -327,9 +327,15 @@ npm ci --include=dev && rm -rf .next && npm run build
 
 **Docker Implementation:**
 - Builds from Python 3.11 base image (lightweight, x86_64 compatible)
-- Installs LiteLLM from PyPI (avoids pre-built image architecture issues)
-- Includes python-dotenv for environment variable support
-- Runs: `python -m litellm.proxy.server`
+- Installs LiteLLM with `[proxy]` extras (websockets, uvicorn, fastapi)
+- Copies `config.yaml` with model definitions into container
+- Startup: `litellm --config /app/config.yaml --port 4000 --host 0.0.0.0`
+
+**Configuration File (`litellm/config.yaml`):**
+- Defines available models (Groq, Gemini, Claude)
+- Maps models to provider API keys from environment variables
+- Sets master key from `LITELLM_MASTER_KEY`
+- Enables debug logging and pre-call checks
 
 **Required Environment Variables** (set in Render dashboard):
 - `LITELLM_MASTER_KEY` — Master API key (e.g., `sk-litellm-...`)
