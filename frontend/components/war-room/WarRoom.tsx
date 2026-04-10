@@ -3,7 +3,7 @@
 // components/war-room/WarRoom.tsx
 // The War Room: goal input + live plan card + per-task approve/reject.
 // This is the core of the founder→orchestrator→worker loop.
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
 import type { Goal, OrchestratorTask, RiskLevel, Department } from '@/types'

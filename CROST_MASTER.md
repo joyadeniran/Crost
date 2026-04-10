@@ -1,5 +1,5 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.1 (BYOK Model Assignment & Render-Ready)
+**Version:** 5.2 (Browser Client Isolation & Build Stability)
 **Last Updated:** April 10, 2026
 **Deployment Status:** 🚀 Ready for Render
 **Purpose:** The single, definitive technical and operational specification of Crost.
@@ -183,6 +183,28 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 - **Implementation**: Python script automated addition across all 35 files
 - **Impact**: Render build no longer crashes on `NEXT_PUBLIC_SUPABASE_URL is not set` error
 
+### Browser Client Isolation (Supabase Module Split)
+**Files**: `frontend/lib/supabase-browser.ts` (new), `frontend/lib/supabase.ts`, 11 client components
+- **Root Cause**: `lib/supabase.ts` exported `supabaseClient` (browser client) at module scope via `createBrowserClient(...)`. API routes import `lib/supabase.ts` for server functions — when Next.js collects page data during build it evaluates the module, triggering `createBrowserClient` with empty env vars and throwing `@supabase/ssr: Your project's URL and API key are required`. `force-dynamic` alone does not prevent module-level evaluation.
+- **Fix Applied**:
+  1. Created `frontend/lib/supabase-browser.ts` — lazy singleton browser client, instantiated only on first call at runtime via a `Proxy` wrapper. Never runs at module load time.
+  2. Removed `supabaseClient` and `createBrowserClient` import from `lib/supabase.ts`. That file now exports server-only functions exclusively.
+  3. Updated all 11 client components to import `supabaseClient` from `@/lib/supabase-browser`.
+- **Client components updated**:
+  - `app/login/page.tsx`
+  - `app/signup/page.tsx`
+  - `app/onboarding/activate/page.tsx`
+  - `components/settings/McpSettings.tsx`
+  - `components/event-log/EventLogClient.tsx`
+  - `components/providers/RealtimeProvider.tsx`
+  - `components/providers/LayoutStoreHydrator.tsx`
+  - `components/dashboard/NotificationDropdown.tsx`
+  - `components/dashboard/LiveEventsPanel.tsx`
+  - `components/war-room/WarRoom.tsx`
+  - `components/onboarding/OnboardingLogoutButton.tsx`
+- **Impact**: `npm run build` completes with 0 errors. Browser client is never instantiated server-side. Server-side routes remain isolated to service-role and SSR clients only.
+- **Render Env Vars Required**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` must be set in Render dashboard for runtime to function.
+
 ### Model Name Correction
 **File**: `frontend/app/api/toggle/route.ts`
 - **Fix**: Changed `model_name` from `'cloud/groq-llama'` to `'groq/llama-3.3-70b-versatile'`
@@ -223,10 +245,11 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 
 ## 8.2 Build Verification
 
-✅ **Build Status**: `npm run build` completes successfully
+✅ **Build Status**: `npm run build` completes successfully (22 pages, 0 errors)
 ✅ **Warnings Only**: Non-blocking warnings in ArtifactCard.tsx (`<img>` tag optimization)
 ✅ **API Routes**: All 35 routes properly exported with `dynamic = 'force-dynamic'`
 ✅ **Environment**: Ready for Render deployment with all env vars properly gated
+✅ **Browser/Server Isolation**: `lib/supabase.ts` is server-only; browser client lives in `lib/supabase-browser.ts` (lazy singleton)
 
 ---
 
