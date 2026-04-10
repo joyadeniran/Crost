@@ -1,6 +1,7 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.0 (LiteLLM Gateway & Secure Multi-tenancy)
+**Version:** 5.1 (BYOK Model Assignment & Render-Ready)
 **Last Updated:** April 10, 2026
+**Deployment Status:** 🚀 Ready for Render
 **Purpose:** The single, definitive technical and operational specification of Crost.
 
 ---
@@ -40,6 +41,27 @@ Crost uses a **LiteLLM Proxy** for all model interactions.
 
 ---
 
+## 3.1 Model Assignment (BYOK — Bring Your Own Key)
+
+Users can provide their own API keys and assign models to three roles:
+
+**Roles:**
+- **Reasoning** (Orc planning, analysis) — Default: Claude 3.5 Opus
+- **Execution** (tool calls, task dispatch) — Default: Groq Llama 3.1 70B
+- **Utility** (memo generation, lightweight) — Default: Gemini 1.5 Flash
+
+**Configuration:**
+- Users add API keys via `/api/settings/models/validate` (LiteLLM test call validates key)
+- Users select presets per role: budget, fast, premium
+- System stores encrypted keys in `user_api_keys` (RLS-secured)
+- Task dispatch resolves user's model choice via `getModelForTask()` (fallback to Orc default)
+
+**Providers Supported:** Claude, Gemini, Groq  
+**Database:** `user_api_keys`, `user_model_assignments` tables (RLS policies)  
+**UI:** Dashboard → Settings → Models
+
+---
+
 ## 4. The Orchestrator (Orc v2.5)
 
 Orc is the **Chief of Staff**, the only cognitive planner in the system.
@@ -73,6 +95,8 @@ Orc is the **Chief of Staff**, the only cognitive planner in the system.
 | **Waterfall Execution** | 3 | ✅ | Strict dependency gating with memo verification. |
 | **Context Sync** | 4 | ✅ | Automated injection of user responses into worker brains. |
 | **Strategic Synthesis** | 5 | ✅ | **Automated** trigger for synthesis reports. |
+| **BYOK Model Assignment** | 6 | ✅ | User API keys, role-based routing, preset configs. |
+| **Render Deployment** | 7 | ✅ | Web service + Background worker, health checks, auto-migration. |
 
 ---
 
@@ -89,7 +113,32 @@ Orc is the **Chief of Staff**, the only cognitive planner in the system.
 - `20260409010000_multitenant_fix`: Tightened RLS policies.
 - `20260410030000_add_current_context`: Adds `is_current_context` to memos.
 - `20260410040000_fix_rls_and_schema`: **CRITICAL**: Drops permissive policies & adds `expected_deliverable` column.
+- `20260410050000_user_model_config`: **NEW** — BYOK tables (`user_api_keys`, `user_model_assignments`).
+
+### Deployment
+See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services, env vars, migrations).
+
+---
+
+## 8. Current Status (April 10, 2026)
+
+✅ **Phase 1-7 Complete**: All core features implemented.
+✅ **BYOK System**: Role-based model assignment with API key management.
+✅ **Render-Ready**: Web service + worker background job configured.
+✅ **Build Fixed**: All ESLint errors resolved, ready for CI/CD.
+
+**Next Steps:**
+1. Deploy to Render (see `RENDER_DEPLOYMENT.md`).
+2. Verify health checks & worker logs.
+3. Run DB migrations (auto-applied).
+4. Test onboarding → goal creation → model selection flow.
+
+**Known Limitations:**
+- API keys stored as-is in DB (TODO: encrypt with libsodium).
+- LiteLLM instance must be pre-deployed (not bundled in Render service).
+- Worker uses polling for Realtime events (single-instance constraint).
 
 ---
 
 *Crost: Think Global, Act Local. Built for the world's founders.*
+*Ready for solo founder deployment on Render. V5.1 — April 2026.*
