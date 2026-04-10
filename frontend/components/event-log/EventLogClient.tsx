@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { useEffect } from 'react'
 import type { EventLogEntry, EventType } from '@/types'
 

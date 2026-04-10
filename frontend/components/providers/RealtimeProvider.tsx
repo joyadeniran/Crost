@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { useCrostStore } from '@/lib/store'
 import type { Department } from '@/types'
 

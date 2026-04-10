@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { toast } from '@/components/ui/toaster'
 
 interface Tool {

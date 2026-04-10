@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { Logo } from '@/components/ui/Logo'
 import { toast } from '@/components/ui/toaster'
 import Link from 'next/link'

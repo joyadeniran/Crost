@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import { ProgressLine } from '@/components/onboarding/ProgressLine'
 import { toast } from '@/components/ui/toaster'
 

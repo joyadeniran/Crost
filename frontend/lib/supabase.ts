@@ -1,23 +1,13 @@
 // lib/supabase.ts
-// Supabase client setup.
-// Client-side uses anon key. Server-side uses service role key (never exposed to browser).
+// Server-side Supabase clients ONLY.
+// For client components, import from '@/lib/supabase-browser' instead.
 
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { createServerClient, createBrowserClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-// Client-side Supabase client (uses anon key, automatically syncs auth with cookies for SSR)
-export const supabaseClient = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-  {
-    global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, { ...options, cache: 'no-store' as RequestCache }) }
-  }
-)
 
 // Server-side Supabase client (uses service role key, bypasses RLS)
 // ONLY use in API routes and server components — never expose to the browser

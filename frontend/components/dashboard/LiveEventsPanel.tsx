@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabaseClient } from '@/lib/supabase'
+import { supabaseClient } from '@/lib/supabase-browser'
 import type { EventLogEntry } from '@/types'
 
 const EVENT_COLORS: Record<string, string> = {
