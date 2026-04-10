@@ -221,12 +221,24 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
   - `startCommand: cd frontend && npx tsx ../scripts/worker.ts`
 - **Impact**: Render dashboard Root Directory setting now works with buildCommand
 
-### Build Optimization (Google Fonts)
-**File**: `frontend/next.config.js`
-- **Root Cause**: Network requests to `fonts.gstatic.com` failed in Render's restricted build environment
-- **Fix**: Added `optimizeFonts: false` to disable build-time font inlining
-- **Implementation**: Fonts still load at runtime via standard `<link>` tags in HTML
-- **Impact**: Build no longer hangs on network timeouts; font optimization deferred to runtime
+### Local Font Files (Zero External Requests)
+**Files**: 
+- `frontend/public/fonts/` (8 font files: Syne, DM Mono, DM Sans in 300/400/500/700 weights)
+- `frontend/styles/fonts.css` (new: @font-face declarations + CSS variables)
+- `frontend/app/layout.tsx` (refactored: removed `next/font/google`, imports `fonts.css`)
+- `frontend/next.config.js` (removed `optimizeFonts: false`)
+
+- **Root Cause**: Network requests to `fonts.gstatic.com` fail in Render's restricted build environment
+- **Previous Fix**: Added `optimizeFonts: false` (deferred to runtime)
+- **New Fix**: Downloaded font files locally and embedded @font-face declarations
+  - 8 TTF files: Syne (Regular, Bold), DM Mono (Light 300, Regular 400, Medium 500), DM Sans (Light 300, Regular 400, Medium 500)
+  - `@font-face` declarations with `font-display: swap` for fast load
+  - CSS variables (`--font-syne`, `--font-dm-mono`, `--font-dm-sans`) still work
+- **Impact**: 
+  - Zero external network requests for fonts
+  - Build no longer dependent on Render's network access
+  - Fonts load from `public/` (served locally by Next.js)
+  - No Google Fonts API dependency
 
 ### npm Network Resilience
 **File**: `frontend/.npmrc` (new)
