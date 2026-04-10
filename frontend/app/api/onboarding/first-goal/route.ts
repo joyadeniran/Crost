@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
-import { runOrchestratorTask } from '@/lib/onyx-client'
+import { runOrchestratorTask } from '@/lib/llm-client'
 
 export async function POST(req: NextRequest) {
   try {

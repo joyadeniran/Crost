@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Trigger Orchestrator Synthesis if goal is being completed manually
     if (parsed.status === 'completed') {
-      const { runOrcReport } = await import('@/lib/onyx-client')
+      const { runOrcReport } = await import('@/lib/llm-client')
       runOrcReport(params.id).catch(err => {
         console.error('[PATCH /api/goals/:id] Synthesis failed:', err)
       })

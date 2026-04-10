@@ -3,7 +3,7 @@
 // Usually called by the supervision worker after all tasks are completed.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runOrcReport } from '@/lib/onyx-client'
+import { runOrcReport } from '@/lib/llm-client'
 
 type Params = { params: { id: string } }
 

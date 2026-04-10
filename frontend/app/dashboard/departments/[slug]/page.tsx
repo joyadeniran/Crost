@@ -35,7 +35,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
   const dept = deptResult.data as Department
   const events = (eventsResult.data ?? []) as EventLogEntry[]
   const canActivate = dept.activation_stage !== 'active' && dept.activation_stage !== 'deprecated'
-  const syncFailed = !dept.onyx_persona_id || dept.onyx_persona_id === 'SYNC_FAILED'
+  const syncFailed = !dept.orc_persona_id || dept.orc_persona_id === 'SYNC_FAILED'
 
   // Stuck = running for > 30 min
   const isStuck = dept.status === 'running' && dept.last_active_at
@@ -221,3 +221,4 @@ export default async function DepartmentDetailPage({ params }: Props) {
     </div>
   )
 }
+

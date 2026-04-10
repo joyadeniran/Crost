@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     const { error } = await supabase
       .from('available_tools')
-      .update({ is_configured, onyx_connector_id: is_configured ? `mcp_${id}` : null })
+      .update({ is_configured, connector_id: is_configured ? `mcp_${id}` : null })
       .eq('id', id)
 
     if (error) {

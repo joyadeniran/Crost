@@ -64,7 +64,7 @@ export function DepartmentCard({ department: dept }: Props) {
             <ActivationBadge stage={dept.activation_stage} />
           )}
           {dept.activation_stage === 'active' && (
-            <SyncFailedBadge personaId={dept.onyx_persona_id} slug={dept.slug} />
+            <SyncFailedBadge personaId={dept.orc_persona_id} slug={dept.slug} />
           )}
         </div>
       </div>

@@ -30,7 +30,7 @@ export function DepartmentChat({ department: dept }: Props) {
     }
   }, [messages, messagesReady])
 
-  const isRunnable = dept.activation_stage === 'active' && dept.onyx_persona_id && dept.onyx_persona_id !== 'SYNC_FAILED'
+  const isRunnable = dept.activation_stage === 'active' && dept.orc_persona_id && dept.orc_persona_id !== 'SYNC_FAILED'
 
   const send = async () => {
     const task = input.trim()
@@ -83,7 +83,7 @@ export function DepartmentChat({ department: dept }: Props) {
   if (!isRunnable) {
     const reason = dept.activation_stage !== 'active'
       ? `Department is ${dept.activation_stage} — activate it before running tasks.`
-      : 'Onyx persona not synced — check your Onyx connection.'
+      : 'Orc persona not synced — check your Orc connection.'
 
     return (
       <div style={{

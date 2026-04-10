@@ -1,7 +1,7 @@
 # Project Crost: Master Source of Truth
-**Version:** 4.1 (State-Driven Context & Waterfall Hardening)
+**Version:** 5.0 (LiteLLM Gateway & Secure Multi-tenancy)
 **Last Updated:** April 10, 2026
-**Purpose:** The single, definitive technical and operational specification of Crost. This document merges all previous architectures and roadmaps into one source of truth.
+**Purpose:** The single, definitive technical and operational specification of Crost.
 
 ---
 
@@ -25,93 +25,70 @@ It does NOT run purely on prompts; it runs on **structured company state (the Me
 Crost consists of five core layers:
 1. **Onboarding Layer**: Initial state setup (Company Profile & Foundational Memos).
 2. **Cognitive Layer (Orc)**: Strategic planning, clarification, and supervision.
-3. **Execution Layer**: Deterministic task engine and worker runners.
+3. **Execution Layer**: Deterministic task engine using **LiteLLM Proxy** as the unified model gateway.
 4. **State Layer**: The "Working Memory" (Memos, goal_tasks, event_log).
-5. **Storage Layer**: External artifacts (Supabase Storage/S3) for large data.
+5. **Storage Layer**: External artifacts (Supabase Storage) for large data.
 
 ---
 
-## 3. The Memo System (System Memory)
+## 3. The LLM Gateway (LiteLLM)
 
-The Memo is the **primary context source** for all agents. It is the working memory of the company.
-
-### 3.1 Memo Types
-- **Foundational (Static)**: Company identity, business model, founder vision. (`is_foundational: true`).
-- **Context (Temporal)**: Founder answers to clarifying questions or `needs_data` requests. (`is_current_context: true`).
-- **Operational (Dynamic)**: Task outputs, tool results, research findings. (`task_id` linked).
-
-### 3.2 Context Synchronization
-Workers perform a **"Context Sync"** as the first step of every task.
-- **Tier 1 (Core)**: Foundational + Current Context (Always included).
-- **Tier 2 (Critical)**: Urgent memos (Always included).
-- **Tier 3 (Relevant)**: Goal-specific memos and high-priority recent updates (Conditional).
-- **Tier 4 (Historical)**: Summarized or title-only logs (Optional).
+Crost uses a **LiteLLM Proxy** for all model interactions. 
+- **Unified API**: All requests use the OpenAI-compatible `/v1/chat/completions` format.
+- **Security**: Access is gated by `LITELLM_MASTER_KEY` to prevent unauthorized credit usage.
+- **Model Agnostic**: Supports Groq, Gemini, Anthropic, and Local (Ollama) via a single `LITELLM_BASE_URL`.
 
 ---
 
-## 4. The Orchestrator (Orc v2.1)
+## 4. The Orchestrator (Orc v2.5)
 
 Orc is the **Chief of Staff**, the only cognitive planner in the system.
 
 ### 4.1 Planning Logic & Constraints
-- **Centralized Research**: If a goal requires general market data, Orc inserts a **"Master Research Task"** at the top of the plan. Subsequent tasks depend on this and read its memo.
-- **Brain vs. Tool**: Orc instructs workers to use tools *only* for data the LLM cannot know (real-time news, private DB records). General strategy uses the "Brain".
-- **JSON-Strict**: Orc MUST output valid JSON for deterministic UI rendering.
-- **Dialogue Mode**: Orc pauses execution to ask clarifying questions if the goal is ambiguous.
+- **Centralized Research**: Consolidates market data gathering into a single "Master Research Task".
+- **Brain vs. Tool**: Explicit logic to prioritize LLM internal knowledge over redundant tool calls.
+- **JSON-Strict**: Deterministic JSON output for UI rendering.
+- **Strategic Synthesis**: Automated generation of an "Orc Report" (strategic summary) as soon as all tasks in a goal reach terminal status.
 
 ---
 
 ## 5. Execution Engine & Strict Waterfall
 
-Execution is a deterministic task lifecycle system.
-
 ### 5.1 The Dependency Gate
-Crost enforces a **Strict Waterfall**:
-- A task cannot transition from `planned` to `running` until its dependencies reach `status: completed`.
-- **Data Verification**: Even if a task is "completed", downstream tasks stay blocked until the `company_memos` table contains a record matching the dependency's `task_id`. This ensures the hand-off is backed by real data.
+- A task cannot transition to `running` until its dependencies are `completed` AND a physical memo exists in `company_memos` for that dependency's `task_id`.
 
-### 5.2 Artifacts System
-Large outputs (>5000 chars) are offloaded to Supabase Storage. The DB stores a reference in the `artifacts` table, and the Memo provides a summary and a link.
-
----
-
-## 6. Decision Log (Consolidated)
-
-1-25. (See Legacy Logs for items 1-25 including Composio pivot, Onboarding screens, and RLS Hardening).
-26. **Information Loop Redundancy**: User answers are saved as `is_current_context` memos with `valid_until` timestamps to prevent agents from asking the same questions twice.
-27. **Centralized Research**: Orc consolidates redundant web searches into one "Master Research Task" to save tokens and ensure a single source of truth for market data.
-28. **Strict Waterfall Verification**: Dependencies are now gated by both task status AND the physical existence of a result memo in the DB.
-29. **Context Versioning**: Added `is_current_context` to differentiate between permanent identity and task-specific ephemeral context.
-30. **Brain vs. Tool Differentiator**: Explicit system rules to prevent unnecessary tool calls for common knowledge tasks.
+### 5.2 Multi-Tenant Security (RLS)
+- **Hardened RLS**: Every table is secured with `auth.uid() = created_by`. 
+- **Privacy**: Permissive MVP policies have been purged; users can only see their own goals, memos, and artifacts.
 
 ---
 
-## 7. Implementation Progress
+## 6. Implementation Progress
 
 | Feature | Phase | Status | Description |
 | :--- | :--- | :--- | :--- |
-| **Core Infrastructure** | 0 | ✅ | Supabase, Onyx, LiteLLM, Composio. |
+| **Core Infrastructure** | 0 | ✅ | Supabase, LiteLLM Proxy, Composio. |
 | **Memo Memory System** | 1 | ✅ | Tiered context, foundational/current context split. |
-| **Orc Planning v2.1** | 2 | ✅ | JSON plans, Master Research, Brain vs Tool logic. |
+| **Orc Planning v2.5** | 2 | ✅ | JSON plans, Master Research, Brain vs Tool logic. |
 | **Waterfall Execution** | 3 | ✅ | Strict dependency gating with memo verification. |
 | **Context Sync** | 4 | ✅ | Automated injection of user responses into worker brains. |
-| **Strategic Synthesis** | 5 | ✅ | Post-mortem Orc Reports and strategic next steps. |
+| **Strategic Synthesis** | 5 | ✅ | **Automated** trigger for synthesis reports. |
 
 ---
 
-## 8. Build & Maintenance
+## 7. Build & Maintenance
 
 ### Running the System
 - **Frontend**: `npm run dev` (Port 3000)
-- **Supabase**: `supabase start` (Local)
-- **Worker**: `npx tsx scripts/worker.ts` (Supervises stall detection and goal closure).
+- **LiteLLM**: `docker run -p 4000:4000 ghcr.io/berriai/litellm` (or standalone container)
+- **Worker**: `npx tsx scripts/worker.ts` (Zero-Poll supervisor)
 
 ### Critical Migrations (Order Matters)
 - `orc_upgrade`: Goals, tasks, memos enhancements.
-- `rls_policies`: Multi-tenant security.
-- `dialogue_mode`: Clarification thread and `orc_conversation`.
-- `20260410020000_context_memos`: Adds `valid_until` and `version_tag`.
-- `20260410030000_add_current_context`: Adds `is_current_context` and `task_id` to memos.
+- `rls_policies`: Multi-tenant security (Initial).
+- `20260409010000_multitenant_fix`: Tightened RLS policies.
+- `20260410030000_add_current_context`: Adds `is_current_context` to memos.
+- `20260410040000_fix_rls_and_schema`: **CRITICAL**: Drops permissive policies & adds `expected_deliverable` column.
 
 ---
 

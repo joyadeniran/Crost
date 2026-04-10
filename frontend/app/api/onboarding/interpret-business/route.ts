@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { callLLM, CLOUD_MODEL } from '@/lib/onyx-client'
+import { callLLM, CLOUD_MODEL } from '@/lib/llm-client'
 
 export async function POST(req: NextRequest) {
   try {

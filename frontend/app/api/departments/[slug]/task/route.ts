@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { buildFinalPrompt, callLLM } from '@/lib/onyx-client'
+import { buildFinalPrompt, callLLM } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 
