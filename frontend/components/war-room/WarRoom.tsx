@@ -891,7 +891,7 @@ export function WarRoom() {
       }
     }, 2000)
     return () => clearInterval(interval)
-  }, [activeGoal?.id, activeGoal?.status])
+  }, [activeGoal, setIsSubmittingGoal, updateActiveGoal])
 
   const handleGoalSubmit = useCallback(async (founderInput: string) => {
     setIsSubmittingGoal(true)
