@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 // Model defaults (Always cloud)
-const CLOUD_DEFAULTS = { model_provider: 'groq', model_name: 'cloud/groq-llama' } as const
+const CLOUD_DEFAULTS = { model_provider: 'groq', model_name: 'groq/llama-3.3-70b-versatile' } as const
 
 export async function POST(req: NextRequest) {
   try {

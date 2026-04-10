@@ -114,9 +114,14 @@ export interface CompanyMemo {
   body: string
   tags: string[]
   priority: MemoPriority
-  onyx_index_id: string | null
   created_at: string
   read_by: string[]
+  // Memo tiers (migrations 010, 030)
+  is_foundational: boolean        // Always included in context — generated from company_profile
+  is_current_context: boolean     // Temporal founder answers to clarifying/needs_data requests
+  task_id: string | null          // Links memo to the goal_task that produced it
+  valid_until: string | null      // Expiry for context memos — workers ignore expired ones
+  version_tag: string | null      // Batch versioning (e.g. 'goal_iteration_1')
   // Provenance & confidence (migration 011)
   source_type: 'founder' | 'agent' | 'orchestrator' | 'external' | 'system'
   confidence: number              // [0.0–1.0]. Legacy memos default to 0.5
