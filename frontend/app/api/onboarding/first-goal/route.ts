@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (res.plan) {
       // 3. Write each task to approval_queue with status 'pending' (Following Spec)
       // This makes them appear in the "Approvals" feed in the dashboard.
-      const approvalTasks = res.plan.tasks.map(task => ({
+      const approvalTasks = res.plan.tasks.map((task: any) => ({
         goal_id: goalRow.id,
         action_type: 'orchestrator_plan_task',
         action_label: task.label,
