@@ -1,0 +1,47 @@
+# LiteLLM Proxy Configuration
+# This file defines available models and their routing
+
+model_list:
+  # Groq Models
+  - model_name: groq/llama-3.3-70b-versatile
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: ${GROQ_API_KEY}
+
+  - model_name: groq/llama-3.1-70b-versatile
+    litellm_params:
+      model: groq/llama-3.1-70b-versatile
+      api_key: ${GROQ_API_KEY}
+
+  # Google Gemini Models
+  - model_name: gemini/gemini-1.5-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: ${GOOGLE_API_KEY}
+
+  - model_name: gemini/gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: ${GOOGLE_API_KEY}
+
+  # Anthropic Claude Models
+  - model_name: claude/claude-3-5-sonnet-20241022
+    litellm_params:
+      model: claude-3-5-sonnet-20241022
+      api_key: ${ANTHROPIC_API_KEY}
+
+  - model_name: claude/claude-3-opus-20250219
+    litellm_params:
+      model: claude-3-opus-20250219
+      api_key: ${ANTHROPIC_API_KEY}
+
+# General settings
+general:
+  master_key: ${LITELLM_MASTER_KEY}
+  debug: true
+  log_level: DEBUG
+
+# Router settings
+router:
+  # Enable dynamic rate limiting
+  enable_pre_call_checks: true
