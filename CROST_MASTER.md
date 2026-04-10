@@ -328,13 +328,22 @@ npm ci --include=dev && rm -rf .next && npm run build
 **Docker Implementation:**
 - Builds from Python 3.11 base image (lightweight, x86_64 compatible)
 - Installs LiteLLM with `[proxy]` extras (websockets, uvicorn, fastapi)
-- Copies `config.yaml` with model definitions into container
-- Startup: `litellm --config /app/config.yaml --port 4000 --host 0.0.0.0`
+- Installs `gettext-base` for `envsubst` (environment variable substitution)
+- Copies `config.yaml` template and `entrypoint.sh` into container
+- Entrypoint script substitutes environment variables before starting LiteLLM
+
+**Entrypoint Script (`litellm/entrypoint.sh`):**
+- Uses `envsubst` to substitute `${VAR}` with environment variables
+- Writes final config to `config.generated.yaml`
+- Starts LiteLLM with: `litellm --config /app/config.generated.yaml --port 4000 --host 0.0.0.0`
 
 **Configuration File (`litellm/config.yaml`):**
+- Template with `${VAR}` placeholders for:
+  - `${GROQ_API_KEY}` → Groq authentication
+  - `${GOOGLE_API_KEY}` → Gemini authentication
+  - `${ANTHROPIC_API_KEY}` → Claude authentication
+  - `${LITELLM_MASTER_KEY}` → Master API key
 - Defines available models (Groq, Gemini, Claude)
-- Maps models to provider API keys from environment variables
-- Sets master key from `LITELLM_MASTER_KEY`
 - Enables debug logging and pre-call checks
 
 **Required Environment Variables** (set in Render dashboard):
