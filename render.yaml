@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: crost-frontend
+    runtime: node
+    buildCommand: cd frontend && npm ci && npm run build
+    startCommand: cd frontend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LITELLM_BASE_URL
+        sync: false
+      - key: LITELLM_MASTER_KEY
+        sync: false
+    healthCheckPath: /api/health
+
+  - type: background
+    name: crost-worker
+    runtime: node
+    buildCommand: cd frontend && npm ci && npm run build
+    startCommand: npx tsx scripts/worker.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LITELLM_BASE_URL
+        sync: false
+      - key: LITELLM_MASTER_KEY
+        sync: false
