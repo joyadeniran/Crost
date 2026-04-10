@@ -36,7 +36,7 @@ export default async function DashboardPage() {
   const runningCount = departments.filter((d) => d.status === 'running').length
   const unsyncedCount = departments.filter((d) => {
     if (d.activation_stage !== 'active') return false
-    const id = d.onyx_persona_id
+    const id = d.orc_persona_id
     if (!id || id === 'SYNC_FAILED' || id === 'DIRECT_LLM') return true
     if (id.startsWith('direct_llm:') && id !== `direct_llm:${d.slug}`) return true
     return false

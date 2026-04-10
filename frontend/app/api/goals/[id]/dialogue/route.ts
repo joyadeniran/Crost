@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { runOrchestratorTask } from '@/lib/onyx-client'
+import { runOrchestratorTask } from '@/lib/llm-client'
 import { z } from 'zod'
 
 const DialogueSchema = z.object({

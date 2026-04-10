@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         .from('departments')
         .update({ 
           activation_stage: 'active',
-          onyx_persona_id: null 
+          orc_persona_id: null 
         })
         .in('slug', selectedDepartments)
         .eq('created_by', user.id)

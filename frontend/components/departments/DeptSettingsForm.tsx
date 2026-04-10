@@ -350,7 +350,7 @@ export function DeptSettingsForm({ dept }: Props) {
             Danger Zone
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
-            Deprecating this department will set it to inactive, auto-reject all pending approvals, and pause its Onyx persona. This cannot be undone without re-activating.
+            Deprecating this department will set it to inactive, auto-reject all pending approvals, and pause its Orc persona. This cannot be undone without re-activating.
           </p>
           {!showDeleteConfirm ? (
             <button

@@ -239,19 +239,10 @@ async function tryCloseGoal(goalId: string) {
 
   await writePostMortemMemo(goalId, goal.founder_input, tasks)
 
-  // Trigger Synthesis Report Reliably before goal closure
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
-  if (!APP_URL) {
-    log(`Warning: NEXT_PUBLIC_APP_URL not set. Skipping report generation.`);
-  } else {
-    try {
-      log(`Triggering Orc Synthesis Report for goal: ${goalId}...`)
-      await fetch(`${APP_URL}/api/goals/${goalId}/report`, { method: 'POST' })
-    } catch (err) {
-      log(`Failed to generate Synthesis Report: ${err}`)
-    }
-  }
-
+// Synthesis report is now handled by llm-client.ts on goal completion.
+  // The worker can just signal goal closure and the synthesis will trigger if all tasks are terminal.
+  // ... rest of logic remains but removed fetch to /api/goals/[id]/report as it is now redundant with runOrcReport being called in runWorkerTask
+  
   await supabase.from('goals').update({ status: 'completed', outcome }).eq('id', goalId)
 
   log(`Goal closed: ${goalId}`)

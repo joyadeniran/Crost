@@ -20,7 +20,7 @@ export function SyncFailedBadge({ personaId, slug }: Props) {
   if (state === 'direct_llm') {
     return (
       <span
-        title="Running in Direct LLM mode — tasks work normally, Onyx RAG unavailable."
+        title="Running in Direct LLM mode — tasks work normally, Orc RAG unavailable."
         style={{
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 9,

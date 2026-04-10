@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       .update({ 
         config, 
         is_configured, 
-        onyx_connector_id: is_configured ? `mcp_${id}` : null 
+        connector_id: is_configured ? `mcp_${id}` : null 
       })
       .eq('id', id)
 
