@@ -319,10 +319,17 @@ npm ci --include=dev && rm -rf .next && npm run build
 ## 8.3 LiteLLM Gateway Service
 
 **Service**: `crost-litellm` (Docker-based)
-- **Runtime**: Docker (ghcr.io/berriai/litellm)
+- **Runtime**: Docker (Python 3.11 + LiteLLM from PyPI)
+- **Base Image**: `python:3.11-slim`
 - **Port**: 4000
 - **Health Check**: `GET /health`
 - **Configuration**: See `litellm/README.md`
+
+**Docker Implementation:**
+- Builds from Python 3.11 base image (lightweight, x86_64 compatible)
+- Installs LiteLLM from PyPI (avoids pre-built image architecture issues)
+- Includes python-dotenv for environment variable support
+- Runs: `python -m litellm.proxy.server`
 
 **Required Environment Variables** (set in Render dashboard):
 - `LITELLM_MASTER_KEY` — Master API key (e.g., `sk-litellm-...`)
