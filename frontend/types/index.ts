@@ -77,7 +77,7 @@ export interface Department {
   status: DepartmentStatus
   current_task: string | null
   last_active_at: string | null
-  onyx_persona_id: string | null
+  orc_persona_id: string | null
   icon: string
   color: string
   created_at: string
@@ -167,7 +167,7 @@ export interface AvailableTool {
   description: string
   requires_config: boolean
   is_configured: boolean
-  onyx_connector_id: string | null
+  connector_id: string | null
   risk_level: RiskLevel
 }
 
@@ -274,4 +274,29 @@ export interface WorkerResult {
   // Confidence provenance — written to company_memos on every result
   confidence?: number        // [0.0–1.0], defaults to 0.5 if not provided by worker
   based_on?: string[]        // data sources the worker used
+}
+
+// ─── Model Assignment (BYOK) types ──────────────────────────────────────────
+
+export type ModelRole = 'reasoning' | 'execution' | 'utility'
+export type PresetConfig = 'budget' | 'fast' | 'premium'
+
+export interface UserApiKey {
+  id: string
+  created_by: string
+  provider: 'gemini' | 'claude' | 'groq'
+  is_valid: boolean
+  last_validated_at: string | null
+  created_at: string
+}
+
+export interface UserModelAssignment {
+  id: string
+  created_by: string
+  role: ModelRole
+  model_name: string
+  provider: 'gemini' | 'claude' | 'groq'
+  preset_config: PresetConfig | null
+  created_at: string
+  updated_at: string
 }
