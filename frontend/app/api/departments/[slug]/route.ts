@@ -1,22 +1,29 @@
-// GET /api/departments/[slug]    — get single department
-// PATCH /api/departments/[slug]  — update department (with activation_stage reset logic)
-// DELETE /api/departments/[slug] — soft deprecation (default) or hard delete (?hard=true)
-
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
-import { onyxClient } from '@/lib/onyx-client'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 interface Params { params: { slug: string } }
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('departments')
       .select('*')
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .single()
+
     if (error || !data) return NextResponse.json({ error: 'Department not found' }, { status: 404 })
     return NextResponse.json({ data })
   } catch (err) {
@@ -40,6 +47,15 @@ const UpdateSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const body = await req.json()
     const parsed = UpdateSchema.parse(body)
     const supabase = createServerSupabaseClient()
@@ -48,6 +64,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('departments')
       .select('*')
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .single()
     if (!dept) return NextResponse.json({ error: 'Department not found' }, { status: 404 })
 
@@ -62,23 +79,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('departments')
       .update(updates)
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .select()
       .single()
     if (updateErr) throw updateErr
 
-    // Sync name or prompt changes to Onyx (best-effort)
-    if (dept.onyx_persona_id && dept.onyx_persona_id !== 'SYNC_FAILED') {
-      if (parsed.name !== undefined || parsed.persona_prompt !== undefined) {
-        try {
-          await onyxClient.updatePersona(dept.onyx_persona_id, {
-            name: parsed.name,
-            persona_prompt: parsed.persona_prompt,
-          })
-        } catch (err) {
-          console.error('[PATCH] Onyx persona update failed:', err)
-        }
-      }
-    }
+
 
     await supabase.from('event_log').insert({
       department_id: dept.id,
@@ -86,15 +92,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       event_type: 'department_updated',
       description: `Department "${dept.name}" updated`,
       metadata: { fields: Object.keys(parsed), reset_to_review: requiresReview },
+      created_by: user.id
     })
 
     return NextResponse.json({ data: updated })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
-    }
-    if (err instanceof Error && err.message.includes('not found')) {
-      return NextResponse.json({ error: err.message }, { status: 404 })
     }
     console.error('[PATCH /api/departments/:slug]', err)
     return NextResponse.json({ error: 'Failed to update department' }, { status: 500 })
@@ -103,6 +107,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
     const isHardDelete = new URL(req.url).searchParams.get('hard') === 'true'
 
@@ -110,6 +123,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       .from('departments')
       .select('*')
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .single()
     if (!dept) return NextResponse.json({ error: 'Department not found' }, { status: 404 })
 
@@ -120,15 +134,16 @@ export async function DELETE(req: NextRequest, { params }: Params) {
           { status: 400 }
         )
       }
-      await supabase.from('departments').delete().eq('id', dept.id)
-      if (dept.onyx_persona_id && dept.onyx_persona_id !== 'SYNC_FAILED') {
-        try { await onyxClient.deletePersona(dept.onyx_persona_id) } catch { /* non-fatal */ }
-      }
+      await supabase.from('departments').delete().eq('id', dept.id).eq('created_by', user.id)
+      
+
+      
       await supabase.from('event_log').insert({
         department_slug: dept.slug,
         event_type: 'department_deleted',
         description: `Department "${dept.name}" permanently deleted`,
         metadata: {},
+        created_by: user.id
       })
       return NextResponse.json({ success: true, data: { deleted: true } })
     }
@@ -138,6 +153,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       .from('departments')
       .update({ activation_stage: 'deprecated', status: 'idle' })
       .eq('id', dept.id)
+      .eq('created_by', user.id)
 
     // Auto-reject all pending approvals
     await supabase
@@ -145,10 +161,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       .update({ status: 'rejected', decided_by: 'system_deprecation', decided_at: new Date().toISOString() })
       .eq('department_id', dept.id)
       .eq('status', 'pending')
-
-    if (dept.onyx_persona_id && dept.onyx_persona_id !== 'SYNC_FAILED') {
-      try { await onyxClient.deactivatePersona(dept.onyx_persona_id) } catch { /* non-fatal */ }
-    }
+      .eq('created_by', user.id)
 
     await supabase.from('event_log').insert({
       department_id: dept.id,
@@ -156,6 +169,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       event_type: 'department_deprecated',
       description: `Department "${dept.name}" deprecated`,
       metadata: {},
+      created_by: user.id
     })
 
     return NextResponse.json({ success: true, data: { deprecated: true } })

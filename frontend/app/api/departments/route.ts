@@ -2,17 +2,21 @@
 // POST /api/departments — create a new department (6-step spec flow)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
-import { onyxClient } from '@/lib/onyx-client'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { RESERVED_SLUGS } from '@/lib/department-lifecycle'
 import { z } from 'zod'
 
 export async function GET() {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('departments')
       .select('*')
+      .eq('created_by', user.id)
       .neq('activation_stage', 'deprecated')
       .order('created_at')
     if (error) throw error
@@ -49,6 +53,10 @@ const CreateSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const parsed = CreateSchema.parse(body)
     const supabase = createServerSupabaseClient()
@@ -89,52 +97,25 @@ export async function POST(req: NextRequest) {
     // Step 2: Insert into Supabase with activation_stage = 'draft'
     const { data: dept, error: dbError } = await supabase
       .from('departments')
-      .insert({ ...parsed, activation_stage: 'draft', status: 'idle', onyx_persona_id: null })
+      .insert({ ...parsed, activation_stage: 'draft', status: 'idle', created_by: user.id })
       .select()
       .single()
     if (dbError) throw new Error(dbError.message)
 
-    // Step 3: Create Onyx Persona (non-blocking on failure)
-    let onyxPersonaId: string | 'SYNC_FAILED' | null = null
-    try {
-      const persona = await onyxClient.createPersona(dept)
-      onyxPersonaId = persona.id
-      await supabase
-        .from('departments')
-        .update({ onyx_persona_id: onyxPersonaId })
-        .eq('id', dept.id)
-    } catch (err) {
-      onyxPersonaId = 'SYNC_FAILED'
-      await supabase
-        .from('departments')
-        .update({ onyx_persona_id: 'SYNC_FAILED' })
-        .eq('id', dept.id)
-      await supabase.from('event_log').insert({
-        department_id: dept.id,
-        department_slug: dept.slug,
-        event_type: 'error',
-        description: `Onyx persona creation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        metadata: { step: 'onyx_persona_creation', dept_slug: dept.slug },
-      })
-    }
-
-    // Step 4: Log creation
+    // Step 3: Log creation
     await supabase.from('event_log').insert({
       department_id: dept.id,
       department_slug: dept.slug,
       event_type: 'department_created',
       description: `Department "${dept.name}" created`,
       metadata: { activation_stage: 'draft' },
+      created_by: user.id
     })
 
-    const onyxFailed = onyxPersonaId === 'SYNC_FAILED'
     return NextResponse.json(
       {
         success: true,
-        data: { ...dept, onyx_persona_id: onyxPersonaId },
-        ...(onyxFailed && {
-          warning: 'Department created but Onyx sync failed. It will retry automatically.',
-        }),
+        data: dept
       },
       { status: 201 }
     )

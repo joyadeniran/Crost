@@ -213,6 +213,7 @@ export interface Goal {
   orc_session_id: string | null                 // Onyx chat session for persistent Orc
   last_status_check: string | null
   supervision_interval_seconds: number
+  goal_tasks?: GoalTask[]
 }
 
 // GoalTask — a single task row within a goal (replaces orchestrator_plan.tasks flat JSON)

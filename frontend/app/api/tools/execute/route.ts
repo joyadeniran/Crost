@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 const ToolRequestSchema = z.object({
   tool: z.string(),
@@ -11,86 +11,65 @@ const ToolRequestSchema = z.object({
   department_id: z.string().optional(),
 })
 
-// MCP Tools Registry
-const TOOLS: Record<string, (params: any, context: any) => Promise<any>> = {
-  get_sales_data: async (params) => {
-    return {
-      status: 'success',
-      report_date: new Date().toISOString(),
-      range: params.range || '30d',
-      revenue: '$14,250.00',
-      active_subscriptions: 142,
-      churn_rate: '2.1%',
-      top_tier_customers: 14
-    }
-  },
-  
-  get_customer_list: async (params) => {
-    return {
-      status: 'success',
-      segment: params.segment || 'all',
-      customers: [
-        { id: 'C001', name: 'Acme Corp', ltv: '$4,200', health: 'Good' },
-        { id: 'C002', name: 'Globex', ltv: '$1,900', health: 'At Risk' },
-        { id: 'C003', name: 'Stark Ind', ltv: '$9,500', health: 'Excellent' }
-      ]
-    }
-  },
-  
-  send_whatsapp_message: async (params) => {
-    console.log(`[MCP Tool Executed] Simulated WhatsApp sent to ${params.to}: "${params.message}"`)
-    return {
-      status: 'success',
-      delivered: true,
-      timestamp: new Date().toISOString(),
-      simulated: true,
-      sent_to: params.to
-    }
-  },
-  
-  save_document: async (params, context) => {
-    const supabase = createServerSupabaseClient()
-    
-    const { data, error } = await supabase.from('artifacts').insert({
-      goal_id: context.goal_id || null,
-      department_id: context.department_id || null,
-      department_slug: context.department_slug || 'system',
-      artifact_type: 'document',
-      title: params.title || 'Untitled Document',
-      body: params.content || '',
-      metadata: {
-        task_id: context.task_id,
-        tool: 'save_document',
-        saved_at: new Date().toISOString()
-      }
-    }).select().single()
-
-    if (error) {
-      console.error('[save_document tool error]', error)
-      return { status: 'error', message: error.message }
-    }
-
-    return {
-      status: 'success',
-      document_id: data.id,
-      document_title: data.title,
-      saved_at: data.created_at,
-      bytes: String(params.content || '').length
-    }
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthenticated' }, { status: 401 })
+    }
+
+    const supabase = createServerSupabaseClient()
+
     const body = await req.json()
     const { tool, params, ...context } = ToolRequestSchema.parse(body)
 
-    const fn = TOOLS[tool]
+    // 2. Identify Service from Tool Name
+    // Mapping: apollo_search_contacts -> service: 'apollo', action: 'search_contacts'
+    // This is a simplified mapper for now.
+    let service: string | null = null
+    let action = tool
+
+    if (tool.startsWith('gmail_')) {
+      service = 'gmail'
+      action = tool.replace('gmail_', '')
+    } else if (tool.startsWith('github_')) {
+      service = 'github'
+      action = tool.replace('github_', '')
+    } else if (tool.startsWith('slack_')) {
+      service = 'slack'
+      action = tool.replace('slack_', '')
+    } else if (tool.startsWith('apollo_')) {
+      service = 'apollo'
+      action = tool.replace('apollo_', '')
+    }
+
+    // 3. Handle Other Integrated Services (Placeholder for future upgrades)
+
+    // 4. Fallback to Mock Registry (for other tools not yet upgraded to Nango)
+    const MOCK_TOOLS: Record<string, (params: any, context: any) => Promise<any>> = {
+      supabase_query: async (p) => ({ status: 'success', query: p.query, rows: [{ id: 1, revenue: 1200 }] }),
+      get_sales_data: async (p) => ({ status: 'success', revenue: '$14,250.00' }),
+      save_document: async (p, ctx) => {
+        const { data } = await supabase.from('artifacts').insert({
+          goal_id: ctx.goal_id || null,
+          department_id: ctx.department_id || null,
+          department_slug: ctx.department_slug || 'system',
+          artifact_type: 'document',
+          title: p.title || 'Untitled Document',
+          body: p.content || '',
+          metadata: { task_id: ctx.task_id, tool: 'save_document' }
+        }).select().single()
+        return { status: 'success', document_id: data?.id }
+      }
+    }
+
+    const fn = MOCK_TOOLS[tool]
     if (!fn) {
       return NextResponse.json({ success: false, error: `Tool implementation not found: ${tool}` }, { status: 400 })
     }
 
-    console.log(`[MCP Engine] Executing Tool: ${tool} for Task: ${context.task_id}`)
+    console.log(`[MCP V1 Fallback] Executing Mock Tool: ${tool}`)
     const result = await fn(params, context)
 
     return NextResponse.json({

@@ -1,19 +1,27 @@
-// GET /api/goals/[id]    — get a single goal with its orchestrator plan
-// PATCH /api/goals/[id]  — update goal status (e.g. mark as executing/completed)
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 type Params = { params: { id: string } }
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('goals')
-      .select('*')
+      .select('*, goal_tasks(*)')
       .eq('id', params.id)
+      .eq('created_by', user.id)
       .single()
 
     if (error || !data) {
@@ -40,7 +48,14 @@ const UpdateGoalSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    // Auth gate removed for local founder access
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
 
     const body = await req.json()
     const parsed = UpdateGoalSchema.parse(body)
@@ -50,10 +65,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('goals')
       .update(parsed)
       .eq('id', params.id)
+      .eq('created_by', user.id)
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: 'Goal not found or access denied', code: 'NOT_FOUND', timestamp: new Date().toISOString() },
+        { status: 404 }
+      )
+    }
+
+    // Trigger Orchestrator Synthesis if goal is being completed manually
+    if (parsed.status === 'completed') {
+      const { runOrcReport } = await import('@/lib/onyx-client')
+      runOrcReport(params.id).catch(err => {
+        console.error('[PATCH /api/goals/:id] Synthesis failed:', err)
+      })
+    }
 
     return NextResponse.json({ success: true, data, timestamp: new Date().toISOString() })
   } catch (err) {

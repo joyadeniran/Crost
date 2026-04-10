@@ -2,7 +2,7 @@
 // POST /api/goals  — create a goal and trigger the orchestrator
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/onyx-client'
 import { z } from 'zod'
 
@@ -13,6 +13,10 @@ const CreateGoalSchema = z.object({
 // GET /api/goals
 export async function GET(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
@@ -21,6 +25,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('goals')
       .select('*')
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
       .limit(Math.min(limit, 100))
 
@@ -46,6 +51,10 @@ export async function GET(req: NextRequest) {
 // POST /api/goals
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const { founder_input } = CreateGoalSchema.parse(body)
     const supabase = createServerSupabaseClient()
@@ -58,7 +67,7 @@ export async function POST(req: NextRequest) {
     // Step 1: Insert the goal as 'pending'
     const { data: goal, error: goalError } = await supabase
       .from('goals')
-      .insert({ title, founder_input, status: 'pending' })
+      .insert({ title, founder_input, status: 'pending', created_by: user.id })
       .select()
       .single()
 
@@ -71,9 +80,13 @@ export async function POST(req: NextRequest) {
       event_type: 'task_started',
       description: `Goal received: "${title}"`,
       metadata: { goal_id: goal.id },
+      created_by: user.id,
     })
 
-    // Step 3: Run orchestrator asynchronously — return immediately so UI can poll
+    // Step 3: Update status to 'planning' so the UI reflects the active orc run
+    await supabase.from('goals').update({ status: 'planning' }).eq('id', goal.id)
+
+    // Step 4: Run orchestrator asynchronously — return immediately so UI can poll
     // We do NOT await this — the client polls /api/goals/[id] for status updates.
     runOrchestratorTask(founder_input, goal.id).catch(async (err) => {
       console.error('[POST /api/goals] Orchestrator failed:', err)
@@ -81,6 +94,7 @@ export async function POST(req: NextRequest) {
         .from('goals')
         .update({ status: 'failed', outcome: String(err) })
         .eq('id', goal.id)
+        .eq('created_by', user.id)
     })
 
     return NextResponse.json({

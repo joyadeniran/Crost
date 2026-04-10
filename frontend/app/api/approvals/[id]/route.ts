@@ -1,8 +1,9 @@
-// PATCH /api/approvals/[id] — approve or reject an approval request
-
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
+import { Composio } from "@composio/core"
+import { cleanLargePayload } from "@/lib/utils"
 
 interface Params { params: { id: string } }
 
@@ -13,15 +14,25 @@ const DecisionSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const body = await req.json()
     const { decision, decided_by } = DecisionSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
-    // Fetch the approval to validate it's pending
+    // Fetch the approval to validate it's pending and belongs to user
     const { data: approval, error: fetchErr } = await supabase
       .from('approval_queue')
       .select('*')
       .eq('id', params.id)
+      .eq('created_by', user.id)
       .single()
 
     if (fetchErr || !approval) {
@@ -39,6 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('approval_queue')
       .update({ status: decision, decided_at: new Date().toISOString(), decided_by })
       .eq('id', params.id)
+      .eq('created_by', user.id)
       .select()
       .single()
 
@@ -49,15 +61,94 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('departments')
       .update({ status: 'idle' })
       .eq('id', approval.department_id)
+      .eq('created_by', user.id)
 
     // Log decision
     await supabase.from('event_log').insert({
       department_id: approval.department_id,
       department_slug: approval.department_slug,
+      goal_id: approval.goal_id,
       event_type: decision === 'approved' ? 'approval_approved' : 'approval_rejected',
       description: `Approval ${decision}: ${approval.action_label}`,
       metadata: { approval_id: params.id, decided_by },
+      created_by: user.id
     })
+
+    // ─── AGENT EXECUTION LOOP ────────────────────────────────────────────────
+    // If approved, and it's a tool-based action (Composio), execute it now.
+    if (decision === 'approved' && process.env.COMPOSIO_API_KEY) {
+      const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
+      
+      const normalizedAction = approval.action_type.toLowerCase()
+      const isComposioAction = SUPPORTED_TOOLKITS.some(kit => normalizedAction.startsWith(kit + '_')) || 
+                               (approval.action_type.includes('_') && approval.action_type === approval.action_type.toUpperCase())
+      
+      if (isComposioAction) {
+        try {
+          console.log(`[Approval Execution] Executing Composio action "${approval.action_type}" for user ${user.id}`)
+          const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
+          const entity = await composio.create(user.id)
+          
+          const result = await (entity as any).executeAction(approval.action_type, approval.payload)
+          
+          // Persist result
+          let bodyText = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+          if (bodyText.length > 3000) bodyText = bodyText.substring(0, 3000) + '... [Truncated]'
+
+          await supabase.from('company_memos').insert({
+            from_department: approval.department_slug,
+            goal_id: approval.goal_id,
+            title: `Execution Result: ${approval.action_label}`,
+            body: bodyText,
+            tags: ['execution_result', `approval_${params.id}`],
+            source_type: 'agent',
+            created_by: user.id
+          })
+
+          await supabase.from('approval_queue').update({
+            status: 'executed',
+            execution_result: result as any
+          }).eq('id', params.id)
+
+          await supabase.from('event_log').insert({
+            department_slug: approval.department_slug,
+            goal_id: approval.goal_id,
+            event_type: 'action_executed',
+            description: `Executed approved action: ${approval.action_label}`,
+            metadata: { result: cleanLargePayload(result) },
+            created_by: user.id
+          })
+
+          // ─── TASK COMPLETION & CHAIN REACTION ──────────────────────────────
+          // If the approval was tied to a specific task, mark it completed.
+          const taskId = (approval.payload as any)?.__task_id
+          if (taskId && approval.goal_id) {
+            console.log(`[Approval Execution] Completing parent task ${taskId} for goal ${approval.goal_id}`)
+            await supabase.from('goal_tasks').update({
+              status: 'completed',
+              completed_at: new Date().toISOString()
+            }).eq('goal_id', approval.goal_id).eq('task_id', taskId)
+
+            // Trigger chain reaction dispatch for downstream tasks
+            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+              },
+              body: JSON.stringify({ task_id: 'CHAIN_REACTION' }) // Special signal to scan all planned tasks
+            }).catch(e => console.error('[Approval Execution] Chain reaction failed:', e))
+          }
+          
+        } catch (execErr: any) {
+          console.error(`[Approval Execution Failure]`, execErr)
+          await supabase.from('approval_queue').update({
+            status: 'failed',
+            execution_result: { error: execErr.message }
+          }).eq('id', params.id)
+        }
+      }
+    }
 
     return NextResponse.json({ data: updated })
   } catch (err) {

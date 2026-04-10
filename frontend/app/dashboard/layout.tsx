@@ -1,15 +1,26 @@
 export const dynamic = 'force-dynamic'
 
 import { cookies } from 'next/headers'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { SidebarNav } from '@/components/dashboard/SidebarNav'
 import { Topbar } from '@/components/dashboard/Topbar'
-import { LiveEventsPanel } from '@/components/dashboard/LiveEventsPanel'
+import { ContentWrapper } from '@/components/dashboard/ContentWrapper'
 import { LayoutStoreHydrator } from '@/components/providers/LayoutStoreHydrator'
 import { Logo } from '@/components/ui/Logo'
 import type { EventLogEntry } from '@/types'
 
+import { redirect } from 'next/navigation'
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Use cookie-aware client for auth check
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  // Use service role client for DB reads (bypasses RLS, faster)
   const supabase = createServerSupabaseClient()
 
   // Cookie is the primary source of truth for env_mode — set by /api/toggle.
@@ -18,13 +29,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieMode = cookieStore.get('env_mode')?.value
 
   const [pendingResult, eventsResult, configResult, modeResult] = await Promise.all([
-    supabase.from('approval_queue').select('id').eq('status', 'pending'),
-    supabase.from('event_log').select('*').order('created_at', { ascending: false }).limit(20),
-    supabase.from('system_config').select('key, value').eq('key', 'local_identity').single(),
+    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
+    supabase.from('event_log').select('*').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
+    supabase.from('system_config').select('key, value').eq('key', 'local_identity').eq('created_by', user.id).single(),
     // Only hit DB for mode if no cookie yet
     cookieMode
       ? Promise.resolve({ data: null, error: null })
-      : supabase.from('system_config').select('value').eq('key', 'env_mode').single(),
+      : supabase.from('system_config').select('value').eq('key', 'env_mode').eq('created_by', user.id).single(),
   ])
 
   const pendingCount = pendingResult.data?.length ?? 0
@@ -71,13 +82,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         {/* Topbar — client component for pathname-based title */}
         <Topbar />
 
-        {/* Content + events panel */}
-        <div className="crost-content">
-          <div className="crost-page">
-            {children}
-          </div>
-          <LiveEventsPanel initial={events} />
-        </div>
+        {/* Content wrapper handles context-aware sidebar */}
+        <ContentWrapper initialEvents={events}>
+          {children}
+        </ContentWrapper>
       </div>
     </div>
   )
