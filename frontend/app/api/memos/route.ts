@@ -2,11 +2,15 @@
 // POST /api/memos  — create a new memo
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const tag = searchParams.get('tag')
@@ -15,8 +19,10 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('company_memos')
-      .select('*')
+      .select('id, title, body, priority, from_department, from_department_id, tags, created_at, read_by, source_type')
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
+      .limit(50)
 
     if (tag) query = query.contains('tags', [tag])
     if (department) query = query.eq('from_department', department)
@@ -42,13 +48,17 @@ const CreateMemoSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const parsed = CreateMemoSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('company_memos')
-      .insert(parsed)
+      .insert({ ...parsed, created_by: user.id })
       .select()
       .single()
 
@@ -62,6 +72,7 @@ export async function POST(req: NextRequest) {
         event_type: 'memo_written',
         description: `Memo written: "${parsed.title}"`,
         metadata: { memo_id: data.id, tags: parsed.tags, priority: parsed.priority },
+        created_by: user.id,
       })
     }
 

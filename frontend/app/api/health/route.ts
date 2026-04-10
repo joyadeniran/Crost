@@ -26,71 +26,7 @@ async function checkSupabase(): Promise<ServiceStatus> {
   }
 }
 
-async function checkOnyx(): Promise<ServiceStatus> {
-  const start = Date.now()
-  const base = process.env.ONYX_BASE_URL ?? 'http://localhost:3000'
-  try {
-    const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(4000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return { name: 'Onyx', status: 'ok', latencyMs: Date.now() - start }
-  } catch (err) {
-    const msg = String(err)
-    const isConnRefused = msg.includes('ECONNREFUSED') || msg.includes('fetch failed') || msg.includes('timeout')
-    return {
-      name: 'Onyx',
-      status: isConnRefused ? 'down' : 'degraded',
-      latencyMs: null,
-      detail: isConnRefused ? 'Not running — start Docker stack' : msg,
-    }
-  }
-}
 
-async function checkLiteLLM(): Promise<ServiceStatus> {
-  const start = Date.now()
-  const base = process.env.LITELLM_BASE_URL ?? 'http://localhost:4000'
-  try {
-    // Use /healthz (liveness) not /health (checks all backends — hangs when Ollama is slow)
-    const res = await fetch(`${base}/healthz`, { signal: AbortSignal.timeout(3000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return { name: 'LiteLLM', status: 'ok', latencyMs: Date.now() - start, detail: 'Proxy running' }
-  } catch (err) {
-    const msg = String(err)
-    const isDown = msg.includes('ECONNREFUSED') || msg.includes('fetch failed')
-      || msg.includes('timeout') || msg.includes('abort') || msg.includes('TimeoutError')
-    return {
-      name: 'LiteLLM',
-      status: isDown ? 'down' : 'degraded',
-      latencyMs: null,
-      detail: isDown ? 'Not running — run: litellm --config litellm_config.yaml --port 4000' : msg,
-    }
-  }
-}
-
-async function checkOllama(): Promise<ServiceStatus> {
-  const start = Date.now()
-  const base = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-  try {
-    const res = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(4000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = await res.json() as { models?: { name: string }[] }
-    const models = json.models?.map((m) => m.name) ?? []
-    return {
-      name: 'Ollama',
-      status: 'ok',
-      latencyMs: Date.now() - start,
-      detail: models.length ? `Models: ${models.join(', ')}` : 'Running — no models pulled',
-    }
-  } catch (err) {
-    const msg = String(err)
-    const isDown = msg.includes('ECONNREFUSED') || msg.includes('fetch failed') || msg.includes('timeout')
-    return {
-      name: 'Ollama',
-      status: isDown ? 'down' : 'degraded',
-      latencyMs: null,
-      detail: isDown ? 'Not running — install Ollama & pull gemma3:4b' : msg,
-    }
-  }
-}
 
 async function checkGemini(): Promise<ServiceStatus> {
   const key = process.env.GOOGLE_AI_STUDIO_API_KEY
@@ -159,23 +95,71 @@ async function checkGroq(): Promise<ServiceStatus> {
   }
 }
 
+async function checkComposio(): Promise<ServiceStatus> {
+  const key = process.env.COMPOSIO_API_KEY
+  if (!key) return { name: 'Composio', status: 'down', latencyMs: null, detail: 'No COMPOSIO_API_KEY' }
+  const start = Date.now()
+  try {
+    const res = await fetch('https://backend.composio.dev/api/v1/client/auth/me', {
+      headers: { 'x-api-key': key },
+      signal: AbortSignal.timeout(4000)
+    })
+    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+    return { name: 'Composio', status: 'ok', latencyMs: Date.now() - start }
+  } catch (err) {
+    return { name: 'Composio', status: 'degraded', latencyMs: null, detail: String(err) }
+  }
+}
+
+async function checkCrostSystem() {
+  try {
+    const supabase = createServerSupabaseClient()
+    const [{ data: lastGoal }, { data: lastEvent }] = await Promise.all([
+      supabase.from('goals').select('updated_at').eq('status', 'completed').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('event_log').select('created_at').eq('department_slug', 'orchestrator').order('created_at', { ascending: false }).limit(1).maybeSingle()
+    ])
+
+    const now = Date.now()
+    const lastEventTime = lastEvent ? new Date(lastEvent.created_at).getTime() : 0
+    // If the orchestrator hasn't logged anything in 12 hours, worker might be stalled or just idle.
+    return {
+      last_goal_completion: lastGoal ? lastGoal.updated_at : null,
+      worker_status: (now - lastEventTime > 12 * 60 * 60 * 1000) ? 'idle_or_stalled' : 'active'
+    }
+  } catch (err) {
+    return { last_goal_completion: null, worker_status: 'unknown' }
+  }
+}
+
+async function checkRateLimiter(): Promise<ServiceStatus> {
+  // Simple check — if we can reach this, the in-memory store is alive
+  return { name: 'Rate Limiter', status: 'ok', latencyMs: 0, detail: 'In-Memory Store Active' }
+}
+
 export async function GET() {
-  const [supabase, onyx, litellm, ollama, gemini, groq] = await Promise.all([
+  const [supabase, gemini, groq, composio, rateLimit, system] = await Promise.all([
     checkSupabase(),
-    checkOnyx(),
-    checkLiteLLM(),
-    checkOllama(),
     checkGemini(),
     checkGroq(),
+    checkComposio(),
+    checkRateLimiter(),
+    checkCrostSystem(),
   ])
 
-  const services: ServiceStatus[] = [supabase, onyx, litellm, ollama, gemini, groq]
+  const services: ServiceStatus[] = [supabase, gemini, groq, composio, rateLimit]
   const allOk = services.every((s) => s.status === 'ok')
   const anyDown = services.some((s) => s.status === 'down')
   const overall = allOk ? 'ok' : anyDown ? 'degraded' : 'degraded'
 
   return NextResponse.json(
-    { overall, services, checkedAt: new Date().toISOString() },
+    { 
+      overall, 
+      worker_status: system.worker_status,
+      last_goal_completion: system.last_goal_completion,
+      composio_connectivity: composio.status,
+      services, 
+      checkedAt: new Date().toISOString() 
+    },
     { status: 200 }
   )
 }

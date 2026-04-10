@@ -1,11 +1,6 @@
-// POST /api/departments/[slug]/activate
-// Transitions: draft → review → active
-// Onyx is attempted best-effort; on failure we fall back to DIRECT_LLM mode
-// so departments work even without Onyx running.
-
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
-import { onyxClient } from '@/lib/onyx-client'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { checkRateLimit } from '@/lib/rate-limit'
 import type { Department } from '@/types'
 
 interface Params { params: { slug: string } }
@@ -17,12 +12,22 @@ const STAGE_TRANSITIONS: Record<string, string> = {
 
 export async function POST(_req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Rate limit exceeded', retry_in: `${retryAfterSeconds} seconds` }, { status: 429 })
+    }
+
     const supabase = createServerSupabaseClient()
 
     const { data: dept, error } = await supabase
       .from('departments')
       .select('*')
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .single()
 
     if (error || !dept) {
@@ -53,23 +58,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const updates: Record<string, unknown> = { activation_stage: nextStage }
     let onyxMode = 'direct_llm'
 
-    // When transitioning to active: attempt Onyx persona creation (best-effort)
-    if (nextStage === 'active') {
-      try {
-        const persona = await onyxClient.createPersona(dept as Department)
-        updates.onyx_persona_id = persona.id
-        onyxMode = 'onyx'
-      } catch (onyxErr) {
-        // Onyx unavailable — fall back to DIRECT_LLM mode
-        console.warn(`[activate] Onyx unavailable for ${dept.slug}, using DIRECT_LLM:`, onyxErr)
-        updates.onyx_persona_id = `direct_llm:${dept.slug}`
-      }
-    }
-
     const { data: updated, error: updateErr } = await supabase
       .from('departments')
       .update(updates)
       .eq('id', dept.id)
+      .eq('created_by', user.id)
       .select()
       .single()
 
@@ -79,8 +72,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
       department_id: dept.id,
       department_slug: dept.slug,
       event_type: 'department_activated',
-      description: `Department "${dept.name}" promoted: ${dept.activation_stage} → ${nextStage}${onyxMode === 'direct_llm' ? ' (Direct LLM mode — Onyx unavailable)' : ''}`,
+      description: `Department "${dept.name}" promoted: ${dept.activation_stage} → ${nextStage}`,
       metadata: { from: dept.activation_stage, to: nextStage, mode: onyxMode },
+      created_by: user.id
     })
 
     return NextResponse.json({ data: updated, mode: onyxMode })

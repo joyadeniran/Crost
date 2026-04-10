@@ -11,58 +11,92 @@ import { McpSettings } from '@/components/settings/McpSettings'
 export default async function SettingsPage() {
   const supabase = createServerSupabaseClient()
   
+  const { data: { user } } = await supabase.auth.getUser()
+  
   const [configsRes, toolsRes] = await Promise.all([
-    supabase.from('system_config').select('*').order('key'),
-    supabase.from('available_tools').select('*').eq('requires_config', true).order('label')
+    supabase.from('system_config').select('*').eq('created_by', user?.id).order('key'),
+    supabase.from('available_tools')
+      .select('*')
+      .eq('user_id', user?.id)
+      .eq('is_action', false)
+      .eq('requires_config', true)
+      .order('label')
   ])
 
   const configs = configsRes.data ?? []
   const tools = toolsRes.data ?? []
 
   const tokenLimit   = configs.find(c => c.key === 'token_hard_limit_per_session')?.value
-  const identity     = configs.find(c => c.key === 'local_identity')?.value
-  const identityStr  = identity ? String(identity).replace(/"/g, '') : ''
+  const founderName  = configs.find(c => c.key === 'founder_name')?.value
+  const companyName  = configs.find(c => c.key === 'company_name')?.value
+  
+  const founderStr = founderName ? String(founderName).replace(/"/g, '') : ''
+  const companyStr = companyName ? String(companyName).replace(/"/g, '') : ''
 
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 700, fontSize: 24, color: 'var(--text)', marginBottom: 2, letterSpacing: '-0.02em' }}>
-          System Settings
+    <div style={{ width: '100%' }}>
+      <div style={{ marginBottom: 40 }}>
+        <h1 style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 800, fontSize: 32, color: 'var(--text)', marginBottom: 6, letterSpacing: '-0.04em' }}>
+          System Configuration
         </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-3)' }}>Management of API credentials, tools, and operational limits.</p>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', maxWidth: 600, lineHeight: 1.6 }}>
+          Manage your AI workforce parameters, secure API credentials, and connected business tools from this centralized control hub.
+        </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
-        {/* Left Column: Keys & Tools */}
-        <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32, alignItems: 'start' }}>
+        {/* Column 1: Core Credentials */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            CORE CREDENTIALS
+          </div>
           <ApiKeysSettings />
+          
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            IDENTITY & CONTEXT
+          </div>
+          <IdentityEditor 
+            initialFounder={founderStr} 
+            initialCompany={companyStr} 
+          />
+        </div>
+
+        {/* Column 2: Connected Tools */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            INTEGRATIONS & MCP
+          </div>
           <McpSettings initialTools={tools} />
         </div>
 
-        {/* Right Column: Identity & Ops */}
-        <div>
+        {/* Column 3: Operational Control */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            OPERATIONAL LIMITS
+          </div>
+          
           {/* AI Mode toggle */}
           <section style={{
             background: 'var(--bg-2)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: '24px 20px',
-            marginBottom: 20,
+            position: 'relative',
+            overflow: 'hidden'
           }}>
+             <div style={{ position: 'absolute', top: 0, left: 0, width: 2, height: '100%', background: 'var(--accent)' }}></div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>
-                  Private Delegation Mode
+                  Private Delegation
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5, margin: 0 }}>
-                  Switch between <b>LOCAL</b> (Ollama) for maximum privacy and <b>CLOUD</b> (Gemini/Groq) for advanced reasoning.
+                  Switch between <b>LOCAL</b> (Ollama) and <b>CLOUD</b> (Gemini).
                 </p>
               </div>
               <ModeToggle />
             </div>
           </section>
-
-          <IdentityEditor initial={identityStr} />
 
           {/* Token limits */}
           <section style={{
@@ -70,35 +104,37 @@ export default async function SettingsPage() {
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: '24px 20px',
-            marginBottom: 20,
           }}>
             <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>
               Account Token Budget
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
               <span style={{ color: 'var(--text-2)' }}>Hard limit per session</span>
-              <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12, color: 'var(--accent)' }}>
-                {String(tokenLimit ?? 50000).replace(/"/g, '')} tokens
+              <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                {String(tokenLimit ?? 50000).replace(/"/g, '')}
               </span>
+            </div>
+            <div style={{ height: 4, background: 'var(--bg-4)', borderRadius: 2, marginTop: 16, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: '35%', background: 'var(--accent)', borderRadius: 2 }}></div>
             </div>
           </section>
 
-          {/* Service Health */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            SYSTEM HEALTH
+          </div>
           <HealthWidget />
 
-          {/* Approval maintenance */}
           <section style={{
             background: 'var(--bg-2)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             padding: '18px 20px',
-            marginBottom: 20,
           }}>
             <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginBottom: 6 }}>
-              Approval Maintenance
+              Maintenance
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 14 }}>
-              Approvals pending for more than 24 hours are automatically marked as expired.
+              Clean up expired approvals from the queue.
             </p>
             <ExpireApprovalsButton />
           </section>

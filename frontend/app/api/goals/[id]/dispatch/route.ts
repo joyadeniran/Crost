@@ -30,6 +30,17 @@ const DispatchSchema = z.object({
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+
+    // Allow internal system bypass for automated "Chain Reaction" dispatches
+    const internalSecret = req.headers.get('x-crost-internal-secret')
+    const isInternal = internalSecret && internalSecret === process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!user && !isInternal) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+
     const body = await req.json()
     const { task_id, task_override } = DispatchSchema.parse(body)
     const supabase = createServerSupabaseClient()
@@ -48,12 +59,48 @@ export async function POST(req: NextRequest, { params }: Params) {
       )
     }
 
+    // Auth gate check for human-initiated dispatches (with overrides)
+    if (task_override && !user) {
+      return NextResponse.json({ error: 'Unauthorized: Manual overrides require a user session.' }, { status: 403 })
+    }
+
     const plan = goal.orchestrator_plan as { tasks: OrchestratorTask[] } | null
     if (!plan || !Array.isArray(plan.tasks)) {
       return NextResponse.json(
         { success: false, error: 'Goal has no orchestrator plan yet', code: 'NO_PLAN', timestamp: new Date().toISOString() },
         { status: 422 }
       )
+    }
+
+    // ─── CHAIN REACTION HANDLER ─────────────────────────────────────────────
+    if (task_id === 'CHAIN_REACTION') {
+      console.log(`[Dispatch] Chain Reaction triggered for goal ${goal.id}`)
+      const { data: allTasks } = await supabase.from('goal_tasks').select('*').eq('goal_id', goal.id)
+      const planned = (allTasks || []).filter(t => t.status === 'planned')
+      
+      let count = 0
+      for (const t of planned) {
+        const blockers = (t.depends_on || []).filter(depId => {
+          const depTask = (allTasks || []).find(at => at.task_id === depId)
+          return !depTask || depTask.status !== 'completed'
+        })
+        
+        if (blockers.length === 0) {
+          // Recursive call to self for this specific task
+          console.log(`[Dispatch] Releasing dependency for task ${t.task_id}`)
+          fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${goal.id}/dispatch`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+            },
+            body: JSON.stringify({ task_id: t.task_id })
+          }).catch(e => console.error(`[Dispatch] Recursive dispatch failed for ${t.task_id}:`, e))
+          count++
+        }
+      }
+      
+      return NextResponse.json({ success: true, count, timestamp: new Date().toISOString() })
     }
 
     const task = plan.tasks.find((t) => t.id === task_id) as OrchestratorTask | undefined
@@ -64,11 +111,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       )
     }
 
-    // Validation of dept is now handled dynamically in runOrchestratorTask
-    // and enforced by the presence of a department record in the DB.
-
     // ─── Idempotency check ────────────────────────────────────────────────────
-    // Check goal_tasks for this task. If already dispatched/completed, return 200.
     const { data: existingTask } = await supabase
       .from('goal_tasks')
       .select('status')
@@ -77,23 +120,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       .single()
 
     if (existingTask) {
-      if (['dispatched', 'completed'].includes(existingTask.status)) {
+      if (['dispatched', 'completed', 'running'].includes(existingTask.status)) {
         return NextResponse.json({
           success: true,
           data: { dispatched: false, reason: 'already_dispatched', status: existingTask.status, dept: task.dept, task_id, goal_id: goal.id },
           timestamp: new Date().toISOString(),
         })
       }
-      if (existingTask.status === 'rejected') {
-        return NextResponse.json(
-          { success: false, error: 'Task was rejected by founder', code: 'TASK_REJECTED', timestamp: new Date().toISOString() },
-          { status: 409 }
-        )
-      }
     }
 
     // ─── Depends_on enforcement ───────────────────────────────────────────────
-    // Block dispatch if any dependency task has not yet completed.
     if (task.depends_on && task.depends_on.length > 0) {
       const { data: depTasks } = await supabase
         .from('goal_tasks')
@@ -101,19 +137,22 @@ export async function POST(req: NextRequest, { params }: Params) {
         .eq('goal_id', params.id)
         .in('task_id', task.depends_on)
 
-      const blockers = (depTasks ?? []).filter(d => d.status !== 'completed')
-      if (blockers.length > 0) {
-        // Update task status to 'pending_dependency' so the supervision loop can retry
+      const depList = depTasks ?? []
+      const finishedIds = depList.filter(d => d.status === 'completed').map(d => d.task_id)
+      const missingOrPending = task.depends_on.filter(id => !finishedIds.includes(id))
+
+      if (missingOrPending.length > 0) {
+        // Ensure the task is marked as 'planned' in the DB if it was somehow 'dispatched'
         await supabase
           .from('goal_tasks')
-          .update({ status: 'pending_dependency' })
+          .update({ status: 'planned' })
           .eq('goal_id', params.id)
           .eq('task_id', task_id)
 
         return NextResponse.json(
           {
             success: false,
-            error: `Task depends on ${blockers.length} unfinished task(s): ${blockers.map(b => b.task_id).join(', ')}`,
+            error: `Task depends on ${missingOrPending.length} unfinished or missing task(s): ${missingOrPending.join(', ')}`,
             code: 'DEPENDENCY_PENDING',
             timestamp: new Date().toISOString(),
           },
@@ -176,20 +215,39 @@ export async function POST(req: NextRequest, { params }: Params) {
       .eq('id', goal.id)
       .eq('status', 'awaiting_approval')  // Conditional: only applies once
 
-    // ─── Mark task as dispatched (+ apply overrides) ─────────────────────────
+    // ─── Mark task as running (V5 status) (+ apply overrides) ─────────────────
     const isModified = !!task_override
-    await supabase
+    
+    // Use upsert to handle cases where the orchestrator failed to insert the task row initially
+    const { error: upsertError } = await supabase
       .from('goal_tasks')
-      .update({ 
-        status: 'dispatched', 
+      .upsert({ 
+        goal_id: params.id,
+        task_id: task_id,
+        created_by: goal.created_by,
+        dept_slug: task.dept,
+        action: task.action,
+        label: task_override?.label || task.label,
+        reasoning: task_override?.reasoning || task.reasoning,
+        // expected_deliverable: (task as any).expected_deliverable || task.label, // Removed missing column
+        params: task_override?.params || task.params,
+        risk_level: task.risk_level,
+        depends_on: task.depends_on,
+        model: task.model,
+        status: 'running',
         assigned_at: new Date().toISOString(),
-        ...(task_override?.label && { label: task_override.label }),
-        ...(task_override?.reasoning && { reasoning: task_override.reasoning }),
-        ...(task_override?.params && { params: task_override.params }),
         ...(isModified && { orc_notes: [{ ts: new Date().toISOString(), note: 'Founder modified task details before dispatch', action_taken: 'MODIFIED_BY_FOUNDER' }] })
+      }, {
+        onConflict: 'goal_id,task_id'
       })
-      .eq('goal_id', params.id)
-      .eq('task_id', task_id)
+
+    if (upsertError) {
+      console.error('[dispatch] Failed to upsert task row:', upsertError)
+      return NextResponse.json(
+        { success: false, error: 'Database synchronization failed', details: upsertError.message },
+        { status: 500 }
+      )
+    }
 
     // Merge overrides into the task for execution
     const finalTask = {

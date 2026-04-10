@@ -2,11 +2,15 @@
 // POST /api/approvals        — create a new approval request (called by agent actions)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || 'pending'
@@ -15,6 +19,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('approval_queue')
       .select('*')
+      .eq('created_by', user.id)
       .order('requested_at', { ascending: false })
 
     if (status !== 'all') query = query.eq('status', status)
@@ -46,13 +51,17 @@ const CreateApprovalSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const parsed = CreateApprovalSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('approval_queue')
-      .insert(parsed)
+      .insert({ ...parsed, created_by: user.id })
       .select()
       .single()
 
@@ -63,6 +72,7 @@ export async function POST(req: NextRequest) {
       .from('departments')
       .update({ status: 'awaiting_approval' })
       .eq('id', parsed.department_id)
+      .eq('created_by', user.id)
 
     // Log to event_log
     await supabase.from('event_log').insert({
@@ -71,6 +81,7 @@ export async function POST(req: NextRequest) {
       event_type: 'approval_requested',
       description: `Approval requested: ${parsed.action_label}`,
       metadata: { approval_id: data.id, risk_level: parsed.risk_level },
+      created_by: user.id,
     })
 
     return NextResponse.json({ data }, { status: 201 })

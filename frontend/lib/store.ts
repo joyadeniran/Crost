@@ -10,6 +10,7 @@ interface CrostStore {
   envMode: 'local' | 'cloud'
   pendingApprovalCount: number
   isLoading: boolean
+  showEventsPanel: boolean
 
   // Active goal (War Room)
   activeGoal: Goal | null
@@ -20,6 +21,8 @@ interface CrostStore {
   setEnvMode: (mode: 'local' | 'cloud') => void
   setPendingApprovalCount: (count: number) => void
   setIsLoading: (loading: boolean) => void
+  setShowEventsPanel: (show: boolean) => void
+
 
   // Goal actions
   setActiveGoal: (goal: Goal | null) => void
@@ -42,6 +45,7 @@ export const useCrostStore = create<CrostStore>()(
       envMode: 'cloud',
       pendingApprovalCount: 0,
       isLoading: true,
+      showEventsPanel: true,
       activeGoal: null,
       isSubmittingGoal: false,
 
@@ -50,6 +54,8 @@ export const useCrostStore = create<CrostStore>()(
       setEnvMode: (envMode) => set({ envMode }),
       setPendingApprovalCount: (pendingApprovalCount) => set({ pendingApprovalCount }),
       setIsLoading: (isLoading) => set({ isLoading }),
+      setShowEventsPanel: (showEventsPanel) => set({ showEventsPanel }),
+
 
       // Goal setters
       setActiveGoal: (activeGoal) => set({ activeGoal }),
@@ -87,7 +93,7 @@ export const useCrostStore = create<CrostStore>()(
     }),
     {
       name: 'crost-store',
-      partialize: (state) => ({ activeGoal: state.activeGoal }),
+      partialize: (state) => ({ activeGoal: state.activeGoal, showEventsPanel: state.showEventsPanel }),
     }
   )
 )

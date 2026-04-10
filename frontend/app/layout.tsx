@@ -26,11 +26,14 @@ export const metadata: Metadata = {
   description: 'The Agentic Operating System for solo founders',
 }
 
+import { Toaster } from '@/components/ui/toaster'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${syne.variable} ${dmMono.variable} ${dmSans.variable} font-dm-sans antialiased`}>
         {children}
+        <Toaster />
       </body>
     </html>
   )

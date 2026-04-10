@@ -2,11 +2,15 @@
 // POST /api/artifacts — create a new artifact (manually if needed, usually via worker)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const type = searchParams.get('type')
@@ -16,6 +20,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('artifacts')
       .select('*')
+      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
 
     if (type) query = query.eq('artifact_type', type)
@@ -53,13 +58,17 @@ const CreateArtifactSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const parsed = CreateArtifactSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
       .from('artifacts')
-      .insert(parsed)
+      .insert({ ...parsed, created_by: user.id })
       .select()
       .single()
 
@@ -73,6 +82,7 @@ export async function POST(req: NextRequest) {
       event_type: 'artifact_created',
       description: `Artifact created: "${parsed.title}"`,
       metadata: { artifact_id: data.id, artifact_type: parsed.artifact_type },
+      created_by: user.id,
     })
 
     return NextResponse.json({ 

@@ -208,6 +208,7 @@ type TaskDecision = 'approved' | 'rejected' | 'held' | null
 
 function TaskApprovalItem({
   task,
+  dbTask,
   decision,
   onApprove,
   onReject,
@@ -215,6 +216,7 @@ function TaskApprovalItem({
   departments,
 }: {
   task: OrchestratorTask
+  dbTask?: any
   decision: TaskDecision
   onApprove: (overrides?: { label?: string; reasoning?: string }) => void
   onReject: () => void
@@ -231,11 +233,20 @@ function TaskApprovalItem({
   const deptColour = deptData?.color ?? DEFAULT_DEPT_COLOUR
   const deptIcon = resolveIcon(deptData?.icon ?? DEFAULT_DEPT_ICON)
 
-  const decisionLabel: Record<NonNullable<TaskDecision>, string> = {
+  const decisionLabel: Record<string, string> = {
     approved: '✓ DISPATCHED',
     rejected: '✗ REJECTED',
     held:     '⏸ HELD',
+    running:  '⚡ RUNNING',
+    completed: '✓ COMPLETED',
+    failed:    '⚠ FAILED',
+    planned:   '⏳ WAITING',
+    needs_data: '❓ BLOCKED',
   }
+
+  // Use DB status if it's more "advanced" than the local decision
+  const resolvedStatus = dbTask?.status || decision
+  const statusLabel = decisionLabel[resolvedStatus || ''] || ''
 
   return (
     <div style={{
@@ -354,10 +365,13 @@ function TaskApprovalItem({
         <div style={{
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 10,
-          color: decision === 'approved' ? '#4ade80' : decision === 'held' ? '#facc15' : 'var(--text-3)',
+          color: resolvedStatus === 'completed' ? '#4ade80' : 
+                 resolvedStatus === 'failed' ? '#f87171' :
+                 (resolvedStatus === 'running' || resolvedStatus === 'dispatched') ? '#60a5fa' :
+                 resolvedStatus === 'held' ? '#facc15' : 'var(--text-3)',
           letterSpacing: '0.06em',
         }}>
-          {decisionLabel[decision]}
+          {statusLabel}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 6 }}>
@@ -534,6 +548,7 @@ function PlanCard({
           <TaskApprovalItem
             key={task.id}
             task={task}
+            dbTask={goal.goal_tasks?.find(gt => gt.task_id === task.id)}
             decision={decisions[task.id] ?? null}
             onApprove={(overrides) => onDispatch(task.id, overrides)}
             onReject={() => onReject(task.id)}
@@ -848,6 +863,7 @@ export function WarRoom() {
     setIsSubmittingGoal,
     departments,
   } = useCrostStore()
+  const [reportDismissed, setReportDismissed] = useState(false)
   const [decisions, setDecisions] = useState<Record<string, TaskDecision>>({})
 
   // Clear decisions when a new goal is set
@@ -855,16 +871,17 @@ export function WarRoom() {
     setDecisions({})
   }, [activeGoal?.id])
 
-  // Poll for plan when goal is in 'planning' state
+  // Poll for plan when goal is in 'planning' or 'executing' or 'awaiting_approval' status
   useEffect(() => {
-    if (!activeGoal || !['pending', 'planning'].includes(activeGoal.status)) return
+    if (!activeGoal || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoal.status)) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/goals/${activeGoal.id}`)
         const json = await res.json()
         if (json.success && json.data) {
           updateActiveGoal(json.data)
-          if (!['pending', 'planning'].includes(json.data.status)) {
+          // Stop polling if goal reaches terminal state
+          if (['completed', 'failed'].includes(json.data.status)) {
             clearInterval(interval)
             setIsSubmittingGoal(false)
           }
@@ -914,9 +931,15 @@ export function WarRoom() {
     }
   }, [activeGoal, setActiveGoal])
 
+  const inFlightDispatches = useRef<Set<string>>(new Set())
+
   const handleDispatch = useCallback(async (taskId: string, overrides?: { label?: string; reasoning?: string }) => {
     if (!activeGoal) return
+    if (inFlightDispatches.current.has(taskId)) return
+    
+    inFlightDispatches.current.add(taskId)
     setDecisions(d => ({ ...d, [taskId]: 'approved' }))
+    
     try {
       await fetch(`/api/goals/${activeGoal.id}/dispatch`, {
         method: 'POST',
@@ -929,6 +952,8 @@ export function WarRoom() {
     } catch (err) {
       console.error('[WarRoom] dispatch failed', err)
       setDecisions(d => ({ ...d, [taskId]: null }))
+    } finally {
+      inFlightDispatches.current.delete(taskId)
     }
   }, [activeGoal])
 
@@ -955,18 +980,23 @@ export function WarRoom() {
 
   const isPlanning = activeGoal && ['pending', 'planning'].includes(activeGoal.status)
   const hasPlan = activeGoal && activeGoal.orchestrator_plan && activeGoal.status !== 'failed'
+  const isClarifying = activeGoal?.status === 'clarifying'
+  const isCompleted = activeGoal?.status === 'completed'
 
-  // Automatically clear active goal when all tasks are actioned
+  // Automatically clear active goal ONLY when all tasks are actioned AND it's not completed/clarifying
   useEffect(() => {
-    if (!hasPlan || !activeGoal.orchestrator_plan) return
+    if (!hasPlan || !activeGoal.orchestrator_plan || isCompleted || isClarifying) return
     const pending = activeGoal.orchestrator_plan.tasks.filter(t => !decisions[t.id]).length
     if (pending === 0 && Object.keys(decisions).length > 0) {
       const timer = setTimeout(() => {
-        setActiveGoal(null)
-      }, 5000) // Clear after 5 seconds
+        // Only clear if still in executing or awaiting_approval (don't clear if it's about to hit completed)
+        if (['executing', 'awaiting_approval'].includes(activeGoal.status)) {
+          setActiveGoal(null)
+        }
+      }, 8000) 
       return () => clearTimeout(timer)
     }
-  }, [hasPlan, activeGoal?.orchestrator_plan, decisions, setActiveGoal])
+  }, [hasPlan, activeGoal?.orchestrator_plan, activeGoal?.status, decisions, setActiveGoal, isCompleted, isClarifying])
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -978,14 +1008,14 @@ export function WarRoom() {
 
       {isPlanning && <PlanningIndicator />}
 
-      {activeGoal?.status === 'clarifying' && (
+      {isClarifying && (
         <OrcDialogue 
           goal={activeGoal} 
           onResponse={handleDialogueResponse} 
         />
       )}
 
-      {hasPlan && activeGoal && !['completed', 'clarifying'].includes(activeGoal.status) && (
+      {hasPlan && activeGoal && !['completed', 'clarifying', 'failed'].includes(activeGoal.status) && (
         <PlanCard
           goal={activeGoal}
           decisions={decisions}
@@ -998,10 +1028,10 @@ export function WarRoom() {
         />
       )}
 
-      {activeGoal?.status === 'completed' && (
+      {isCompleted && activeGoal && (
         <SynthesisReportCard 
           goalId={activeGoal.id} 
-          onDismiss={() => setActiveGoal(null)}
+          onDismiss={() => setActiveGoal(null)} 
         />
       )}
 
