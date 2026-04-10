@@ -20,6 +20,21 @@ services:
         sync: false
     healthCheckPath: /api/health
 
+  - type: web
+    name: crost-litellm
+    runtime: docker
+    rootDir: litellm
+    port: 4000
+    envVars:
+      - key: LITELLM_MASTER_KEY
+        sync: false
+      - key: LITELLM_LOG
+        value: DEBUG
+      - key: LITELLM_PROXY_ADMIN_KEY
+        sync: false
+    healthCheckPath: /health
+    startAsJob: false
+
   - type: worker
     name: crost-worker
     runtime: node
