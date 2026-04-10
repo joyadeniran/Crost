@@ -3,7 +3,7 @@ services:
     name: crost-frontend
     runtime: node
     rootDir: frontend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci && rm -rf .next && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
