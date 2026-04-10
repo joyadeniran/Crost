@@ -283,14 +283,26 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 2. **File**: `frontend/app/api/onboarding/first-goal/route.ts`
    - Fixed: Added explicit type annotation `(task: any)` in `.map()` callback
 
-### Frontend Module Resolution Cache
-**File**: `render.yaml` (web service buildCommand)
+### Frontend Build Issues & Fixes
 
-- **Problem**: Build fails with "Can't resolve '@/components/...'" errors for files that exist
+**Issue 1: Module Resolution**
+- **Problem**: Build fails with "Can't resolve '@/components/...'" errors for files that DO exist
 - **Root Cause**: Stale `.next` build cache contains outdated module metadata
 - **Fix**: Added `rm -rf .next` to buildCommand before `npm run build`
-- **Updated Command**: `npm ci && rm -rf .next && npm run build`
-- **Impact**: Fresh build without cached module resolution errors
+- **Status**: ✓ Resolved (files confirmed present on Render)
+
+**Issue 2: TypeScript Not Installed**
+- **Problem**: Next.js build fails with "typescript is not installed" despite being in devDependencies
+- **Root Cause**: Render sets `NODE_ENV=production` which causes `npm ci` to skip devDependencies
+- **Fix**: Use `npm ci --include=dev` to force installation of build tools
+- **Also Added**: Webpack alias config in next.config.js for explicit module resolution
+
+**Updated Build Command**: 
+```
+npm ci --include=dev && rm -rf .next && npm run build
+```
+
+**Impact**: Build now has access to TypeScript, ESLint, and all required compilation tools during Render deployment
 
 ---
 
