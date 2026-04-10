@@ -316,18 +316,58 @@ npm ci --include=dev && rm -rf .next && npm run build
 
 ---
 
-## 8.3 Deployment Readiness
+## 8.3 LiteLLM Gateway Service
 
-**Next Steps:**
-1. Push this version to GitHub
-2. Deploy to Render (see `RENDER_DEPLOYMENT.md`)
-3. Verify health checks at `/api/health` show all 4 services as `ok`
-4. Monitor worker logs for Realtime subscription startup
-5. Test onboarding → goal creation → model selection flow
+**Service**: `crost-litellm` (Docker-based)
+- **Runtime**: Docker (ghcr.io/berriai/litellm)
+- **Port**: 4000
+- **Health Check**: `GET /health`
+- **Configuration**: See `litellm/README.md`
+
+**Required Environment Variables** (set in Render dashboard):
+- `LITELLM_MASTER_KEY` — Master API key (e.g., `sk-litellm-...`)
+- Provider API keys (at least one):
+  - `GROQ_API_KEY` — For Groq models (e.g., `llama-3.3-70b-versatile`)
+  - `GOOGLE_API_KEY` — For Gemini models
+  - `ANTHROPIC_API_KEY` — For Claude models
+  - `OPENAI_API_KEY` — For GPT models
+
+**How Frontend & Worker Communicate:**
+- Both services set `LITELLM_BASE_URL=https://crost-litellm.onrender.com`
+- Both services use `LITELLM_MASTER_KEY` for authentication
+- All LLM requests route through LiteLLM's unified `/v1/chat/completions` API
+
+**Setup Steps:**
+1. LiteLLM service auto-deploys when you push to GitHub (included in render.yaml)
+2. Obtain API keys from providers:
+   - Groq: https://console.groq.com
+   - Google: https://ai.google.dev
+   - Anthropic: https://console.anthropic.com
+3. Set environment variables in Render dashboard for `crost-litellm` service
+4. Set `LITELLM_BASE_URL` and `LITELLM_MASTER_KEY` in frontend/worker services
+5. Verify `/api/health` shows LiteLLM as `ok`
+
+---
+
+## 8.4 Deployment Readiness
+
+**Render Services:**
+- ✅ `crost-frontend` — Next.js web app (Node.js runtime)
+- ✅ `crost-worker` — Background task processor (Node.js runtime)
+- ✅ `crost-litellm` — LLM gateway (Docker runtime)
+
+**Deployment Checklist:**
+1. ✅ Pushed to GitHub (all services in render.yaml)
+2. ✅ Frontend builds successfully with TypeScript
+3. ✅ Worker module resolution fixed
+4. ✅ LiteLLM service configured
+5. ⏳ Configure API keys in Render dashboard
+6. ⏳ Verify health checks at `/api/health` show all services as `ok`
+7. ⏳ Test onboarding → goal creation → orchestrator response
 
 **Known Limitations:**
 - API keys stored as-is in DB (TODO: encrypt with libsodium)
-- LiteLLM instance must be pre-deployed (not bundled in Render service)
+- LiteLLM runs in standard Render container (no GPU acceleration)
 - Worker uses polling for Realtime events (single-instance constraint)
 
 ---
