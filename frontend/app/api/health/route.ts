@@ -1,33 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+async function checkService(name: string, checkFn: () => Promise<boolean>): Promise<{ status: 'ok' | 'down'; detail?: string }> {
+  try {
+    const ok = await checkFn()
+    return { status: ok ? 'ok' : 'down', detail: ok ? undefined : `${name} health check failed` }
+  } catch (err: any) {
+    return { status: 'down', detail: err.message || `${name} unreachable` }
+  }
+}
+
+async function checkSupabase(): Promise<boolean> {
+  const supabase = createServerSupabaseClient()
+  const { error } = await supabase.from('system_config').select('key').limit(1)
+  return !error
+}
+
+async function checkLiteLLM(): Promise<boolean> {
+  const url = process.env.LITELLM_URL || process.env.LITELLM_BASE_URL
+  if (!url) return false // LiteLLM not configured
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch(`${url}/health`, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function checkGemini(): Promise<boolean> {
+  const key = process.env.GEMINI_API_KEY
+  if (!key) return false // Gemini not configured
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + key, {
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function checkGroq(): Promise<boolean> {
+  const key = process.env.GROQ_API_KEY
+  if (!key) return false // Groq not configured
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
+    // Parallel health checks
+    const [supabaseResult, litellmResult, geminiResult, groqResult] = await Promise.all([
+      checkService('Supabase', checkSupabase),
+      checkService('LiteLLM', checkLiteLLM),
+      checkService('Gemini', checkGemini),
+      checkService('Groq', checkGroq),
+    ])
 
-    // Check Supabase connectivity
-    const { data, error } = await supabase
-      .from('system_config')
-      .select('key')
-      .limit(1)
-
-    if (error) {
-      return NextResponse.json(
-        {
-          status: 'unhealthy',
-          error: 'Supabase connection failed',
-          details: error.message
-        },
-        { status: 503 }
-      )
-    }
+    // Determine overall status
+    const allServices = [supabaseResult, litellmResult, geminiResult, groqResult].filter(
+      (s) => s.status !== undefined
+    )
+    const hasDown = allServices.some((s) => s.status === 'down')
+    const overallStatus = hasDown ? 'unhealthy' : 'healthy'
 
     return NextResponse.json({
-      status: 'healthy',
+      status: overallStatus,
       timestamp: new Date().toISOString(),
+      checkedAt: new Date().toISOString(),
       services: {
-        supabase: 'ok'
-      }
+        supabase: supabaseResult.status,
+        litellm: litellmResult.status,
+        gemini: geminiResult.status,
+        groq: groqResult.status,
+      },
+      details: {
+        supabase: supabaseResult.detail,
+        litellm: litellmResult.detail,
+        gemini: geminiResult.detail,
+        groq: groqResult.detail,
+      },
     })
   } catch (err: any) {
     return NextResponse.json(
