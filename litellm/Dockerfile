@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install LiteLLM and dependencies
-RUN pip install --no-cache-dir litellm python-dotenv gunicorn
+# Install LiteLLM with proxy dependencies
+RUN pip install --no-cache-dir 'litellm[proxy]' python-dotenv
 
 # LiteLLM runs on port 4000 by default
 EXPOSE 4000
