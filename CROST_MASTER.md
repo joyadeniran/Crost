@@ -228,6 +228,16 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 - **Implementation**: Fonts still load at runtime via standard `<link>` tags in HTML
 - **Impact**: Build no longer hangs on network timeouts; font optimization deferred to runtime
 
+### npm Network Resilience
+**File**: `frontend/.npmrc` (new)
+- **Root Cause**: Render build VMs experience transient `ENETUNREACH` errors when fetching packages from `registry.npmjs.org`
+- **Fix**: Added `.npmrc` with retry and timeout settings:
+  - `fetch-retries=5` (default 2)
+  - `fetch-retry-mintimeout=20000` (20s min backoff)
+  - `fetch-retry-maxtimeout=120000` (2min max backoff)
+  - `fetch-timeout=300000` (5min overall timeout)
+- **Impact**: `npm ci` survives transient Render network blips instead of failing immediately
+
 ### ESLint Rule Removal
 **File**: `frontend/.eslintrc.json`
 - **Issue**: Rule `@typescript-eslint/no-explicit-any` referenced undefined plugin; caused 60+ file build failures
