@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 async function checkService(name: string, checkFn: () => Promise<boolean>): Promise<{ status: 'ok' | 'down'; detail?: string }> {
   try {
     const ok = await checkFn()

@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 import { cleanLargePayload } from "@/lib/utils";
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: Request) {
   try {
     const { taskId, goalId, userId, toolName, args } = await req.json();

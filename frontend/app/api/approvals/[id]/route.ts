@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { Composio } from "@composio/core"
 import { cleanLargePayload } from "@/lib/utils"
 
+export const dynamic = 'force-dynamic'
+
 interface Params { params: { id: string } }
 
 const DecisionSchema = z.object({

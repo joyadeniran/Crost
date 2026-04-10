@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || 'http://localhost:4000'
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || ''
 

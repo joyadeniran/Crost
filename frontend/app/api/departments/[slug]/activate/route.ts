@@ -3,6 +3,8 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { checkRateLimit } from '@/lib/rate-limit'
 import type { Department } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 interface Params { params: { slug: string } }
 
 const STAGE_TRANSITIONS: Record<string, string> = {

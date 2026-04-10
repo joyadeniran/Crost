@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Artifact } from '@/types'
+import Image from 'next/image'
 
 interface Props {
   artifact: Artifact
@@ -105,9 +106,16 @@ export function ArtifactCard({ artifact }: Props) {
             borderRadius: 4, 
             overflow: 'hidden', 
             marginBottom: 12,
-            border: '1px solid var(--border)' 
+            border: '1px solid var(--border)',
+            position: 'relative'
           }}>
-            <img src={artifact.preview_url} alt={artifact.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <Image 
+              src={artifact.preview_url} 
+              alt={artifact.title} 
+              fill
+              unoptimized
+              style={{ objectFit: 'cover' }} 
+            />
           </div>
         )}
 
@@ -204,7 +212,15 @@ export function ArtifactCard({ artifact }: Props) {
             
             <div style={{ padding: '32px', overflowY: 'auto', flex: 1 }}>
               {artifact.artifact_type === 'image' && artifact.preview_url ? (
-                <img src={artifact.preview_url} style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)' }} alt={artifact.title} />
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
+                  <Image 
+                    src={artifact.preview_url} 
+                    fill
+                    unoptimized
+                    style={{ borderRadius: 8, border: '1px solid var(--border)', objectFit: 'contain' }} 
+                    alt={artifact.title} 
+                  />
+                </div>
               ) : (
                 <div style={{ 
                   fontFamily: 'var(--font-dm-sans, sans-serif)', 

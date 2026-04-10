@@ -2,8 +2,9 @@ services:
   - type: web
     name: crost-frontend
     runtime: node
-    buildCommand: cd frontend && npm ci && npm run build
-    startCommand: cd frontend && npm start
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -22,8 +23,8 @@ services:
   - type: background
     name: crost-worker
     runtime: node
-    buildCommand: cd frontend && npm ci && npm run build
-    startCommand: npx tsx scripts/worker.ts
+    buildCommand: cd frontend && npm ci
+    startCommand: cd frontend && npx tsx ../scripts/worker.ts
     envVars:
       - key: NODE_ENV
         value: production

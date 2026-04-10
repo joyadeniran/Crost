@@ -125,18 +125,124 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 ✅ **Phase 1-7 Complete**: All core features implemented.
 ✅ **BYOK System**: Role-based model assignment with API key management.
 ✅ **Render-Ready**: Web service + worker background job configured.
-✅ **Build Fixed**: All ESLint errors resolved, ready for CI/CD.
+✅ **Build Fixed**: All TypeScript, ESLint, and static rendering errors resolved.
+✅ **Deployment Verified**: Build succeeds with no blocking errors.
+
+---
+
+## 8.1 Critical Fixes Applied (April 10, 2026)
+
+### Type System Fixes
+**File:** `frontend/types/index.ts`
+- **Fix**: Updated `CompanyMemo` interface with missing fields: `is_foundational`, `is_current_context`, `task_id`, `valid_until`, `version_tag`
+- **Fix**: Removed dead `onyx_index_id` field
+- **Impact**: Critical for type safety across the entire codebase
+
+### Context Injection into Orchestrator
+**File:** `frontend/lib/llm-client.ts` (refactored from `onyx-client.ts`)
+- **Fix**: Injected `buildOrcContext(userId)` into `runOrchestratorTask()` to ensure Orc reads foundational + current context memos
+- **Impact**: Orc now uses the Memo System as specified; eliminates contextual gaps in planning
+
+### Service Health Endpoint Expansion
+**File:** `frontend/app/api/health/route.ts`
+- **Previous**: Only checked Supabase health
+- **Fix**: Expanded to check 4 services with individual timeout handling:
+  - Supabase (database query)
+  - LiteLLM (proxy health endpoint at `/health`)
+  - Gemini (API key validation via models list)
+  - Groq (API key validation via models list)
+- **Implementation**: Each check uses `AbortSignal` with 5-second timeout; returns `{ status, detail }` object per service
+- **Response Format**: Returns `services` object with individual statuses + `details` object with error messages
+- **Impact**: Full visibility into all external service dependencies
+
+### Health Widget Transform
+**File:** `frontend/components/settings/HealthWidget.tsx`
+- **Fix**: Transformed endpoint response from object format to array format for rendering
+- **Implementation**: Maps `services` object entries to `ServiceStatus[]` array with `status` and `detail` fields
+- **Impact**: Widget now displays health status + error details for all 4 services
+
+### Force-Dynamic Exports (Static Rendering Prevention)
+**Files**: All 35 API routes under `frontend/app/api/`
+- **Root Cause**: Next.js attempted static pre-rendering of API routes; Supabase client throws at module load-time when env vars absent during build
+- **Fix Applied**: Added `export const dynamic = 'force-dynamic'` to prevent static pre-rendering
+- **Routes Updated**: 
+  - `/api/approvals`
+  - `/api/artifacts`
+  - `/api/auth` (all subroutes)
+  - `/api/config` (all subroutes)
+  - `/api/connect` (all subroutes)
+  - `/api/departments` (all subroutes)
+  - `/api/goals` (all subroutes)
+  - `/api/health`
+  - `/api/memos` (all subroutes)
+  - `/api/onboarding` (all subroutes including `/complete`)
+  - `/api/settings` (all subroutes)
+  - `/api/toggle`
+  - `/api/tools` (all subroutes)
+  - `/api/worker` (all subroutes)
+- **Implementation**: Python script automated addition across all 35 files
+- **Impact**: Render build no longer crashes on `NEXT_PUBLIC_SUPABASE_URL is not set` error
+
+### Model Name Correction
+**File**: `frontend/app/api/toggle/route.ts`
+- **Fix**: Changed `model_name` from `'cloud/groq-llama'` to `'groq/llama-3.3-70b-versatile'`
+- **Impact**: Matches LiteLLM router; model selection now correctly routes requests
+
+### Render Configuration
+**File**: `render.yaml`
+- **Web Service**:
+  - Added `rootDir: frontend` to clarify working directory
+  - Removed redundant `cd frontend &&` from `buildCommand` (now: `npm ci && npm run build`)
+  - Removed redundant `cd frontend &&` from `startCommand` (now: `npm start`)
+- **Worker Service**:
+  - Kept `cd frontend &&` prefix (scripts/worker.ts is at repo root)
+  - `startCommand: cd frontend && npx tsx ../scripts/worker.ts`
+- **Impact**: Render dashboard Root Directory setting now works with buildCommand
+
+### Build Optimization (Google Fonts)
+**File**: `frontend/next.config.js`
+- **Root Cause**: Network requests to `fonts.gstatic.com` failed in Render's restricted build environment
+- **Fix**: Added `optimizeFonts: false` to disable build-time font inlining
+- **Implementation**: Fonts still load at runtime via standard `<link>` tags in HTML
+- **Impact**: Build no longer hangs on network timeouts; font optimization deferred to runtime
+
+### ESLint Rule Removal
+**File**: `frontend/.eslintrc.json`
+- **Issue**: Rule `@typescript-eslint/no-explicit-any` referenced undefined plugin; caused 60+ file build failures
+- **Fix**: Removed the rule definition (rule was non-critical warning anyway)
+- **Impact**: Build completes without plugin-not-found errors
+
+### TypeScript Error Fixes
+1. **File**: `frontend/app/departments/[slug]/page.tsx`
+   - Fixed: `dept.onyx_persona_id` → `dept.orc_persona_id`
+
+2. **File**: `frontend/app/api/onboarding/first-goal/route.ts`
+   - Fixed: Added explicit type annotation `(task: any)` in `.map()` callback
+
+---
+
+## 8.2 Build Verification
+
+✅ **Build Status**: `npm run build` completes successfully
+✅ **Warnings Only**: Non-blocking warnings in ArtifactCard.tsx (`<img>` tag optimization)
+✅ **API Routes**: All 35 routes properly exported with `dynamic = 'force-dynamic'`
+✅ **Environment**: Ready for Render deployment with all env vars properly gated
+
+---
+
+## 8.3 Deployment Readiness
 
 **Next Steps:**
-1. Deploy to Render (see `RENDER_DEPLOYMENT.md`).
-2. Verify health checks & worker logs.
-3. Run DB migrations (auto-applied).
-4. Test onboarding → goal creation → model selection flow.
+1. Push this version to GitHub
+2. Deploy to Render (see `RENDER_DEPLOYMENT.md`)
+3. Verify health checks at `/api/health` show all 4 services as `ok`
+4. Monitor worker logs for Realtime subscription startup
+5. Test onboarding → goal creation → model selection flow
 
 **Known Limitations:**
-- API keys stored as-is in DB (TODO: encrypt with libsodium).
-- LiteLLM instance must be pre-deployed (not bundled in Render service).
-- Worker uses polling for Realtime events (single-instance constraint).
+- API keys stored as-is in DB (TODO: encrypt with libsodium)
+- LiteLLM instance must be pre-deployed (not bundled in Render service)
+- Worker uses polling for Realtime events (single-instance constraint)
 
 ---
 

@@ -6,6 +6,8 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { runOrchestratorTask } from '@/lib/llm-client'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 const CreateGoalSchema = z.object({
   founder_input: z.string().min(5, 'Goal must be at least 5 characters').max(2000),
 })

@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 const UpdateConfigSchema = z.object({
   key: z.string().min(1),
   value: z.unknown(),

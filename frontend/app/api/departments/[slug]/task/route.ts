@@ -19,6 +19,8 @@ import { buildFinalPrompt, callLLM } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 interface Params { params: { slug: string } }
 
 const TaskSchema = z.object({
