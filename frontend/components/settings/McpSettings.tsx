@@ -19,8 +19,8 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
   const supabase = supabaseClient
 
   // Filter tools based on search
-  const filteredTools = tools.filter(t => 
-    t.label.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredTools = tools.filter(t =>
+    t.label.toLowerCase().includes(search.toLowerCase()) ||
     t.description.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -59,7 +59,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
   const handleConnect = async (tool: Tool) => {
     // We now support Composio for all major toolkits
     const supportedProviders = [
-      'gmail', 'github', 'slack', 'notion', 'linear', 
+      'gmail', 'github', 'slack', 'notion', 'linear',
       'googlecalendar', 'googlesheets', 'googledrive'
     ]
     if (!supportedProviders.includes(tool.id)) {
@@ -72,7 +72,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
     try {
       // 1. Get User Session (Enforced by Layout, but good to check)
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         toast('Please sign in to connect tools.', 'error', 'Authentication Required')
         return
@@ -153,7 +153,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
 
       {/* Search Bar */}
       <div style={{ marginBottom: 20 }}>
-        <input 
+        <input
           type="text"
           placeholder="Search tools (e.g. gmail, slack...)"
           value={search}
@@ -173,11 +173,11 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {tools.length === 0 && !isSyncing && (
-          <div style={{ 
-            padding: '24px', 
-            textAlign: 'center', 
-            background: 'var(--bg-3)', 
-            borderRadius: 8, 
+          <div style={{
+            padding: '24px',
+            textAlign: 'center',
+            background: 'var(--bg-3)',
+            borderRadius: 8,
             border: '1px dashed var(--border)',
             fontSize: 12,
             color: 'var(--text-3)'
@@ -195,12 +195,12 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {connectedTools.map((tool) => (
-                <ToolItem 
-                  key={tool.id} 
-                  tool={tool} 
-                  updating={updating} 
-                  onConnect={handleConnect} 
-                  onDisconnect={handleDisconnect} 
+                <ToolItem
+                  key={tool.id}
+                  tool={tool}
+                  updating={updating}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
                 />
               ))}
             </div>
@@ -215,12 +215,12 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {availableTools.map((tool) => (
-                <ToolItem 
-                  key={tool.id} 
-                  tool={tool} 
-                  updating={updating} 
-                  onConnect={handleConnect} 
-                  onDisconnect={handleDisconnect} 
+                <ToolItem
+                  key={tool.id}
+                  tool={tool}
+                  updating={updating}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
                 />
               ))}
             </div>
@@ -229,7 +229,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
 
         {search && filteredTools.length === 0 && (
           <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-3)', fontSize: 13 }}>
-            No tools matching "{search}"
+            No tools matching &quot;{search}&quot;
           </div>
         )}
       </div>
@@ -237,17 +237,17 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
   )
 }
 
-function ToolItem({ tool, updating, onConnect, onDisconnect }: { 
-  tool: Tool, 
-  updating: string | null, 
-  onConnect: (t: Tool) => void, 
-  onDisconnect: (t: Tool) => void 
+function ToolItem({ tool, updating, onConnect, onDisconnect }: {
+  tool: Tool,
+  updating: string | null,
+  onConnect: (t: Tool) => void,
+  onDisconnect: (t: Tool) => void
 }) {
   return (
-    <div style={{ 
-      background: 'var(--bg-3)', 
-      border: '1px solid var(--border)', 
-      borderRadius: 8, 
+    <div style={{
+      background: 'var(--bg-3)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
       padding: '12px 14px',
       display: 'flex',
       alignItems: 'center',
@@ -260,11 +260,11 @@ function ToolItem({ tool, updating, onConnect, onDisconnect }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{tool.label}</div>
           {tool.is_configured && (
-             <span style={{ 
-              fontFamily: 'var(--font-dm-mono, monospace)', 
-              fontSize: 8, 
-              padding: '1px 5px', 
-              borderRadius: 4, 
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 8,
+              padding: '1px 5px',
+              borderRadius: 4,
               background: 'var(--green-dim)',
               color: 'var(--green)'
             }}>
@@ -276,7 +276,7 @@ function ToolItem({ tool, updating, onConnect, onDisconnect }: {
           {tool.description}
         </p>
       </div>
-      
+
       <button
         disabled={updating !== null}
         onClick={() => tool.is_configured ? onDisconnect(tool) : onConnect(tool)}
