@@ -25,7 +25,7 @@ export function ProgressLine({ label, status, duration, onComplete }: ProgressLi
       })
     }, 50)
     return () => clearInterval(interval)
-  }, [duration])
+  }, [duration, onComplete])
 
   return (
     <div className="progress-line">

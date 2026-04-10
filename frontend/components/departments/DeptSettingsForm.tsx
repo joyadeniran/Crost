@@ -56,19 +56,19 @@ export function DeptSettingsForm({ dept }: Props) {
         setHasDraft(true)
       }
     } catch {}
-  }, [dept.slug])
+  }, [dept.slug, dept.persona_prompt, dept.tone_override, dept.tools, dept.capabilities, dept.restrictions, dept.model_provider, dept.model_name])
 
   // Save draft
   useEffect(() => {
     const draft = { persona, toneOverride, tools, capabilities, restrictions, modelKey }
     // Only save if it differs from the original dept props to avoid cluttering storage
-    const isDefault = persona === dept.persona_prompt && 
+    const isDefault = persona === dept.persona_prompt &&
                      toneOverride === (dept.tone_override ?? '') &&
                      JSON.stringify(tools) === JSON.stringify(dept.tools) &&
                      capabilities === (dept.capabilities as string[]).join(', ') &&
                      restrictions === (dept.restrictions as string[]).join(', ') &&
                      modelKey === `${dept.model_provider}::${dept.model_name}`
-    
+
     if (!isDefault) {
       localStorage.setItem(`crost-dept-draft-${dept.slug}`, JSON.stringify(draft))
       setHasDraft(true)
@@ -76,7 +76,7 @@ export function DeptSettingsForm({ dept }: Props) {
       localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
       setHasDraft(false)
     }
-  }, [persona, toneOverride, tools, capabilities, restrictions, modelKey, dept.slug])
+  }, [persona, toneOverride, tools, capabilities, restrictions, modelKey, dept.slug, dept.persona_prompt, dept.tone_override, dept.tools, dept.capabilities, dept.restrictions, dept.model_provider, dept.model_name])
 
   const discardDraft = () => {
     if (confirm('Discard all unsaved changes for this department?')) {
