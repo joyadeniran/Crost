@@ -20,12 +20,12 @@ services:
         sync: false
     healthCheckPath: /api/health
 
-  - type: worker          # <--- FIXED: changed from 'background' to 'worker'
+  - type: worker
     name: crost-worker
     runtime: node
-    rootDir: .            # <--- KEEP: forces execution from repo root
+    rootDir: .
     buildCommand: npm ci && npm ci --prefix frontend
-    startCommand: npx tsx scripts/worker.ts
+    startCommand: npm run worker
     envVars:
       - key: NODE_ENV
         value: production
