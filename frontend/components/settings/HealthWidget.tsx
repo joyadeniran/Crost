@@ -37,8 +37,24 @@ export function HealthWidget() {
     setError(null)
     try {
       const res = await fetch('/api/health', { cache: 'no-store' })
-      const json = await res.json() as HealthData
-      setData(json)
+      const json = await res.json()
+
+      // Transform endpoint response to widget format
+      const details: Record<string, string | undefined> = json.details || {}
+      const services: ServiceStatus[] = Object.entries(json.services || {}).map(([name, status]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        status: (status === 'ok' ? 'ok' : 'down') as 'ok' | 'degraded' | 'down',
+        latencyMs: null,
+        detail: details[name],
+      })).filter((s) => s.status !== undefined) // Filter out services with no status
+
+      const transformed: HealthData = {
+        overall: json.status === 'healthy' ? 'ok' : (json.status === 'degraded' ? 'degraded' : 'down'),
+        services,
+        checkedAt: json.timestamp || new Date().toISOString(),
+      }
+
+      setData(transformed)
     } catch {
       setError('Could not reach health endpoint')
     } finally {
