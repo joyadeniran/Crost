@@ -1,106 +1,118 @@
 # Project Crost: Master Source of Truth
-**Version:** 3.7 (Core Loop Hardening)
-**Last Updated:** April 9, 2026 (18:00 UTC)
-**Purpose:** The single, definitive record of the Crost project. This file replaces all previous roadmap, spec, and context documents.
+**Version:** 4.1 (State-Driven Context & Waterfall Hardening)
+**Last Updated:** April 10, 2026
+**Purpose:** The single, definitive technical and operational specification of Crost. This document merges all previous architectures and roadmaps into one source of truth.
 
 ---
 
-## 1. Executive Summary & Vision
+## 1. Executive Summary & Core Principle
 
-Crost is an **Agentic Operating System for solo founders**. It is a structured "Agent Office" where each department is a semi-autonomous AI agent.
+Crost is a **State-Driven Agentic Operating System** for solo founders. 
+
+It does NOT run purely on prompts; it runs on **structured company state (the Memo System)**. The system operates as a digital "Agent Office" where each department is a semi-autonomous role assigned to an LLM execution block.
 
 ### The Core Loop
-1. **Founder Goal**: Founder inputs a strategic objective in the War Room.
-2. **Orc Planning**: The Orchestrator (Chief of Staff) queries departments, identifies context, and drafts a structured JSON plan.
-3. **Collaborative Dialogue**: If the goal is ambiguous, Orc pauses to ask clarifying questions before committing.
-4. **HITL Gate**: Founder reviews, modifies, and approves/rejects individual tasks.
-5. **Fan-out Execution**: Approved tasks are dispatched to workers (Sales, Marketing, Ops, etc.).
-6. **Strategic Synthesis**: Upon goal completion, Orc synthesizes all department memos into a strategic "Orc Report" with recommended next steps.
+1. **Founder Goal**: Input via the War Room.
+2. **Orc Planning**: The Orchestrator (Chief of Staff) reads system state (Memos), identifies context, and drafts a structured JSON plan.
+3. **Dialogue Mode**: Interactive clarification with the founder; responses are saved as **Context Memos**.
+4. **Strict Waterfall Execution**: Tasks are dispatched to workers only when dependencies AND their corresponding data (Memos) are verified.
+5. **Strategic Synthesis**: Orc synthesizes all findings into a final "Orc Report" upon goal completion.
 
 ---
 
-## 2. Implementation Progress (Built & Active)
+## 2. System Architecture
 
-| Feature | Phase | Status | Description |
-| :--- | :--- | :--- | :--- |
-| **Foundational Infrastructure** | 0 | ✅ Done | Supabase, Onyx, LiteLLM, Ollama, Docker integration. |
-| **Dynamic Department Routing** | 1 | ✅ Done | Orc fetches active depts from DB; no hardcoded "Sales/Marketing/Ops" limits. |
-| **Worker Coherence** | 2 | ✅ Done | Workers receive "Coherence Blocks" (Founder goal + peer awareness). |
-| **Founder Overrides** | 3 | ✅ Done | UI allows editing task labels/reasoning before dispatch. |
-| **Strategic Synthesis** | 4 | ✅ Done | Orc automatically generates post-mortem reports upon goal completion. |
-| **Dialogue Mode** | 5 | ✅ Done | Interactive clarification phase with persistent conversation history. |
-| **Intelligence Architecture v5.0** | 5.5 | ✅ Done | Strict model routing, bounded context memo injection, and strict JSON output schemas. |
-| **MCP & Tools System v1** | 6.0 | ✅ Done | Lightweight Model Context Protocol layer for fetching data and executing mock actions. |
-| **Artifacts & Notifications** | 6.5 | ✅ Done | Dedicated Artifacts gallery and Inbox hub with decoupled settings. |
-| **Waitlist & Landing v2** | 6.8 | ✅ Done | Brevo-powered waitlist, premium scroll animations, and mobile-responsive landing. |
-| **Composio Deep Tooling** | 7.0 | ✅ Done | Pivoted from Nango to Composio: Managed OAuth, entity-based tool execution, and unified tool_call protocol. |
-| **Strategic Onboarding** | 8.0 | ✅ Done | 4-screen premium setup flow with deferred completion and auth-gate middleware. |
-| **Aesthetic Overhaul** | 8.5 | ✅ Done | Glassmorphism, premium accent glow, and centralized global styling (anti-FOUC). |
-| **Zero-Poll Optimization** | 8.8 | ✅ Done | Transitioned supervisor to Supabase Realtime; implemented data pruning to cut egress by 90%. |
-| **Identity Standardisation** | 8.9 | ✅ Done | Resolved [Object Object] bugs; separated Founder vs Company identity for high-fidelity AI context. |
-| **Crost Security v1.0** | 9.0 | ✅ Done | Enforced RLS across all tables; unified ownership via `created_by` column. |
-| **Hardening v1.1** | 9.1 | ✅ Done | Implemented mandatory Rate Limiting, stubbed Onyx lifecycle for MVP, and fixed worker 404s. |
-| **Core Loop Hardening** | 9.2 | ✅ Done | Automated chain-reactions, synthesis idempotency, and re-plan task cleanup. |
+Crost consists of five core layers:
+1. **Onboarding Layer**: Initial state setup (Company Profile & Foundational Memos).
+2. **Cognitive Layer (Orc)**: Strategic planning, clarification, and supervision.
+3. **Execution Layer**: Deterministic task engine and worker runners.
+4. **State Layer**: The "Working Memory" (Memos, goal_tasks, event_log).
+5. **Storage Layer**: External artifacts (Supabase Storage/S3) for large data.
 
 ---
 
-## 5. The Orchestrator (Orc v2)
+## 3. The Memo System (System Memory)
 
-Orc is not a department; he is the **Chief of Staff**.
+The Memo is the **primary context source** for all agents. It is the working memory of the company.
 
-### Responsibilities:
-1. **Clarification**: Interactive chat with the founder using `orc_conversation` history.
-2. **Querying**: Fetches recent memos and department status BEFORE planning.
-3. **Decomposition**: Produces a valid JSON `OrchestratorPlan`.
-4. **Supervision**: Monitors the `scripts/worker.ts` for stalled or failed tasks.
-5. **Synthesis**: Runs the `runOrcReport` function to create a strategic post-mortem.
-6. **Task Hygiene**: Automatically clears old `pending` tasks when re-drafting a plan to prevent UI orphans.
+### 3.1 Memo Types
+- **Foundational (Static)**: Company identity, business model, founder vision. (`is_foundational: true`).
+- **Context (Temporal)**: Founder answers to clarifying questions or `needs_data` requests. (`is_current_context: true`).
+- **Operational (Dynamic)**: Task outputs, tool results, research findings. (`task_id` linked).
+
+### 3.2 Context Synchronization
+Workers perform a **"Context Sync"** as the first step of every task.
+- **Tier 1 (Core)**: Foundational + Current Context (Always included).
+- **Tier 2 (Critical)**: Urgent memos (Always included).
+- **Tier 3 (Relevant)**: Goal-specific memos and high-priority recent updates (Conditional).
+- **Tier 4 (Historical)**: Summarized or title-only logs (Optional).
+
+---
+
+## 4. The Orchestrator (Orc v2.1)
+
+Orc is the **Chief of Staff**, the only cognitive planner in the system.
+
+### 4.1 Planning Logic & Constraints
+- **Centralized Research**: If a goal requires general market data, Orc inserts a **"Master Research Task"** at the top of the plan. Subsequent tasks depend on this and read its memo.
+- **Brain vs. Tool**: Orc instructs workers to use tools *only* for data the LLM cannot know (real-time news, private DB records). General strategy uses the "Brain".
+- **JSON-Strict**: Orc MUST output valid JSON for deterministic UI rendering.
+- **Dialogue Mode**: Orc pauses execution to ask clarifying questions if the goal is ambiguous.
+
+---
+
+## 5. Execution Engine & Strict Waterfall
+
+Execution is a deterministic task lifecycle system.
+
+### 5.1 The Dependency Gate
+Crost enforces a **Strict Waterfall**:
+- A task cannot transition from `planned` to `running` until its dependencies reach `status: completed`.
+- **Data Verification**: Even if a task is "completed", downstream tasks stay blocked until the `company_memos` table contains a record matching the dependency's `task_id`. This ensures the hand-off is backed by real data.
+
+### 5.2 Artifacts System
+Large outputs (>5000 chars) are offloaded to Supabase Storage. The DB stores a reference in the `artifacts` table, and the Memo provides a summary and a link.
 
 ---
 
 ## 6. Decision Log (Consolidated)
 
-1. **Orchestrator as Chief of Staff**: Treat Orc as a stateful supervisor, not a one-shot tool.
-2. **JSON-Strict Planning**: Orc MUST output JSON to ensure deterministic UI rendering.
-3. **Coherence via Context**: Pass the full founder goal to every worker to prevent silo drift.
-4. **Soft Deprecation**: Departments are deprecated (hidden) rather than deleted to preserve audit trails.
-5. **Local-First Sensitive Data**: Sales/Ops default to local mode; Marketing defaults to cloud for creativity.
-6. **Token Protection & Truncation**: Memo bodies are truncated to 800 chars internally to prevent worker crashes.
-7. **Active Re-clarification**: If a worker hits `needs_data`, it dynamically updates `orc_conversation` and flips the goal back to `clarifying`.
-8. **Mobile Criticality (Dispatch)**: Future high-stakes approvals (spend/delete) will require desktop confirmation.
-9. **Execution Safety (Gate)**: MCP Tool calls are awaited synchronously.
-10. **Aesthetic Premium**: Vanilla CSS is used for custom layouts (wow factor).
-11. **Composio Entity Isolation**: Every founder is a Composio Entity.
-12. **Protocol Pivot (tool_call)**: Standardised on the `tool_call` JSON pattern for workers.
-13. **FOUC Elimination**: Migrated all component-level `styled-jsx` into a centralized `globals.css`.
-14. **Deferred Completion State**: Split onboarding into `activated` and `complete` phases.
-15. **Auth Hardening (SSR)**: Enforced cookie-aware clients for all identity checks.
-16. **Multi-Tenant Isolation**: Implemented `created_by` across all core tables (Goals, Departments, Memos, Approvals, Events).
-17. **Hard Session Refresh**: Use `supabaseClient.auth.refreshSession()` for onboarding transitions.
-18. **Synthesis Idempotency**: `runOrcReport` checks for existing reports to prevent duplicate synthesis.
-19. **Manual Closure Synthesis**: Synthesis is triggered even on manual goal completion via the API.
-20. **Chain-Reaction Dispatch**: Secure internal bypass (`x-crost-internal-secret`) allows automated dispatch of dependency-satisfied tasks.
+1-25. (See Legacy Logs for items 1-25 including Composio pivot, Onboarding screens, and RLS Hardening).
+26. **Information Loop Redundancy**: User answers are saved as `is_current_context` memos with `valid_until` timestamps to prevent agents from asking the same questions twice.
+27. **Centralized Research**: Orc consolidates redundant web searches into one "Master Research Task" to save tokens and ensure a single source of truth for market data.
+28. **Strict Waterfall Verification**: Dependencies are now gated by both task status AND the physical existence of a result memo in the DB.
+29. **Context Versioning**: Added `is_current_context` to differentiate between permanent identity and task-specific ephemeral context.
+30. **Brain vs. Tool Differentiator**: Explicit system rules to prevent unnecessary tool calls for common knowledge tasks.
 
 ---
 
-## 7. Build & Maintenance
+## 7. Implementation Progress
+
+| Feature | Phase | Status | Description |
+| :--- | :--- | :--- | :--- |
+| **Core Infrastructure** | 0 | ✅ | Supabase, Onyx, LiteLLM, Composio. |
+| **Memo Memory System** | 1 | ✅ | Tiered context, foundational/current context split. |
+| **Orc Planning v2.1** | 2 | ✅ | JSON plans, Master Research, Brain vs Tool logic. |
+| **Waterfall Execution** | 3 | ✅ | Strict dependency gating with memo verification. |
+| **Context Sync** | 4 | ✅ | Automated injection of user responses into worker brains. |
+| **Strategic Synthesis** | 5 | ✅ | Post-mortem Orc Reports and strategic next steps. |
+
+---
+
+## 8. Build & Maintenance
 
 ### Running the System
 - **Frontend**: `npm run dev` (Port 3000)
 - **Supabase**: `supabase start` (Local)
-- **Worker**: `npx tsx scripts/worker.ts` (Must be running for goal closure!)
+- **Worker**: `npx tsx scripts/worker.ts` (Supervises stall detection and goal closure).
 
-### Migrations List (In Order)
-1-10: Foundation (Legacy)
-11: `orc_upgrade` (Goals, tasks, memos)
-12: `rls_policies` (Security)
-14: `dialogue_mode` (Clarifying status, conversation history)
-15: `v5_task_states` (Execution state machine)
-16: `20260408_create_connections_table.sql` (Composio Deep Tooling)
-17: `20260409_multitenant_fix.sql` (Privacy isolation & RLS)
-18: `auth_client_refactor` (SSR cookie security fixes)
-19: `20260409050000_fix_task_tenant.sql` (Enforced ownership on goal_tasks)
+### Critical Migrations (Order Matters)
+- `orc_upgrade`: Goals, tasks, memos enhancements.
+- `rls_policies`: Multi-tenant security.
+- `dialogue_mode`: Clarification thread and `orc_conversation`.
+- `20260410020000_context_memos`: Adds `valid_until` and `version_tag`.
+- `20260410030000_add_current_context`: Adds `is_current_context` and `task_id` to memos.
 
 ---
 
-*Crost is built for the world's founders. Think Global, Act Local.*
+*Crost: Think Global, Act Local. Built for the world's founders.*

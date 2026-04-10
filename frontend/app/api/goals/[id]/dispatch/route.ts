@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       
       let count = 0
       for (const t of planned) {
-        const blockers = (t.depends_on || []).filter(depId => {
+        const blockers = (t.depends_on || []).filter((depId: string) => {
           const depTask = (allTasks || []).find(at => at.task_id === depId)
           return !depTask || depTask.status !== 'completed'
         })

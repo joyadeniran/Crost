@@ -186,19 +186,37 @@ async function unblockDependentTasks(goalId: string) {
     .eq('status', 'pending_dependency')
 
   for (const blocked of blockedTasks ?? []) {
-    if (!blocked.depends_on || (blocked.depends_on as string[]).length === 0) continue
+    const dependencies = blocked.depends_on as string[] || []
+    if (dependencies.length === 0) continue
 
+    // 1. Check if all dependent tasks are 'completed'
     const { data: depTasks } = await supabase
       .from('goal_tasks')
       .select('task_id, status')
       .eq('goal_id', goalId)
-      .in('task_id', blocked.depends_on as string[])
+      .in('task_id', dependencies)
 
-    const allComplete = (depTasks ?? []).every((d: any) => d.status === 'completed')
-    if (allComplete) {
+    const allTasksComplete = (depTasks ?? []).every((d: any) => d.status === 'completed')
+    if (!allTasksComplete) continue
+
+    // 2. Strict Waterfall: Check if all dependencies have actually posted a memo
+    // This ensures data exists before unblocking
+    const { data: memos } = await supabase
+      .from('company_memos')
+      .select('task_id')
+      .eq('goal_id', goalId)
+      .in('task_id', dependencies)
+
+    const postedMemos = new Set((memos ?? []).map(m => m.task_id))
+    const allMemosExist = dependencies.every(depId => postedMemos.has(depId))
+
+    if (allMemosExist) {
       await supabase.from('goal_tasks').update({ status: 'approved' }).eq('task_id', blocked.task_id).eq('goal_id', goalId)
-      log(`Dependencies resolved — task "${blocked.task_id}" unblocked`, { goalId })
-      await writeEvent('orc_rebalance', `Task "${blocked.label}" is now ready to dispatch`, goalId)
+      log(`Dependencies resolved & Memos verified — task "${blocked.task_id}" unblocked`, { goalId })
+      await writeEvent('orc_rebalance', `Task "${blocked.label}" is now ready (Data Verified)`, goalId)
+    } else {
+      const missing = dependencies.filter(id => !postedMemos.has(id))
+      log(`Task "${blocked.task_id}" still waiting for memos from: ${missing.join(', ')}`, { goalId })
     }
   }
 }
