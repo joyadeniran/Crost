@@ -66,7 +66,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
                 {dept.name}
               </h1>
               <PulseIndicator status={dept.status} showLabel />
-              {dept.activation_stage === 'active' && <SyncFailedBadge personaId={dept.onyx_persona_id} slug={dept.slug} />}
+              {dept.activation_stage === 'active' && <SyncFailedBadge personaId={dept.orc_persona_id} slug={dept.slug} />}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 11, color: 'var(--text-3)' }}>

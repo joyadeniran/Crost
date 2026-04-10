@@ -52,8 +52,8 @@ export async function createSupabaseServerComponentClient() {
       setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            cookieStore.set(name, value, options as any)
+            // eslint-disable-next-line
+            cookieStore.set(name, value, options as never)
           )
         } catch {
           // Server component — can't set cookies. Middleware handles refresh.

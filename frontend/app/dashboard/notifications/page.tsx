@@ -50,7 +50,7 @@ export default async function NotificationsPage() {
               fontFamily: 'var(--font-dm-mono, monospace)',
               fontSize: 12
             }}>
-              No pending actions. You're all clear.
+              No pending actions. You&apos;re all clear.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -129,7 +129,7 @@ export default async function NotificationsPage() {
           }}>
              <h3 style={{ fontFamily: 'var(--font-syne, Syne)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Human-in-the-Loop</h3>
              <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.6 }}>
-               Crost's safety architecture ensures that irreversible actions are always gated by founder approval.
+               Crost&apos;s safety architecture ensures that irreversible actions are always gated by founder approval.
              </p>
           </section>
         </div>

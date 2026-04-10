@@ -146,7 +146,7 @@ export default function ToolConfigPage({ params }: { params: { id: string } }) {
             </div>
           ))
         ) : (
-          <p style={{ color: 'var(--text-3)', fontSize: 13 }}>No configuration required for this tool. Click "Activate" to enable.</p>
+          <p style={{ color: 'var(--text-3)', fontSize: 13 }}>No configuration required for this tool. Click &quot;Activate&quot; to enable.</p>
         )}
 
         <button

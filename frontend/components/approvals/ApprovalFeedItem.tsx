@@ -53,7 +53,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
 
       {item.context && (
         <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 8, fontStyle: 'italic' }}>
-          "{item.context}"
+          &quot;{item.context}&quot;
         </div>
       )}
 
