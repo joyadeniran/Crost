@@ -23,6 +23,7 @@ services:
   - type: background
     name: crost-worker
     runtime: node
+    rootDir: .     # <--- ADD THIS: explicitly forces repo root
     buildCommand: npm ci && npm ci --prefix frontend
     startCommand: npx tsx scripts/worker.ts
     envVars:
