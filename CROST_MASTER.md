@@ -221,24 +221,24 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
   - `startCommand: cd frontend && npx tsx ../scripts/worker.ts`
 - **Impact**: Render dashboard Root Directory setting now works with buildCommand
 
-### Local Font Files (Zero External Requests)
+### Local Font Files (Zero External Requests) — RESTORED Weights
 **Files**: 
-- `frontend/public/fonts/` (8 font files: Syne, DM Mono, DM Sans in 300/400/500/700 weights)
-- `frontend/styles/fonts.css` (new: @font-face declarations + CSS variables)
-- `frontend/app/layout.tsx` (refactored: removed `next/font/google`, imports `fonts.css`)
-- `frontend/next.config.js` (removed `optimizeFonts: false`)
+- `frontend/public/fonts/` (14 font files: Syne 400-800, DM Mono 300-500, DM Sans 300-800)
+- `frontend/styles/fonts.css` (Updated: @font-face declarations for all 14 weights)
+- `frontend/app/layout.tsx` (Confirmed: imports `fonts.css`)
 
-- **Root Cause**: Network requests to `fonts.gstatic.com` fail in Render's restricted build environment
-- **Previous Fix**: Added `optimizeFonts: false` (deferred to runtime)
-- **New Fix**: Downloaded font files locally and embedded @font-face declarations
-  - 8 TTF files: Syne (Regular, Bold), DM Mono (Light 300, Regular 400, Medium 500), DM Sans (Light 300, Regular 400, Medium 500)
-  - `@font-face` declarations with `font-display: swap` for fast load
-  - CSS variables (`--font-syne`, `--font-dm-mono`, `--font-dm-sans`) still work
+- **Root Cause**: Previous build optimization replaced original high-quality fonts with low-resolution placeholders (1.6KB files), causing a "defaulted" look.
+- **Fix Applied**: 
+  1. Purged 1.6KB corrupt font placeholders from `public/fonts/`.
+  2. Downloaded all 14 original weights from Google Fonts GitHub repo:
+     - **Syne**: 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold), 800 (ExtraBold)
+     - **DM Mono**: 300 (Light), 400 (Regular), 500 (Medium)
+     - **DM Sans**: 300 (Light), 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold), 800 (ExtraBold)
+  3. Rewrote `frontend/styles/fonts.css` to correctly reference these local files with proper `font-weight` and `font-display: swap`.
 - **Impact**: 
-  - Zero external network requests for fonts
-  - Build no longer dependent on Render's network access
-  - Fonts load from `public/` (served locally by Next.js)
-  - No Google Fonts API dependency
+  - Restored the "premium" aesthetic specified in `crost_ui.jsx`.
+  - Maintained zero external network requests for fonts during build and runtime.
+  - Full font coverage for all weights used in the dashboard design.
 
 ### npm Network Resilience
 **File**: `frontend/.npmrc` (new)
