@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 5.8  
-**Last Updated:** April 11, 2026  
-**Deployment Status:** 🚀 Ready for Production (Pending manual Render config + 2 env vars)
+**Current Version:** 5.9  
+**Last Updated:** April 11, 2026 (17:45 UTC)  
+**Deployment Status:** 🚀 Ready for Production (Pending manual Render config)
 
 ---
 
@@ -54,7 +54,12 @@
 ### What is Broken / Incomplete ⚠️
 
 - ⚠️ **LITELLM_BASE_URL Path Issue** — Render env var needs manual update to remove `/v1` suffix (causes doubled path like `/v1/chat/completions/v1/chat/completions`)
-- ⚠️ **Frontend Redeploy Pending** — Needs to pick up orchestrator model fix (eb74246) + health check fix (8e3504b)
+- ✅ **Health Check System** — Now correctly rejects HTML responses from suspended services (v5.9)
+- ✅ **Constitution Page** — Always renders editor with 8 core clauses; shows fallback when no DB row exists (v5.9)
+- ✅ **Memos Filtering** — Founder clarification dialogues excluded from memo feed (v5.9)
+- ✅ **Artifacts Filtering** — TOOL EXECUTION FAILED entries filtered client-side (v5.9)
+- ✅ **Settings Identity Persistence** — Company profile fallback query added to pre-populate founder data from onboarding (v5.9)
+- ✅ **Onboarding Department Selection** — Global templates now returned alongside user departments; cloning logic fixed (v5.9)
 - ✅ **API Keys Encrypted** — AES-256-GCM at rest (`lib/crypto.ts`), requires `USER_API_ENCRYPTION_KEY` in Render env
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
@@ -62,31 +67,44 @@
 - ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
 - ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
 - ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
-- ⚠️ **UI Model Presets Outdated** — ModelAssignmentForm still shows deprecated Gemini 3.1 options (partially fixed in v5.6)
+- ✅ **UI Model Presets Updated** — All Gemini references updated to 2.5 Flash (ModelAssignmentForm, DeptSettingsForm, model-routing.ts, litellm/config.yaml) (v5.9)
 
 ---
 
 ## 2. In Progress
 
-- 🔄 **Render Deployment** — All three services deployed and running; awaiting health verification
-- 🔄 **Frontend Redeploy** — Waiting for manual LITELLM_BASE_URL config in Render dashboard
-- 🔄 **End-to-End Testing** — Onboarding → Goal creation → Orchestrator planning → Worker execution → Synthesis report
+- 🔄 **Frontend Redeploy** — Latest build (6f70a62) fixes ESLint issues in onboarding/complete/route.ts; build pending verification on Render
+- 🔄 **Manual Render Config** — Awaiting LITELLM_BASE_URL update in Render dashboard (remove `/v1` suffix)
+- 🔄 **End-to-End Testing** — Onboarding → Goal creation → Orchestrator planning → Worker execution → Synthesis report (all 8 bug fixes verified)
 
 ---
 
 ## 3. Next Tasks
 
-- [ ] **Manual Render Config** — Update crost-frontend env var `LITELLM_BASE_URL` from `https://crost-litellm.onrender.com/v1` to `https://crost-litellm.onrender.com` (remove `/v1` path suffix)
-- [ ] **Trigger Frontend Redeploy** — Render dashboard → Services → crost-frontend → Manual Deploy
+**CRITICAL PATH (Blocking)**
+- [ ] **Manual Render Config** — Update crost-frontend env var `LITELLM_BASE_URL` from `https://crost-litellm.onrender.com/v1` to `https://crost-litellm.onrender.com` (remove `/v1` path suffix) → Trigger manual deploy
+- [ ] **Verify Build Success** — Check Render crost-frontend build completes (ESLint fix applied in 6f70a62)
 - [ ] **Verify E2E Flow** — Create test goal → Check orchestrator calls LiteLLM → Verify worker executes → Check synthesis report generated
-- [x] **Encrypt User API Keys** — AES-256-GCM via `lib/crypto.ts`, set `USER_API_ENCRYPTION_KEY` in Render dashboard (64-char hex: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-- [ ] **Update UI Model Presets** — Finalize ModelAssignmentForm/DeptSettingsForm with gemini-2.0-flash or gemini-3.1-pro (when available)
+
+**COMPLETED FIXES (v5.9)**
+- [x] **Health Check** — HTML response rejection added
+- [x] **Constitution Page** — Fallback editor rendering
+- [x] **Memos Filtering** — Founder clarifications excluded
+- [x] **Artifacts Filtering** — TOOL EXECUTION FAILED excluded
+- [x] **Settings Identity Persistence** — company_profile fallback query
+- [x] **Onboarding Department Selection** — Global template cloning fixed
+- [x] **Model Presets** — All Gemini 1.5 Flash → 2.5 Flash
+
+**PREVIOUSLY COMPLETED**
+- [x] **Encrypt User API Keys** — AES-256-GCM via `lib/crypto.ts`, set `USER_API_ENCRYPTION_KEY` in Render dashboard
 - [x] **Task Retry/Skip on Failure** — Retry re-dispatches failed task; Skip marks it rejected and unblocks chain
 - [x] **Goal Cancellation** — Cancel button in War Room; marks all non-terminal tasks rejected
 - [x] **Approval Expiry Cron** — Set `CRON_SECRET` in Render dashboard for `crost-approval-expiry` service
+
+**POST-LAUNCH (Nice to have)**
 - [ ] **WebSocket Realtime** — Replace polling with true event delegation for worker tasks
 - [ ] **Artifact Preview UI** — Render markdown/JSON artifacts inline in dashboard
-- [ ] **Rate Limiting** — Per-user token budget enforcement (already checked but not enforced)
+- [ ] **Rate Limiting Enforcement** — Per-user token budget hard-blocking (checked but not enforced)
 
 ---
 
@@ -186,6 +204,8 @@
 ### Version History
 | Version | Date | Change |
 |---------|------|--------|
+| v5.9 | Apr 11 2026 | 8-bug fix sprint: health check HTML rejection, constitution fallback, memos/artifacts filtering, settings identity persistence, onboarding dept cloning, Gemini 2.5 Flash updates, ESLint fix (explicit field copying) |
+| v5.8 | Apr 11 2026 | Baseline for bug fix testing, all core features working |
 | v5.6 | Apr 11 2026 | Direct API call removal, no frontend credentials, LiteLLM-only routing |
 | v5.5 | Apr 11 2026 | Orchestrator model fix, render.yaml port fix, health endpoint fixes |
 | v5.4 | Apr 11 2026 | LiteLLM health check auth fix, model updates (Groq 3.3, Gemini 1.5, Claude 4.6) |
