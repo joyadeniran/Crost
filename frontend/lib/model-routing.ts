@@ -50,7 +50,7 @@ export async function getModelForTask(
   const fallback = FALLBACK_MODELS[role]
   return {
     model: fallback,
-    provider: fallback.split('-')[0]
+    provider: fallback.startsWith('claude') ? 'anthropic' : fallback.split('/')[0]
   }
 }
 
