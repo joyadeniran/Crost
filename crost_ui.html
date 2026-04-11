@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crost Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #09090b;
+            --bg-2: #111114;
+            --bg-3: #18181c;
+            --bg-4: #1f1f25;
+            --border: rgba(255,255,255,0.07);
+            --border-bright: rgba(255,255,255,0.13);
+            --text: #e8e8f0;
+            --text-2: #9898aa;
+            --text-3: #5a5a6e;
+            --accent: #00d4aa;
+            --accent-dim: rgba(0,212,170,0.12);
+            --accent-glow: rgba(0,212,170,0.25);
+            --red: #ff4d6d;
+            --amber: #ffb347;
+            --blue: #4da6ff;
+            --green: #00d4aa;
+            --radius: 10px;
+            --radius-sm: 6px;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .mono { font-family: 'DM Mono', monospace; }
+        .syne { font-family: 'Syne', sans-serif; }
+
+        /* Grain overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.6;
+        }
+
+        /* Layout */
+        .shell { display: flex; height: 100vh; }
+        .sidebar { width: 220px; min-width: 220px; background: var(--bg-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { height: 56px; min-height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 12px; background: var(--bg-2); }
+        .content { flex: 1; overflow-y: auto; padding: 20px; display: flex; gap: 16px; }
+        .event-panel { width: 260px; min-width: 260px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+        /* Sidebar */
+        .sidebar-logo { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .logo-mark { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 13px; color: #000; flex-shrink: 0; }
+        .logo-text { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+        .sidebar-nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text-2); font-size: 13px; cursor: pointer; transition: all 0.15s; user-select: none; }
+        .nav-item:hover { background: var(--bg-3); color: var(--text); }
+        .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+        .nav-item svg { flex-shrink: 0; }
+        .nav-section { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; padding: 14px 10px 6px; }
+        .sidebar-bottom { padding: 12px 8px; border-top: 1px solid var(--border); }
+
+        /* Topbar */
+        .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .topbar-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 14px; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        
+        /* Mode toggle */
+        .mode-toggle { display: flex; align-items: center; background: var(--bg-3); border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px; }
+        .mode-btn { padding: 4px 12px; border-radius: 16px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; transition: all 0.2s; border: none; outline: none; }
+        .mode-btn.local.active { background: #00d4aa; color: #000; }
+        .mode-btn.cloud.active { background: #4da6ff; color: #000; }
+        .mode-btn:not(.active) { background: transparent; color: var(--text-3); }
+        .mode-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-3); margin-right: 4px; }
+
+        /* Icon button */
+        .icon-btn { width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-3); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-2); transition: all 0.15s; position: relative; }
+        .icon-btn:hover { border-color: var(--border-bright); color: var(--text); }
+        .badge { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: var(--red); border-radius: 8px; font-size: 9px; font-family: 'DM Mono', monospace; display: flex; align-items: center; justify-content: center; color: #fff; border: 2px solid var(--bg-2); }
+
+        /* Department grid */
+        .dept-grid { flex: 1; }
+        .grid-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .grid-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px; color: var(--text-2); letter-spacing: 0.04em; }
+        .dept-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+        /* Department card */
+        .dept-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+        .dept-card:hover { border-color: var(--border-bright); background: var(--bg-3); }
+        .dept-card.active-card:hover { border-color: rgba(0,212,170,0.3); }
+        .dept-card-stripe { position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: var(--radius) var(--radius) 0 0; }
+
+        .dept-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+        .dept-icon-wrap { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .dept-status-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+        .dept-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+        .dept-task { font-size: 12px; color: var(--text-2); line-height: 1.4; min-height: 34px; }
+        .dept-task.empty { color: var(--text-3); font-style: italic; }
+
+        .dept-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .dept-model { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); }
+        .dept-tokens { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+        .token-bar-wrap { width: 48px; height: 3px; background: var(--bg-4); border-radius: 2px; }
+        .token-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+        /* Status badges */
+        .status-badge { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 10px; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; }
+        .status-badge.idle { background: rgba(255,255,255,0.05); color: var(--text-3); }
+        .status-badge.running { background: rgba(0,212,170,0.12); color: var(--accent); }
+        .status-badge.awaiting { background: rgba(255,179,71,0.12); color: var(--amber); }
+        .status-badge.error { background: rgba(255,77,109,0.12); color: var(--red); }
+
+        .activation-badge { padding: 2px 7px; border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.06em; }
+        .activation-badge.active { background: rgba(0,212,170,0.1); color: var(--accent); border: 1px solid rgba(0,212,170,0.2); }
+        .activation-badge.draft { background: rgba(255,179,71,0.1); color: var(--amber); border: 1px solid rgba(255,179,71,0.2); }
+        .activation-badge.review { background: rgba(77,166,255,0.1); color: var(--blue); border: 1px solid rgba(77,166,255,0.2); }
+
+        /* Pulse dot */
+        .pulse-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .pulse-dot.idle { background: var(--text-3); }
+        .pulse-dot.running { background: var(--accent); animation: pulse-green 1.5s ease-in-out infinite; }
+        .pulse-dot.awaiting { background: var(--amber); animation: pulse-amber 1s ease-in-out infinite; }
+        .pulse-dot.error { background: var(--red); }
+
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,170,0.6); }
+            50% { box-shadow: 0 0 0 5px rgba(0,212,170,0); }
+        }
+        @keyframes pulse-amber {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,179,71,0.6); }
+            50% { box-shadow: 0 0 0 5px rgba(255,179,71,0); }
+        }
+
+        /* Add department card */
+        .add-dept-card { background: transparent; border: 1px dashed var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 148px; }
+        .add-dept-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .add-dept-card:hover .add-dept-label { color: var(--accent); }
+        .add-dept-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.06em; transition: color 0.2s; }
+
+        /* Event panel */
+        .panel { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; height: 100%; display: flex; flex-direction: column; }
+        .panel-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .panel-title { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--text-2); letter-spacing: 0.04em; }
+        .panel-body { flex: 1; overflow-y: auto; padding: 6px; }
+
+        /* Event items */
+        .event-item { padding: 8px 8px; border-radius: var(--radius-sm); display: flex; gap: 10px; transition: background 0.15s; }
+        .event-item:hover { background: var(--bg-3); }
+        .event-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+        .event-content { flex: 1; min-width: 0; }
+        .event-desc { font-size: 12px; color: var(--text-2); line-height: 1.4; }
+        .event-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); margin-top: 2px; display: flex; gap: 8px; }
+        .event-dept { color: var(--text-3); }
+
+        /* Approval panel items */
+        .approval-item { padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 8px; }
+        .approval-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .approval-label { font-size: 12px; font-weight: 500; line-height: 1.3; margin-bottom: 4px; }
+        .approval-context { font-size: 11px; color: var(--text-2); line-height: 1.4; }
+        .approval-actions { display: flex; gap: 6px; margin-top: 10px; }
+        .btn { padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; border: none; font-family: 'DM Mono', monospace; font-weight: 500; transition: all 0.15s; }
+        .btn-approve { background: rgba(0,212,170,0.15); color: var(--accent); border: 1px solid rgba(0,212,170,0.3); }
+        .btn-approve:hover { background: rgba(0,212,170,0.25); }
+        .btn-reject { background: rgba(255,77,109,0.1); color: var(--red); border: 1px solid rgba(255,77,109,0.2); }
+        .btn-reject:hover { background: rgba(255,77,109,0.2); }
+
+        .risk-badge { padding: 2px 7px; border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; letter-spacing: 0.05em; }
+        .risk-badge.critical { background: rgba(255,77,109,0.15); color: var(--red); border: 1px solid rgba(255,77,109,0.25); }
+        .risk-badge.high { background: rgba(255,120,70,0.15); color: #ff7846; border: 1px solid rgba(255,120,70,0.25); }
+        .risk-badge.medium { background: rgba(255,179,71,0.15); color: var(--amber); border: 1px solid rgba(255,179,71,0.25); }
+        .risk-badge.low { background: rgba(0,212,170,0.1); color: var(--accent); border: 1px solid rgba(0,212,170,0.2); }
+
+        /* View tabs */
+        .view-tabs { display: flex; gap: 2px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+        .view-tab { padding: 4px 12px; border-radius: 5px; font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: all 0.15s; color: var(--text-3); border: none; background: transparent; }
+        .view-tab.active { background: var(--bg-4); color: var(--text); }
+
+        /* New dept button */
+        .btn-primary { padding: 6px 14px; border-radius: var(--radius-sm); background: var(--accent); color: #000; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; display: flex; align-items: center; gap: 6px; letter-spacing: 0.03em; }
+        .btn-primary:hover { background: #00efc0; }
+
+        /* Modal overlay */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal { background: var(--bg-2); border: 1px solid var(--border-bright); border-radius: 14px; width: 540px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+        /* Form elements */
+        .field { margin-bottom: 18px; }
+        .label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-2); margin-bottom: 6px; display: block; letter-spacing: 0.04em; }
+        .input { width: 100%; padding: 8px 12px; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.15s; }
+        .input:focus { border-color: var(--accent); }
+        .textarea { width: 100%; padding: 10px 12px; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; outline: none; transition: border-color 0.15s; resize: vertical; min-height: 100px; line-height: 1.6; }
+        .textarea:focus { border-color: var(--accent); }
+
+        .wizard-steps { display: flex; gap: 4px; margin-bottom: 24px; }
+        .wizard-step { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background 0.3s; }
+        .wizard-step.done { background: var(--accent); }
+        .wizard-step.current { background: var(--accent); opacity: 0.5; }
+
+        .tool-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 16px; font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-3); color: var(--text-2); transition: all 0.15s; margin: 3px; }
+        .tool-chip.selected { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+        .tool-chip:hover:not(.selected) { border-color: var(--border-bright); color: var(--text); }
+
+        /* Memo cards */
+        .memo-item { padding: 12px; border-radius: var(--radius-sm); border-left: 3px solid; margin-bottom: 8px; background: var(--bg-3); }
+        .memo-item.urgent { border-color: var(--red); }
+        .memo-item.high { border-color: var(--amber); }
+        .memo-item.normal { border-color: var(--text-3); }
+        .memo-title { font-weight: 500; font-size: 12px; margin-bottom: 4px; }
+        .memo-body { font-size: 11px; color: var(--text-2); line-height: 1.5; }
+        .memo-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .memo-tag { padding: 1px 7px; border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 9px; background: var(--bg-4); color: var(--text-3); }
+        .memo-from { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-3); }
+
+        /* Fade in */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+        /* Slide in new event */
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+        .slide-in { animation: slideDown 0.25s ease forwards; }
+
+        .divider { height: 1px; background: var(--border); margin: 8px 0; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .gap-2 { gap: 8px; }
+        .ml-auto { margin-left: auto; }
+        .text-accent { color: var(--accent); }
+        .text-muted { color: var(--text-3); }
+
+        /* Constitution panel */
+        .constitution-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-2); line-height: 1.8; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+        .constitution-clause { display: flex; gap: 8px; margin-bottom: 6px; }
+        .clause-num { color: var(--accent); flex-shrink: 0; }
+
+        /* Navigation Visibility */
+        .view-content { display: none; }
+        .view-content.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-mark">C</div>
+                <span class="logo-text syne">Crost</span>
+                <span style="margin-left: auto; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-3); background: var(--bg-3); padding: 2px 6px; border-radius: 4px;">v1.0</span>
+            </div>
+
+            <div class="sidebar-nav">
+                <div class="nav-section">Workspace</div>
+                <div class="nav-item active" data-view="departments">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    <span>Dashboard</span>
+                </div>
+                <div class="nav-item" data-view="approvals">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Approvals</span>
+                    <span id="approval-badge" style="margin-left: auto; min-width: 18px; height: 18px; background: var(--red); border-radius: 9px; font-family: 'DM Mono', monospace; font-size: 10px; display: flex; align-items: center; justify-content: center; color: #fff;">3</span>
+                </div>
+                <div class="nav-item" data-view="memos">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <span>Memos</span>
+                </div>
+                <div class="nav-item" data-view="constitution">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span>Constitution</span>
+                </div>
+
+                <div class="nav-section" style="margin-top: 8px;">Activity</div>
+                <div class="nav-item">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span>Event Log</span>
+                </div>
+                <div class="nav-item">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span>Founder</span>
+                </div>
+            </div>
+
+            <div class="sidebar-bottom">
+                <div class="nav-item">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    <span style="font-size: 13px;">Settings</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+            <!-- TOPBAR -->
+            <div class="topbar">
+                <div class="topbar-left">
+                    <span class="topbar-title syne" id="page-title">Agent Office</span>
+                </div>
+                <div class="topbar-right">
+                    <span class="mode-label mono">MODE</span>
+                    <div class="mode-toggle">
+                        <button class="mode-btn local active" id="mode-local">LOCAL</button>
+                        <button class="mode-btn cloud" id="mode-cloud">CLOUD</button>
+                    </div>
+
+                    <div class="icon-btn" data-view="approvals">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                        <span class="badge">3</span>
+                    </div>
+
+                    <div class="icon-btn">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTENT -->
+            <div class="content">
+                <div class="dept-grid">
+                    <!-- DEPARTMENTS VIEW -->
+                    <div id="view-departments" class="view-content active">
+                        <div class="grid-header">
+                            <span class="grid-title mono">5 DEPARTMENTS</span>
+                            <button class="btn-primary" id="open-wizard">
+                                <svg width="12" height="12" fill="none" stroke="#000" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                New Department
+                            </button>
+                        </div>
+                        <div class="dept-cards">
+                            <!-- Engineering -->
+                            <div class="dept-card active-card" style="border-top-color: #0ea5e9;">
+                                <div class="dept-card-stripe" style="background: #0ea5e9;"></div>
+                                <div class="dept-card-header">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="dept-icon-wrap" style="background: #0ea5e922;">
+                                            <svg width="16" height="16" fill="none" stroke="#0ea5e9" stroke-width="1.5" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                        </div>
+                                        <div><div class="dept-name syne">Engineering</div></div>
+                                    </div>
+                                    <div class="dept-status-area">
+                                        <span class="status-badge running"><span class="pulse-dot running"></span>RUNNING</span>
+                                    </div>
+                                </div>
+                                <div class="dept-task">Reviewing PR #47 — refactoring the payment webhook handler for idempotency</div>
+                                <div class="dept-footer">
+                                    <span class="dept-model mono">local/llama3</span>
+                                    <div class="dept-tokens">
+                                        <div class="token-bar-wrap"><div class="token-bar" style="width: 62%; background: #00d4aa;"></div></div>
+                                        <span>62%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Marketing -->
+                            <div class="dept-card active-card" style="border-top-color: #f97316;">
+                                <div class="dept-card-stripe" style="background: #f97316;"></div>
+                                <div class="dept-card-header">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="dept-icon-wrap" style="background: #f9731622;">
+                                            <svg width="16" height="16" fill="none" stroke="#f97316" stroke-width="1.5" viewBox="0 0 24 24"><path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                                        </div>
+                                        <div><div class="dept-name syne">Marketing</div></div>
+                                    </div>
+                                    <div class="dept-status-area">
+                                        <span class="status-badge awaiting"><span class="pulse-dot awaiting"></span>APPROVAL</span>
+                                    </div>
+                                </div>
+                                <div class="dept-task">Awaiting approval to post LinkedIn thread on BNPL for SMEs</div>
+                                <div class="dept-footer">
+                                    <span class="dept-model mono">local/gemma3</span>
+                                    <div class="dept-tokens">
+                                        <div class="token-bar-wrap"><div class="token-bar" style="width: 31%; background: #00d4aa;"></div></div>
+                                        <span>31%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Sales -->
+                            <div class="dept-card" style="border-top-color: #22c55e;">
+                                <div class="dept-card-stripe" style="background: #22c55e;"></div>
+                                <div class="dept-card-header">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="dept-icon-wrap" style="background: #22c55e22;">
+                                            <svg width="16" height="16" fill="none" stroke="#22c55e" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 11l-5-5-5 5m5-5v12"/><path d="M3 7l4 4m10-4l-4 4"/></svg>
+                                        </div>
+                                        <div><div class="dept-name syne">Sales</div></div>
+                                    </div>
+                                    <div class="dept-status-area">
+                                        <span class="status-badge idle"><span class="pulse-dot idle"></span>IDLE</span>
+                                    </div>
+                                </div>
+                                <div class="dept-task empty">No active task</div>
+                                <div class="dept-footer">
+                                    <span class="dept-model mono">cloud/gemini-pro</span>
+                                    <div class="dept-tokens">
+                                        <div class="token-bar-wrap"><div class="token-bar" style="width: 8%; background: #00d4aa;"></div></div>
+                                        <span>8%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Finance -->
+                            <div class="dept-card" style="border-top-color: #a855f7;">
+                                <div class="dept-card-stripe" style="background: #a855f7;"></div>
+                                <div class="dept-card-header">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="dept-icon-wrap" style="background: #a855f722;">
+                                            <svg width="16" height="16" fill="none" stroke="#a855f7" stroke-width="1.5" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                                        </div>
+                                        <div><div class="dept-name syne">Finance</div></div>
+                                    </div>
+                                    <div class="dept-status-area">
+                                        <span class="status-badge idle"><span class="pulse-dot idle"></span>IDLE</span>
+                                    </div>
+                                </div>
+                                <div class="dept-task empty">No active task</div>
+                                <div class="dept-footer">
+                                    <span class="dept-model mono">local/gemma3</span>
+                                    <div class="dept-tokens">
+                                        <div class="token-bar-wrap"><div class="token-bar" style="width: 15%; background: #00d4aa;"></div></div>
+                                        <span>15%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Operations -->
+                            <div class="dept-card active-card" style="border-top-color: #64748b;">
+                                <div class="dept-card-stripe" style="background: #64748b;"></div>
+                                <div class="dept-card-header">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div class="dept-icon-wrap" style="background: #64748b22;">
+                                            <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                                        </div>
+                                        <div><div class="dept-name syne">Operations</div></div>
+                                    </div>
+                                    <div class="dept-status-area">
+                                        <span class="status-badge running"><span class="pulse-dot running"></span>RUNNING</span>
+                                    </div>
+                                </div>
+                                <div class="dept-task">Drafting employment contract for new contractor</div>
+                                <div class="dept-footer">
+                                    <span class="dept-model mono">local/gemma3</span>
+                                    <div class="dept-tokens">
+                                        <div class="token-bar-wrap"><div class="token-bar" style="width: 44%; background: #00d4aa;"></div></div>
+                                        <span>44%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="add-dept-card" id="add-dept-trigger">
+                                <div style="width: 32px; height: 32px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;">
+                                    <svg width="16" height="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                </div>
+                                <span class="add-dept-label mono">NEW DEPARTMENT</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- APPROVALS VIEW -->
+                    <div id="view-approvals" class="view-content">
+                        <div class="grid-header">
+                            <span class="grid-title mono">3 PENDING APPROVALS</span>
+                            <div class="view-tabs">
+                                <button class="view-tab active">Pending</button>
+                                <button class="view-tab">Approved</button>
+                                <button class="view-tab">Rejected</button>
+                            </div>
+                        </div>
+                        <div id="approval-list">
+                            <!-- Marketing -->
+                            <div class="approval-item fade-in">
+                                <div class="approval-header">
+                                    <span style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3);">Marketing</span>
+                                    <span class="risk-badge medium">MEDIUM</span>
+                                </div>
+                                <div class="approval-label">Post LinkedIn thread</div>
+                                <div class="approval-context">Drafted a 6-part thread on BNPL adoption for SMEs. Estimated reach: 3,200 impressions.</div>
+                                <div style="margin-top: 8px; padding: 6px 8px; background: var(--bg-4); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); line-height: 1.5;">
+                                    Thread preview: '1/ Most small businesses don't have a CFO...'
+                                </div>
+                                <div class="approval-actions">
+                                    <button class="btn btn-approve">✓ Approve</button>
+                                    <button class="btn btn-reject">✗ Reject</button>
+                                </div>
+                            </div>
+                            <!-- Sales -->
+                            <div class="approval-item fade-in">
+                                <div class="approval-header">
+                                    <span style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3);">Sales</span>
+                                    <span class="risk-badge high">HIGH</span>
+                                </div>
+                                <div class="approval-label">Send cold outreach to 8 investors</div>
+                                <div class="approval-context">Identified 8 pre-seed VCs focused on Africa fintech from Apollo research.</div>
+                                <div style="margin-top: 8px; padding: 6px 8px; background: var(--bg-4); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); line-height: 1.5;">
+                                    To: partner@vc.com, Subject: Crost — Agentic OS for Founders
+                                </div>
+                                <div class="approval-actions">
+                                    <button class="btn btn-approve">✓ Approve</button>
+                                    <button class="btn btn-reject">✗ Reject</button>
+                                </div>
+                            </div>
+                            <!-- Engineering -->
+                            <div class="approval-item fade-in">
+                                <div class="approval-header">
+                                    <span style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3);">Engineering</span>
+                                    <span class="risk-badge critical">CRITICAL</span>
+                                </div>
+                                <div class="approval-label">Merge PR #47 to main</div>
+                                <div class="approval-context">Refactor complete. Tests passing. Ready for production.</div>
+                                <div style="margin-top: 8px; padding: 6px 8px; background: var(--bg-4); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); line-height: 1.5;">
+                                    Branch: feat/payment-webhook-idempotency → main
+                                </div>
+                                <div class="approval-actions">
+                                    <button class="btn btn-approve">✓ Approve</button>
+                                    <button class="btn btn-reject">✗ Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MEMOS VIEW -->
+                    <div id="view-memos" class="view-content">
+                        <div class="grid-header">
+                            <span class="grid-title mono">3 COMPANY MEMOS</span>
+                            <div class="view-tabs">
+                                <button class="view-tab active">All</button>
+                                <button class="view-tab">Urgent</button>
+                                <button class="view-tab">Unread</button>
+                            </div>
+                        </div>
+                        <div class="memo-item high">
+                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                                <div class="memo-title">Payment webhook refactor ships Friday</div>
+                            </div>
+                            <div class="memo-body">PR #47 will merge Friday. Marketing should not promise any payment-related features before then.</div>
+                            <div class="memo-meta">
+                                <span class="memo-from mono">from Engineering</span>
+                                <span class="memo-tag">promise</span>
+                                <span class="memo-tag">deadline</span>
+                            </div>
+                        </div>
+                        <div class="memo-item urgent">
+                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                                <div class="memo-title">Runway at 7 months — review burn rate</div>
+                            </div>
+                            <div class="memo-body">Current MRR growth needs to accelerate. Limit discretionary spend this month.</div>
+                            <div class="memo-meta">
+                                <span class="memo-from mono">from Finance</span>
+                                <span class="memo-tag">budget</span>
+                                <span class="memo-tag">urgent</span>
+                            </div>
+                        </div>
+                        <div class="memo-item normal">
+                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                                <div class="memo-title">8 investor leads identified from Apollo</div>
+                            </div>
+                            <div class="memo-body">Tier 1: Partech, TLcom, Norrsken22. Awaiting approval to send first touch.</div>
+                            <div class="memo-meta">
+                                <span class="memo-from mono">from Sales</span>
+                                <span class="memo-tag">investors</span>
+                                <span class="memo-tag">outreach</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CONSTITUTION VIEW -->
+                    <div id="view-constitution" class="view-content">
+                        <div class="grid-header">
+                            <span class="grid-title mono">AGENT CONSTITUTION</span>
+                            <span style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 3px 8px; border-radius: 8px;">READ-ONLY CORE</span>
+                        </div>
+                        <div>
+                            <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); margin-bottom: 10px; letter-spacing: 0.08em;">
+                                CROST AGENT CONSTITUTION — applies to all departments
+                            </div>
+                            <div class="constitution-text">
+                                <div class="constitution-clause"><span class="clause-num">1.</span><span>NEVER take an irreversible action without calling request_approval() first.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">2.</span><span>NEVER fabricate data, metrics, quotes, or facts.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">3.</span><span>NEVER expose credentials, API keys, or sensitive data.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">4.</span><span>NEVER make commitments on behalf of the founder without approval.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">5.</span><span>ALWAYS check company_memos before starting a task.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">6.</span><span>ALWAYS surface uncertainty rather than guessing.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">7.</span><span>ALWAYS log task start, completion, and errors.</span></div>
+                                <div class="constitution-clause"><span class="clause-num">8.</span><span>You are a department head. The founder is the CEO.</span></div>
+                            </div>
+                            <div style="margin-top: 8px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3);">
+                                Core clauses are read-only. Contact Crost to propose amendments.
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+                            <div style="font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px; margin-bottom: 10px;">Local Identity</div>
+                            <div class="constitution-text" style="margin-bottom: 0;">
+                                Write professionally and with cultural awareness for your market. Be direct, warm, and human. Avoid corporate buzzwords.
+                            </div>
+                            <button class="btn-primary" style="margin-top: 12px;">Edit Identity</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EVENT LOG PANEL -->
+                <div class="event-panel">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span class="panel-title">LIVE EVENTS</span>
+                            <span style="font-family: 'DM Mono', monospace; font-size: 9px; color: var(--accent);">● LIVE</span>
+                        </div>
+                        <div class="panel-body" id="event-log">
+                            <div class="event-item">
+                                <div class="event-dot" style="background: #0ea5e9;"></div>
+                                <div class="event-content">
+                                    <div class="event-desc">Reviewing PR #47 — payment webhook refactor</div>
+                                    <div class="event-meta"><span class="mono">just now</span><span class="event-dept mono">Engineering</span></div>
+                                </div>
+                            </div>
+                            <div class="event-item">
+                                <div class="event-dot" style="background: #f97316;"></div>
+                                <div class="event-content">
+                                    <div class="event-desc">Approval requested: Post LinkedIn thread</div>
+                                    <div class="event-meta"><span class="mono">2m ago</span><span class="event-dept mono">Marketing</span></div>
+                                </div>
+                            </div>
+                            <div class="event-item">
+                                <div class="event-dot" style="background: #a855f7;"></div>
+                                <div class="event-content">
+                                    <div class="event-desc">Memo written: Runway at 7 months</div>
+                                    <div class="event-meta"><span class="mono">8m ago</span><span class="event-dept mono">Finance</span></div>
+                                </div>
+                            </div>
+                            <div class="event-item">
+                                <div class="event-dot" style="background: #22c55e;"></div>
+                                <div class="event-content">
+                                    <div class="event-desc">Research complete: 8 investor leads identified</div>
+                                    <div class="event-meta"><span class="mono">14m ago</span><span class="event-dept mono">Sales</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE DEPT MODAL -->
+    <div class="modal-overlay" id="wizard-modal">
+        <div class="modal fade-in">
+            <div class="modal-header">
+                <span class="modal-title syne">New Department</span>
+                <div class="icon-btn" id="close-wizard" style="border: none; background: none; cursor: pointer;">
+                    <svg width="14" height="14" fill="none" stroke="var(--text-2)" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="wizard-steps">
+                    <div class="wizard-step current"></div>
+                    <div class="wizard-step"></div>
+                    <div class="wizard-step"></div>
+                    <div class="wizard-step"></div>
+                </div>
+                <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-3); margin-bottom: 16px; letter-spacing: 0.08em;">
+                    STEP 1 / 4 — IDENTITY
+                </div>
+
+                <div class="field">
+                    <label class="label">DEPARTMENT NAME</label>
+                    <input class="input" placeholder="e.g. Customer Success">
+                </div>
+                <div class="field">
+                    <label class="label">SLUG (auto-generated)</label>
+                    <input class="input mono" style="color: var(--accent); font-size: 12px;" readonly>
+                </div>
+                <div class="field">
+                    <label class="label">ACCENT COLOR</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div style="width: 28px; height: 28px; border-radius: 6px; background: #0ea5e9; cursor: pointer; border: 2px solid white;"></div>
+                        <div style="width: 28px; height: 28px; border-radius: 6px; background: #f97316; cursor: pointer;"></div>
+                        <div style="width: 28px; height: 28px; border-radius: 6px; background: #22c55e; cursor: pointer;"></div>
+                        <div style="width: 28px; height: 28px; border-radius: 6px; background: #a855f7; cursor: pointer;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" style="background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border);">Cancel</button>
+                <button class="btn-primary">Continue →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching logic
+        const navItems = document.querySelectorAll('.nav-item[data-view]');
+        const views = document.querySelectorAll('.view-content');
+        const pageTitle = document.getElementById('page-title');
+        const badge = document.getElementById('approval-badge');
+
+        const titleMap = {
+            'departments': 'Agent Office',
+            'approvals': 'Approval Feed',
+            'memos': 'Company Memos',
+            'constitution': 'Agent Constitution'
+        };
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const viewId = item.getAttribute('data-view');
+                
+                // Update nav active state
+                navItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+
+                // Update view visibility
+                views.forEach(v => v.classList.remove('active'));
+                document.getElementById('view-' + viewId).classList.add('active');
+
+                // Update title
+                pageTitle.textContent = titleMap[viewId];
+            });
+        });
+
+        // Mode toggle
+        const btnLocal = document.getElementById('mode-local');
+        const btnCloud = document.getElementById('mode-cloud');
+
+        btnLocal.addEventListener('click', () => {
+            btnLocal.classList.add('active');
+            btnCloud.classList.remove('active');
+        });
+
+        btnCloud.addEventListener('click', () => {
+            btnCloud.classList.add('active');
+            btnLocal.classList.remove('active');
+        });
+
+        // Wizard Modal
+        const wizardModal = document.getElementById('wizard-modal');
+        const openWizard = document.getElementById('open-wizard');
+        const addDeptTrigger = document.getElementById('add-dept-trigger');
+        const closeWizard = document.getElementById('close-wizard');
+
+        const showWizard = () => wizardModal.style.display = 'flex';
+        const hideWizard = () => wizardModal.style.display = 'none';
+
+        openWizard.addEventListener('click', showWizard);
+        addDeptTrigger.addEventListener('click', showWizard);
+        closeWizard.addEventListener('click', hideWizard);
+        wizardModal.addEventListener('click', (e) => {
+            if (e.target === wizardModal) hideWizard();
+        });
+
+        // Simple Event Simulation
+        const eventLog = document.getElementById('event-log');
+        const events = [
+            { dept: "Engineering", desc: "Token usage: 1,240 tokens consumed this session", color: "#0ea5e9" },
+            { dept: "Operations", desc: "Draft contract: 2 clauses flagged for review", color: "#64748b" },
+            { dept: "Sales", desc: "Apollo search complete: 3 new contacts found", color: "#22c55e" },
+            { dept: "Finance", desc: "Runway model updated: 7.2 months remaining", color: "#a855f7" },
+        ];
+        let eventIdx = 0;
+
+        setInterval(() => {
+            const event = events[eventIdx % events.length];
+            const div = document.createElement('div');
+            div.className = 'event-item slide-in';
+            div.innerHTML = `
+                <div class="event-dot" style="background: ${event.color};"></div>
+                <div class="event-content">
+                    <div class="event-desc">${event.desc}</div>
+                    <div class="event-meta"><span class="mono">just now</span><span class="event-dept mono">${event.dept}</span></div>
+                </div>
+            `;
+            eventLog.insertBefore(div, eventLog.firstChild);
+            if (eventLog.children.length > 10) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+            eventIdx++;
+        }, 8000);
+    </script>
+</body>
+</html>
