@@ -1,7 +1,7 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.4 (LiteLLM Deployment Hardening & Health Check Fix)
-**Last Updated:** April 11, 2026 (Latest: 00:59 UTC)
-**Deployment Status:** 🚀 Ready for Render
+**Version:** 5.5 (Orchestrator Model Fix & URL Path Correction)
+**Last Updated:** April 11, 2026 (Latest: 01:39 UTC)
+**Deployment Status:** 🚀 Ready for Render (Frontend redeploy pending)
 **Purpose:** The single, definitive technical and operational specification of Crost.
 
 ---
