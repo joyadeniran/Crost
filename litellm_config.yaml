@@ -26,7 +26,7 @@ model_list:
       model: gemini/gemini-1.5-pro
       api_key: os.environ/GEMINI_API_KEY
 
-  - model_name: gemini/gemini-1.5-pro      # Direct alias (used by onyx-client.ts CLOUD_MODEL env)
+  - model_name: gemini/gemini-1.5-pro      # Direct alias
     litellm_params:
       model: gemini/gemini-1.5-pro
       api_key: os.environ/GEMINI_API_KEY
@@ -48,7 +48,7 @@ model_list:
 
   - model_name: gemini-2.5-flash
     litellm_params:
-      model: gemini/gemini-2.0-flash-exp # Closest valid for now
+      model: gemini/gemini-1.5-flash
       api_key: os.environ/GEMINI_API_KEY
 
   - model_name: claude-sonnet-4.6
@@ -67,7 +67,3 @@ router_settings:
 litellm_settings:
   max_budget: 5.0
   budget_duration: 1d
-
-# IMPORTANT: When a user creates a new department with a custom model_name,
-# validate it against this list before saving. Reject with:
-# "Model 'X' is not configured in LiteLLM. Add it to litellm_config.yaml first."
