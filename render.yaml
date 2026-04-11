@@ -58,3 +58,16 @@ services:
         sync: false
       - key: LITELLM_MASTER_KEY
         sync: false
+
+  - type: cron
+    name: crost-approval-expiry
+    runtime: node
+    rootDir: .
+    schedule: "0 * * * *"
+    buildCommand: npm ci
+    startCommand: node scripts/expire-approvals.js
+    envVars:
+      - key: CROST_APP_URL
+        value: https://crost-frontend.onrender.com
+      - key: CRON_SECRET
+        sync: false

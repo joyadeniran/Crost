@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 const UpdateGoalSchema = z.object({
-  status: z.enum(['pending', 'planning', 'awaiting_approval', 'executing', 'completed', 'failed']).optional(),
+  status: z.enum(['pending', 'planning', 'awaiting_approval', 'executing', 'completed', 'failed', 'cancelled']).optional(),
   outcome: z.string().optional(),
 })
 
@@ -84,6 +84,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       runOrcReport(params.id).catch(err => {
         console.error('[PATCH /api/goals/:id] Synthesis failed:', err)
       })
+    }
+
+    // On cancel: reject all non-terminal tasks so the chain stops cleanly
+    if (parsed.status === 'cancelled') {
+      const supabase = createServerSupabaseClient()
+      await supabase
+        .from('goal_tasks')
+        .update({ status: 'rejected', completed_at: new Date().toISOString() })
+        .eq('goal_id', params.id)
+        .not('status', 'in', '(completed,failed,rejected,expired)')
     }
 
     return NextResponse.json({ success: true, data, timestamp: new Date().toISOString() })
