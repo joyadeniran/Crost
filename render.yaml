@@ -25,6 +25,7 @@ services:
     runtime: docker
     rootDir: litellm
     port: 4000
+    healthCheckPath: /health/liveliness
     envVars:
       - key: LITELLM_MASTER_KEY
         sync: false
