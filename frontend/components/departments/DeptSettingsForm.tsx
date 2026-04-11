@@ -11,13 +11,10 @@ const AVAILABLE_TOOLS = [
 ]
 
 const MODEL_OPTIONS: { provider: Department['model_provider']; name: string; label: string }[] = [
-  { provider: 'local',  name: 'gemma3:4b',         label: 'Gemma 3 4B (Local)' },
-  { provider: 'local',  name: 'gemma3:12b',         label: 'Gemma 3 12B (Local)' },
-  { provider: 'gemini', name: 'gemini-2.0-flash',   label: 'Gemini 2.0 Flash' },
-  { provider: 'gemini', name: 'gemini-1.5-pro',     label: 'Gemini 1.5 Pro' },
-  { provider: 'claude', name: 'claude-3-5-haiku',   label: 'Claude 3.5 Haiku' },
-  { provider: 'claude', name: 'claude-3-5-sonnet',  label: 'Claude 3.5 Sonnet' },
-  { provider: 'groq',   name: 'llama-3.3-70b',      label: 'Llama 3.3 70B (Groq)' },
+  { provider: 'gemini', name: 'gemini-1.5-flash',   label: 'Gemini 1.5 Flash' },
+  { provider: 'claude', name: 'claude-sonnet-4.6',   label: 'Claude Sonnet 4.6' },
+  { provider: 'claude', name: 'claude-opus-4.6',     label: 'Claude Opus 4.6' },
+  { provider: 'groq',   name: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
 ]
 
 interface Props {

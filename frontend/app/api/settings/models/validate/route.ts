@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic'
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || 'http://localhost:4000'
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || ''
 
-// Map provider to test models
+// Map provider to test models (must match LiteLLM config.yaml)
 const TEST_MODELS: Record<string, string> = {
-  'claude': 'claude-3-haiku-20240307',
+  'claude': 'claude-sonnet-4.6',
   'gemini': 'gemini-1.5-flash',
-  'groq': 'mixtral-8x7b-32768'
+  'groq': 'llama-3.3-70b-versatile'
 }
 
 export async function POST(req: NextRequest) {

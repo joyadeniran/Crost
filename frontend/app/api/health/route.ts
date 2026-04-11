@@ -34,53 +34,16 @@ async function checkLiteLLM(): Promise<boolean> {
   }
 }
 
-async function checkGemini(): Promise<boolean> {
-  const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
-  if (!key) return false // Gemini not configured
-
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + key, {
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-async function checkGroq(): Promise<boolean> {
-  const key = process.env.GROQ_API_KEY
-  if (!key) return false // Groq not configured
-
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch('https://api.groq.com/openai/v1/models', {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 export async function GET(req: NextRequest) {
   try {
-    // Parallel health checks
-    const [supabaseResult, litellmResult, geminiResult, groqResult] = await Promise.all([
+    // Parallel health checks (LiteLLM is the unified gateway for all model providers)
+    const [supabaseResult, litellmResult] = await Promise.all([
       checkService('Supabase', checkSupabase),
       checkService('LiteLLM', checkLiteLLM),
-      checkService('Gemini', checkGemini),
-      checkService('Groq', checkGroq),
     ])
 
     // Determine overall status
-    const allServices = [supabaseResult, litellmResult, geminiResult, groqResult].filter(
+    const allServices = [supabaseResult, litellmResult].filter(
       (s) => s.status !== undefined
     )
     const hasDown = allServices.some((s) => s.status === 'down')
@@ -93,14 +56,10 @@ export async function GET(req: NextRequest) {
       services: {
         supabase: supabaseResult.status,
         litellm: litellmResult.status,
-        gemini: geminiResult.status,
-        groq: groqResult.status,
       },
       details: {
         supabase: supabaseResult.detail,
         litellm: litellmResult.detail,
-        gemini: geminiResult.detail,
-        groq: groqResult.detail,
       },
     })
   } catch (err: any) {

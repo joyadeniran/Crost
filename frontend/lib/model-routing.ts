@@ -4,9 +4,10 @@ import { createServerSupabaseClient } from './supabase'
 import type { ModelRole } from '@/types'
 
 // Fallback models if no user assignment exists
+// These must match LiteLLM config.yaml model_list entries
 const FALLBACK_MODELS: Record<ModelRole, string> = {
-  'reasoning': 'claude-3-opus-20240229',
-  'execution': 'groq-mixtral-8x7b-32768',
+  'reasoning': 'claude-opus-4.6',
+  'execution': 'groq/llama-3.3-70b-versatile',
   'utility': 'gemini-1.5-flash'
 }
 
