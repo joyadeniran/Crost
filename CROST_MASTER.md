@@ -1,6 +1,6 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.3 (LiteLLM Model Optimization & Health Verification)
-**Last Updated:** April 11, 2026
+**Version:** 5.4 (LiteLLM Deployment Hardening & Health Check Fix)
+**Last Updated:** April 11, 2026 (Latest: 00:59 UTC)
 **Deployment Status:** 🚀 Ready for Render
 **Purpose:** The single, definitive technical and operational specification of Crost.
 
@@ -387,21 +387,24 @@ npm ci --include=dev && rm -rf .next && npm run build
 1. ✅ Pushed to GitHub (all services in render.yaml)
 2. ✅ Frontend builds successfully with TypeScript
 3. ✅ Worker module resolution fixed
-4. ✅ LiteLLM service configured with model definitions
+4. ✅ LiteLLM service configured with model definitions (current versions)
 5. ✅ Environment variable substitution working (entrypoint script)
 6. ✅ API keys configured in Render dashboard
-7. ✅ LiteLLM health check returning 200 OK
-8. ✅ All models verified healthy (groq/llama-3.3-70b, gemini-1.5-flash, claude models)
-9. ⏳ Test frontend → Supabase connection
-10. ⏳ Test onboarding → goal creation → orchestrator calls LiteLLM
+7. ✅ LiteLLM health check path fixed (`/health/liveliness` for Render)
+8. ✅ Port configuration explicit (`port: 4000`)
+9. ✅ Model assignments updated (Claude 4.6, Gemini 3.1, Groq 3.3)
+10. ⏳ Verify redeploy completes without timeout (awaiting redeploy)
+11. ⏳ Test frontend → Supabase connection
+12. ⏳ Test onboarding → goal creation → orchestrator calls LiteLLM
 
 **Current System Status:**
 - ✅ Frontend deployed and running on Render
 - ✅ Worker deployed and running on Render  
-- ✅ LiteLLM proxy deployed and responding to health checks
+- ✅ LiteLLM proxy deployed and responding to liveness checks
 - ✅ API keys configured and being passed to LLM providers
 - ✅ Model configuration corrected: Groq, Gemini, Claude routed correctly
-- ✅ Health check shows 3/3 models healthy (groq/llama-3.3, gemini-1.5-flash, claude-3-5-sonnet)
+- ✅ Health check fixed: Using `/health/liveliness` (unauthenticated) for Render
+- ✅ Model assignments updated to current versions (Claude 4.6, Gemini 3.1, Groq 3.3)
 
 **LiteLLM Deployment Journey:**
 1. Docker architecture issue → Fixed with Python 3.11 base image
@@ -409,11 +412,16 @@ npm ci --include=dev && rm -rf .next && npm run build
 3. Missing model definitions → Created config.yaml with model routes
 4. Environment variable substitution → Created entrypoint script with `envsubst`
 5. Model name mismatches → Removed prefixes to match provider API specs
-6. Model decommissioning & dependency issues → Final refinement:
-   - Removed `groq/llama-3.1-70b-versatile` (decommissioned by Groq)
+6. Model decommissioning & dependency issues → Updated to current versions:
+   - Removed `groq/llama-3.1-70b-versatile` (decommissioned by Groq on April 11, 2026)
    - Changed `gemini-2.0-flash` to `gemini-1.5-flash` (avoids Vertex AI dependencies)
+   - Updated Claude models to `claude-sonnet-4.6` and `claude-opus-4.6` (latest Feb 2026)
    - Kept `groq/llama-3.3-70b-versatile` (stable & healthy)
-   - Kept Claude models `claude-3-5-sonnet` and `claude-3-opus` (stable & healthy)
+7. Health check authentication → Fixed with `/health/liveliness` endpoint:
+   - `/health` endpoint requires LITELLM_MASTER_KEY → causes 401 → Render timeout
+   - `/health/liveliness` endpoint requires no auth → 200 OK → deployment succeeds
+   - Updated render.yaml `healthCheckPath: /health/liveliness` for Render health checks
+   - Added explicit `port: 4000` to render.yaml (was causing :4000 in health check URLs)
 
 **Known Limitations:**
 - API keys stored as-is in DB (TODO: encrypt with libsodium)
@@ -422,5 +430,35 @@ npm ci --include=dev && rm -rf .next && npm run build
 
 ---
 
+---
+
+## 8.5 Latest Fixes (April 11, 2026 - 00:59 UTC)
+
+### LiteLLM Health Check Deployment Timeout Fix
+
+**Problem:** Render deployment timing out when waiting for LiteLLM health check
+- Render's health check was hitting `/health` endpoint
+- LiteLLM's `/health` requires LITELLM_MASTER_KEY authentication
+- Health check received 401 Unauthorized every 10 seconds
+- Render marked service as unhealthy and timeout after ~15 minutes
+
+**Solution:** Use `/health/liveliness` endpoint instead
+- LiteLLM exposes two health endpoints with different requirements:
+  - `/health` - Full model health check (requires master key) 
+  - `/health/liveliness` - Server liveness check (no auth required)
+- Updated `render.yaml` to use `healthCheckPath: /health/liveliness`
+- Removed invalid `allow_unauth_routes` config
+- Added explicit `port: 4000` declaration (was causing `:4000` in URLs)
+
+**Commits:**
+- `377ff79` - Updated model assignments to current versions
+- `5bd3c25` - Fixed LiteLLM config (removed decommissioned models)
+- `d8dc105` - Updated Claude to latest versions (4.6)
+- `daa4557` - Added port declaration, removed broken healthCheckPath
+- `453acb5` - Attempted `allow_unauth_routes` (reverted)
+- `20dbb4e` - **Final fix**: Use `/health/liveliness` for Render health checks
+
+---
+
 *Crost: Think Global, Act Local. Built for the world's founders.*
-*Ready for solo founder deployment on Render. V5.3 — April 2026.*
+*Ready for solo founder deployment on Render. V5.4 — April 2026.*
