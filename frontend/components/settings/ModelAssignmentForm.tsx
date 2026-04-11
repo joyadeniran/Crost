@@ -13,9 +13,9 @@ const MODEL_MAP: Record<string, Record<string, string>> = {
     'premium': 'claude-opus-4.6'
   },
   'gemini': {
-    'budget': 'gemini-1.5-flash',
-    'fast': 'gemini-1.5-flash',
-    'premium': 'gemini-1.5-flash'
+    'budget': 'gemini-2.5-flash',
+    'fast': 'gemini-2.5-flash',
+    'premium': 'gemini-2.5-flash'
   },
   'groq': {
     'budget': 'llama-3.3-70b-versatile',

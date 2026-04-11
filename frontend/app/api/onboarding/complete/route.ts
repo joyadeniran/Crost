@@ -107,15 +107,70 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Activate selected departments (attributed to user)
+    // For new users, departments only exist as global templates (created_by = NULL from seed).
+    // Clone the templates to this user's account so RLS and multi-tenant isolation work correctly.
     if (selectedDepartments && selectedDepartments.length > 0) {
-      await supabase
+      for (const slug of selectedDepartments) {
+        // Check if user already has this department
+        const { data: existing } = await supabase
+          .from('departments')
+          .select('id')
+          .eq('slug', slug)
+          .eq('created_by', user.id)
+          .maybeSingle()
+
+        if (existing) {
+          // Already exists — just activate
+          await supabase.from('departments').update({ activation_stage: 'active' }).eq('id', existing.id)
+        } else {
+          // Clone from global template
+          const { data: template } = await supabase
+            .from('departments')
+            .select('*')
+            .eq('slug', slug)
+            .is('created_by', null)
+            .maybeSingle()
+
+          if (template) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, created_at, updated_at, ...rest } = template
+            await supabase.from('departments').insert({
+              ...rest,
+              created_by: user.id,
+              activation_stage: 'active',
+              status: 'idle',
+            })
+          }
+        }
+      }
+
+      // Also seed the orchestrator for this user if it doesn't exist yet
+      const { data: existingOrc } = await supabase
         .from('departments')
-        .update({ 
-          activation_stage: 'active',
-          orc_persona_id: null 
-        })
-        .in('slug', selectedDepartments)
+        .select('id')
+        .eq('slug', 'orchestrator')
         .eq('created_by', user.id)
+        .maybeSingle()
+
+      if (!existingOrc) {
+        const { data: orcTemplate } = await supabase
+          .from('departments')
+          .select('*')
+          .eq('slug', 'orchestrator')
+          .is('created_by', null)
+          .maybeSingle()
+
+        if (orcTemplate) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, created_at, updated_at, ...rest } = orcTemplate
+          await supabase.from('departments').insert({
+            ...rest,
+            created_by: user.id,
+            activation_stage: 'active',
+            status: 'idle',
+          })
+        }
+      }
     }
 
     // 5. Update User metadata (robust secondary storage)

@@ -13,23 +13,25 @@ export default async function SettingsPage() {
   
   const { data: { user } } = await supabase.auth.getUser()
   
-  const [configsRes, toolsRes] = await Promise.all([
+  const [configsRes, toolsRes, profileRes] = await Promise.all([
     supabase.from('system_config').select('*').eq('created_by', user?.id).order('key'),
     supabase.from('available_tools')
       .select('*')
       .eq('user_id', user?.id)
       .eq('is_action', false)
       .eq('requires_config', true)
-      .order('label')
+      .order('label'),
+    supabase.from('company_profile').select('founder_name, company_name').eq('created_by', user?.id).maybeSingle(),
   ])
 
   const configs = configsRes.data ?? []
   const tools = toolsRes.data ?? []
 
   const tokenLimit   = configs.find(c => c.key === 'token_hard_limit_per_session')?.value
-  const founderName  = configs.find(c => c.key === 'founder_name')?.value
-  const companyName  = configs.find(c => c.key === 'company_name')?.value
-  
+  // Prefer system_config value (set via identity editor), fall back to company_profile from onboarding
+  const founderName  = configs.find(c => c.key === 'founder_name')?.value ?? profileRes.data?.founder_name
+  const companyName  = configs.find(c => c.key === 'company_name')?.value ?? profileRes.data?.company_name
+
   const founderStr = founderName ? String(founderName).replace(/"/g, '') : ''
   const companyStr = companyName ? String(companyName).replace(/"/g, '') : ''
 

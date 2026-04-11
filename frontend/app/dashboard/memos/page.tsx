@@ -9,6 +9,7 @@ export default async function MemosPage() {
   const { data } = await supabase
     .from('company_memos')
     .select('*')
+    .neq('from_department', 'founder') // Exclude raw clarification dialogue responses — not real memos
     .order('created_at', { ascending: false })
     .limit(50)
 

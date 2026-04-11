@@ -12,7 +12,11 @@ export default async function ArtifactsPage() {
     .order('created_at', { ascending: false })
     .limit(50)
 
-  const artifacts = (data ?? []) as Artifact[]
+  // Filter out failed tool execution errors that were accidentally stored as artifacts
+  const artifacts = (data ?? []).filter((a: any) =>
+    !a.body?.startsWith('[TOOL EXECUTION FAILED') &&
+    !a.title?.startsWith('[TOOL EXECUTION FAILED')
+  ) as Artifact[]
   const images = artifacts.filter(a => a.artifact_type === 'image')
   const docs = artifacts.filter(a => a.artifact_type === 'document')
   const dataResults = artifacts.filter(a => a.artifact_type !== 'image' && a.artifact_type !== 'document')
