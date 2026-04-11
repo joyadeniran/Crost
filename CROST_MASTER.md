@@ -1,503 +1,190 @@
-# Project Crost: Master Source of Truth
-**Version:** 5.6 (Direct API Call Removal & Gateway Consolidation)
-**Last Updated:** April 11, 2026 (Latest: Direct API Fix)
-**Deployment Status:** 🚀 Ready for Render (All requests now via LiteLLM)
-**Purpose:** The single, definitive technical and operational specification of Crost.
+> This is a working document.
+> Builders must keep this updated after every major change.
+
+# CROST MASTER (Execution Log)
+
+**Current Version:** 5.6  
+**Last Updated:** April 11, 2026  
+**Deployment Status:** 🚀 Ready for Production (Pending manual Render config)
 
 ---
 
-## 1. Executive Summary & Core Principle
+## 1. Current State
 
-Crost is a **State-Driven Agentic Operating System** for solo founders. 
+### What is Built ✅
 
-It does NOT run purely on prompts; it runs on **structured company state (the Memo System)**. The system operates as a digital "Agent Office" where each department is a semi-autonomous role assigned to an LLM execution block.
+**Core Architecture**
+- ✅ **State-Driven Agentic Operating System** — Founder goals → Orchestrator plans → Worker tasks → Synthesis reports
+- ✅ **LiteLLM Proxy Gateway** — Unified OpenAI-compatible interface for all LLM requests (Groq, Gemini, Claude)
+- ✅ **Memo System** — Foundational context + current context for dynamic knowledge injection
+- ✅ **Orchestrator (Orc v2.5)** — Chief of Staff that reads state, plans tasks, synthesizes results
+- ✅ **Waterfall Execution Engine** — Strict dependency gating with memo verification (data-driven sequencing)
+- ✅ **BYOK Model Assignment** — Users provide API keys, select models per role (reasoning/execution/utility)
+- ✅ **Multi-Tenant Security (RLS)** — Hardened Supabase policies, users only access own goals/memos/tasks
+- ✅ **Event-Driven Worker Supervision** — Zero-poll architecture with Realtime subscriptions + watchdog timers
 
-### The Core Loop
-1. **Founder Goal**: Input via the War Room.
-2. **Orc Planning**: The Orchestrator (Chief of Staff) reads system state (Memos), identifies context, and drafts a structured JSON plan.
-3. **Dialogue Mode**: Interactive clarification with the founder; responses are saved as **Context Memos**.
-4. **Strict Waterfall Execution**: Tasks are dispatched to workers only when dependencies AND their corresponding data (Memos) are verified.
-5. **Strategic Synthesis**: Orc synthesizes all findings into a final "Orc Report" upon goal completion.
+**Frontend & Deployment**
+- ✅ **Next.js Frontend** — Dynamic rendering, all 35 API routes with force-dynamic export
+- ✅ **Browser/Server Isolation** — Supabase client in lazy singleton (`lib/supabase-browser.ts`), server client separate
+- ✅ **Local Font System** — All 14 font files (Syne, DM Mono, DM Sans) locally served, zero external requests
+- ✅ **Render Multi-Service Deployment** — crost-frontend (Node), crost-litellm (Docker), crost-worker (Node)
+- ✅ **LiteLLM Docker Container** — Python 3.11, model routing, environment variable substitution
+- ✅ **Health Check System** — Supabase + LiteLLM gateway verification (simplified in v5.6)
 
----
+**Security & Data**
+- ✅ **No Direct API Calls to Providers** — Frontend credential-agnostic (all requests via LiteLLM)
+- ✅ **API Key Management** — User keys stored in `user_api_keys` table (RLS-secured)
+- ✅ **LITELLM_MASTER_KEY** — Proxy authentication for admin operations
+- ✅ **Artifact Storage** — Large outputs offloaded to Supabase Storage
 
-## 2. System Architecture
+### What Works (Tested) ✅
 
-Crost consists of five core layers:
-1. **Onboarding Layer**: Initial state setup (Company Profile & Foundational Memos).
-2. **Cognitive Layer (Orc)**: Strategic planning, clarification, and supervision.
-3. **Execution Layer**: Deterministic task engine using **LiteLLM Proxy** as the unified model gateway.
-4. **State Layer**: The "Working Memory" (Memos, goal_tasks, event_log).
-5. **Storage Layer**: External artifacts (Supabase Storage) for large data.
+- ✅ Build pipeline: `npm run build` completes with 0 errors
+- ✅ Orchestrator generates JSON plans from founder input
+- ✅ Task dependency resolution: blocks on incomplete dependencies & missing memos
+- ✅ Worker task execution: departments receive instructions, return JSON results
+- ✅ Memo persistence: all task outputs saved as company_memos for future context
+- ✅ Health endpoint: checks Supabase + LiteLLM gateway only
+- ✅ LiteLLM routing: Groq, Gemini, Claude models accessible via unified API
+- ✅ Model validation: user API keys tested through LiteLLM before storing
+- ✅ Multi-tenant isolation: RLS blocks cross-user data access
+- ✅ Goal lifecycle: draft → executing → completed (with post-mortem synthesis)
+- ✅ Render deployments: all three services deploy, no build timeout errors
 
----
+### What is Broken / Incomplete ⚠️
 
-## 3. The LLM Gateway (LiteLLM)
-
-Crost uses a **LiteLLM Proxy** for all model interactions. 
-- **Unified API**: All requests use the OpenAI-compatible `/v1/chat/completions` format.
-- **Security**: Access is gated by `LITELLM_MASTER_KEY` to prevent unauthorized credit usage.
-- **Model Agnostic**: Supports Groq, Gemini, Anthropic, and Local (Ollama) via a single `LITELLM_BASE_URL`.
-
----
-
-## 3.1 Model Assignment (BYOK — Bring Your Own Key)
-
-Users can provide their own API keys and assign models to three roles:
-
-**Roles:**
-- **Reasoning** (Orc planning, analysis) — Default: Claude 3.5 Opus
-- **Execution** (tool calls, task dispatch) — Default: Groq Llama 3.1 70B
-- **Utility** (memo generation, lightweight) — Default: Gemini 1.5 Flash
-
-**Configuration:**
-- Users add API keys via `/api/settings/models/validate` (LiteLLM test call validates key)
-- Users select presets per role: budget, fast, premium
-- System stores encrypted keys in `user_api_keys` (RLS-secured)
-- Task dispatch resolves user's model choice via `getModelForTask()` (fallback to Orc default)
-
-**Providers Supported:** Claude, Gemini, Groq  
-**Database:** `user_api_keys`, `user_model_assignments` tables (RLS policies)  
-**UI:** Dashboard → Settings → Models
-
----
-
-## 4. The Orchestrator (Orc v2.5)
-
-Orc is the **Chief of Staff**, the only cognitive planner in the system.
-
-### 4.1 Planning Logic & Constraints
-- **Centralized Research**: Consolidates market data gathering into a single "Master Research Task".
-- **Brain vs. Tool**: Explicit logic to prioritize LLM internal knowledge over redundant tool calls.
-- **JSON-Strict**: Deterministic JSON output for UI rendering.
-- **Strategic Synthesis**: Automated generation of an "Orc Report" (strategic summary) as soon as all tasks in a goal reach terminal status.
+- ⚠️ **LITELLM_BASE_URL Path Issue** — Render env var needs manual update to remove `/v1` suffix (causes doubled path like `/v1/chat/completions/v1/chat/completions`)
+- ⚠️ **Frontend Redeploy Pending** — Needs to pick up orchestrator model fix (eb74246) + health check fix (8e3504b)
+- ⚠️ **API Keys Unencrypted** — Stored as plaintext in DB (needs libsodium or similar encryption)
+- ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
+- ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
+- ⚠️ **No Artifact Preview** — Large outputs not rendered in UI, only stored as text
+- ⚠️ **No Retry Logic** — Failed tasks don't auto-retry
+- ⚠️ **UI Model Presets Outdated** — ModelAssignmentForm still shows deprecated Gemini 3.1 options (partially fixed in v5.6)
 
 ---
 
-## 5. Execution Engine & Strict Waterfall
+## 2. In Progress
 
-### 5.1 The Dependency Gate
-- A task cannot transition to `running` until its dependencies are `completed` AND a physical memo exists in `company_memos` for that dependency's `task_id`.
-
-### 5.2 Multi-Tenant Security (RLS)
-- **Hardened RLS**: Every table is secured with `auth.uid() = created_by`. 
-- **Privacy**: Permissive MVP policies have been purged; users can only see their own goals, memos, and artifacts.
+- 🔄 **Render Deployment** — All three services deployed and running; awaiting health verification
+- 🔄 **Frontend Redeploy** — Waiting for manual LITELLM_BASE_URL config in Render dashboard
+- 🔄 **End-to-End Testing** — Onboarding → Goal creation → Orchestrator planning → Worker execution → Synthesis report
 
 ---
 
-## 6. Implementation Progress
+## 3. Next Tasks
 
-| Feature | Phase | Status | Description |
-| :--- | :--- | :--- | :--- |
-| **Core Infrastructure** | 0 | ✅ | Supabase, LiteLLM Proxy, Composio. |
-| **Memo Memory System** | 1 | ✅ | Tiered context, foundational/current context split. |
-| **Orc Planning v2.5** | 2 | ✅ | JSON plans, Master Research, Brain vs Tool logic. |
-| **Waterfall Execution** | 3 | ✅ | Strict dependency gating with memo verification. |
-| **Context Sync** | 4 | ✅ | Automated injection of user responses into worker brains. |
-| **Strategic Synthesis** | 5 | ✅ | **Automated** trigger for synthesis reports. |
-| **BYOK Model Assignment** | 6 | ✅ | User API keys, role-based routing, preset configs. |
-| **Render Deployment** | 7 | ✅ | Web service + Background worker, health checks, auto-migration. |
-
----
-
-## 7. Build & Maintenance
-
-### Running the System
-- **Frontend**: `npm run dev` (Port 3000)
-- **LiteLLM**: `docker run -p 4000:4000 ghcr.io/berriai/litellm` (or standalone container)
-- **Worker**: `npx tsx scripts/worker.ts` (Zero-Poll supervisor)
-
-### Critical Migrations (Order Matters)
-- `orc_upgrade`: Goals, tasks, memos enhancements.
-- `rls_policies`: Multi-tenant security (Initial).
-- `20260409010000_multitenant_fix`: Tightened RLS policies.
-- `20260410030000_add_current_context`: Adds `is_current_context` to memos.
-- `20260410040000_fix_rls_and_schema`: **CRITICAL**: Drops permissive policies & adds `expected_deliverable` column.
-- `20260410050000_user_model_config`: **NEW** — BYOK tables (`user_api_keys`, `user_model_assignments`).
-
-### Deployment
-See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services, env vars, migrations).
+- [ ] **Manual Render Config** — Update crost-frontend env var `LITELLM_BASE_URL` from `https://crost-litellm.onrender.com/v1` to `https://crost-litellm.onrender.com` (remove `/v1` path suffix)
+- [ ] **Trigger Frontend Redeploy** — Render dashboard → Services → crost-frontend → Manual Deploy
+- [ ] **Verify E2E Flow** — Create test goal → Check orchestrator calls LiteLLM → Verify worker executes → Check synthesis report generated
+- [ ] **Encrypt User API Keys** — Implement libsodium encryption for `user_api_keys.encrypted_key` column
+- [ ] **Update UI Model Presets** — Finalize ModelAssignmentForm/DeptSettingsForm with gemini-2.0-flash or gemini-3.1-pro (when available)
+- [ ] **Add Retry Logic** — Implement exponential backoff for failed task re-execution
+- [ ] **WebSocket Realtime** — Replace polling with true event delegation for worker tasks
+- [ ] **Artifact Preview UI** — Render markdown/JSON artifacts inline in dashboard
+- [ ] **Rate Limiting** — Per-user token budget enforcement (already checked but not enforced)
 
 ---
 
-## 8. Current Status (April 11, 2026)
+## 4. Decisions Made
 
-✅ **Phase 1-7 Complete**: All core features implemented.
-✅ **BYOK System**: Role-based model assignment with API key management (LiteLLM-only).
-✅ **Render-Ready**: Web service + worker background job configured.
-✅ **Build Fixed**: All TypeScript, ESLint, and static rendering errors resolved.
-✅ **Deployment Verified**: Build succeeds with no blocking errors.
-✅ **Security Hardened**: No direct API calls to model providers; all requests via LiteLLM gateway.
-
----
-
-## 8.1 Critical Fixes Applied (April 10, 2026)
-
-### Type System Fixes
-**File:** `frontend/types/index.ts`
-- **Fix**: Updated `CompanyMemo` interface with missing fields: `is_foundational`, `is_current_context`, `task_id`, `valid_until`, `version_tag`
-- **Fix**: Removed dead `onyx_index_id` field
-- **Impact**: Critical for type safety across the entire codebase
-
-### Context Injection into Orchestrator
-**File:** `frontend/lib/llm-client.ts` (refactored from `onyx-client.ts`)
-- **Fix**: Injected `buildOrcContext(userId)` into `runOrchestratorTask()` to ensure Orc reads foundational + current context memos
-- **Impact**: Orc now uses the Memo System as specified; eliminates contextual gaps in planning
-
-### Service Health Endpoint Expansion
-**File:** `frontend/app/api/health/route.ts`
-- **Previous**: Only checked Supabase health
-- **Fix**: Expanded to check 4 services with individual timeout handling:
-  - Supabase (database query)
-  - LiteLLM (proxy health endpoint at `/health`)
-  - Gemini (API key validation via models list)
-  - Groq (API key validation via models list)
-- **Implementation**: Each check uses `AbortSignal` with 5-second timeout; returns `{ status, detail }` object per service
-- **Response Format**: Returns `services` object with individual statuses + `details` object with error messages
-- **Impact**: Full visibility into all external service dependencies
-
-### Health Widget Transform
-**File:** `frontend/components/settings/HealthWidget.tsx`
-- **Fix**: Transformed endpoint response from object format to array format for rendering
-- **Implementation**: Maps `services` object entries to `ServiceStatus[]` array with `status` and `detail` fields
-- **Impact**: Widget now displays health status + error details for all 4 services
-
-### Force-Dynamic Exports (Static Rendering Prevention)
-**Files**: All 35 API routes under `frontend/app/api/`
-- **Root Cause**: Next.js attempted static pre-rendering of API routes; Supabase client throws at module load-time when env vars absent during build
-- **Fix Applied**: Added `export const dynamic = 'force-dynamic'` to prevent static pre-rendering
-- **Routes Updated**: 
-  - `/api/approvals`
-  - `/api/artifacts`
-  - `/api/auth` (all subroutes)
-  - `/api/config` (all subroutes)
-  - `/api/connect` (all subroutes)
-  - `/api/departments` (all subroutes)
-  - `/api/goals` (all subroutes)
-  - `/api/health`
-  - `/api/memos` (all subroutes)
-  - `/api/onboarding` (all subroutes including `/complete`)
-  - `/api/settings` (all subroutes)
-  - `/api/toggle`
-  - `/api/tools` (all subroutes)
-  - `/api/worker` (all subroutes)
-- **Implementation**: Python script automated addition across all 35 files
-- **Impact**: Render build no longer crashes on `NEXT_PUBLIC_SUPABASE_URL is not set` error
-
-### Browser Client Isolation (Supabase Module Split)
-**Files**: `frontend/lib/supabase-browser.ts` (new), `frontend/lib/supabase.ts`, 11 client components
-- **Root Cause**: `lib/supabase.ts` exported `supabaseClient` (browser client) at module scope via `createBrowserClient(...)`. API routes import `lib/supabase.ts` for server functions — when Next.js collects page data during build it evaluates the module, triggering `createBrowserClient` with empty env vars and throwing `@supabase/ssr: Your project's URL and API key are required`. `force-dynamic` alone does not prevent module-level evaluation.
-- **Fix Applied**:
-  1. Created `frontend/lib/supabase-browser.ts` — lazy singleton browser client, instantiated only on first call at runtime via a `Proxy` wrapper. Never runs at module load time.
-  2. Removed `supabaseClient` and `createBrowserClient` import from `lib/supabase.ts`. That file now exports server-only functions exclusively.
-  3. Updated all 11 client components to import `supabaseClient` from `@/lib/supabase-browser`.
-- **Client components updated**:
-  - `app/login/page.tsx`
-  - `app/signup/page.tsx`
-  - `app/onboarding/activate/page.tsx`
-  - `components/settings/McpSettings.tsx`
-  - `components/event-log/EventLogClient.tsx`
-  - `components/providers/RealtimeProvider.tsx`
-  - `components/providers/LayoutStoreHydrator.tsx`
-  - `components/dashboard/NotificationDropdown.tsx`
-  - `components/dashboard/LiveEventsPanel.tsx`
-  - `components/war-room/WarRoom.tsx`
-  - `components/onboarding/OnboardingLogoutButton.tsx`
-- **Impact**: `npm run build` completes with 0 errors. Browser client is never instantiated server-side. Server-side routes remain isolated to service-role and SSR clients only.
-- **Render Env Vars Required**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` must be set in Render dashboard for runtime to function.
-
-### Model Name Correction
-**File**: `frontend/app/api/toggle/route.ts`
-- **Fix**: Changed `model_name` from `'cloud/groq-llama'` to `'groq/llama-3.3-70b-versatile'`
-- **Impact**: Matches LiteLLM router; model selection now correctly routes requests
-
-### Render Configuration
-**File**: `render.yaml`
-- **Web Service**:
-  - Added `rootDir: frontend` to clarify working directory
-  - Removed redundant `cd frontend &&` from `buildCommand` (now: `npm ci && npm run build`)
-  - Removed redundant `cd frontend &&` from `startCommand` (now: `npm start`)
-- **Worker Service**:
-  - Kept `cd frontend &&` prefix (scripts/worker.ts is at repo root)
-  - `startCommand: cd frontend && npx tsx ../scripts/worker.ts`
-- **Impact**: Render dashboard Root Directory setting now works with buildCommand
-
-### Local Font Files (Zero External Requests) — RESTORED Weights
-**Files**: 
-- `frontend/public/fonts/` (14 font files: Syne 400-800, DM Mono 300-500, DM Sans 300-800)
-- `frontend/styles/fonts.css` (Updated: @font-face declarations for all 14 weights)
-- `frontend/app/layout.tsx` (Confirmed: imports `fonts.css`)
-
-- **Root Cause**: Previous build optimization replaced original high-quality fonts with low-resolution placeholders (1.6KB files), causing a "defaulted" look.
-- **Fix Applied**: 
-  1. Purged 1.6KB corrupt font placeholders from `public/fonts/`.
-  2. Downloaded all 14 original weights from Google Fonts GitHub repo:
-     - **Syne**: 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold), 800 (ExtraBold)
-     - **DM Mono**: 300 (Light), 400 (Regular), 500 (Medium)
-     - **DM Sans**: 300 (Light), 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold), 800 (ExtraBold)
-  3. Rewrote `frontend/styles/fonts.css` to correctly reference these local files with proper `font-weight` and `font-display: swap`.
-- **Impact**: 
-  - Restored the "premium" aesthetic specified in `crost_ui.jsx`.
-  - Maintained zero external network requests for fonts during build and runtime.
-  - Full font coverage for all weights used in the dashboard design.
-
-### npm Network Resilience
-**File**: `frontend/.npmrc` (new)
-- **Root Cause**: Render build VMs experience transient `ENETUNREACH` errors when fetching packages from `registry.npmjs.org`
-- **Fix**: Added `.npmrc` with retry and timeout settings:
-  - `fetch-retries=5` (default 2)
-  - `fetch-retry-mintimeout=20000` (20s min backoff)
-  - `fetch-retry-maxtimeout=120000` (2min max backoff)
-  - `fetch-timeout=300000` (5min overall timeout)
-- **Impact**: `npm ci` survives transient Render network blips instead of failing immediately
-
-### Worker Service Module Resolution
-**Files**: 
-- `render.yaml` (worker service)
-- `package.json` (root)
-
-- **Problem 1**: Worker crashed with "cannot find module at scripts/worker.ts" on initial Render deploy
-  - **Root Cause**: Worker running from wrong directory; path resolution failed
-  - **First Fix**: Set `rootDir: .` and changed startCommand to `npx tsx scripts/worker.ts`
-  - **Result**: Path fixed but `npx tsx` still couldn't find modules
-
-- **Problem 2**: Worker crashed again with "Cannot find module 'dotenv'"
-  - **Root Cause**: `npx tsx` doesn't guarantee access to project `node_modules`
-  - **Final Fix**:
-    - Added `"worker": "tsx scripts/worker.ts"` script to root `package.json`
-    - Updated `startCommand` to `npm run worker` (npm ensures proper module resolution)
-    - Ensured `tsx`, `dotenv`, and dependencies in root `package.json` (moved from devDependencies to main dependencies)
-    - Set `buildCommand: npm ci && npm ci --prefix frontend` (installs at both levels)
-
-- **Impact**: Worker now executes with proper NODE_PATH and module resolution via npm script context
-
-### ESLint Rule Removal
-**File**: `frontend/.eslintrc.json`
-- **Issue**: Rule `@typescript-eslint/no-explicit-any` referenced undefined plugin; caused 60+ file build failures
-- **Fix**: Removed the rule definition (rule was non-critical warning anyway)
-- **Impact**: Build completes without plugin-not-found errors
-
-### TypeScript Error Fixes
-1. **File**: `frontend/app/departments/[slug]/page.tsx`
-   - Fixed: `dept.onyx_persona_id` → `dept.orc_persona_id`
-
-2. **File**: `frontend/app/api/onboarding/first-goal/route.ts`
-   - Fixed: Added explicit type annotation `(task: any)` in `.map()` callback
-
-### Frontend Build Issues & Fixes
-
-**Issue 1: Module Resolution**
-- **Problem**: Build fails with "Can't resolve '@/components/...'" errors for files that DO exist
-- **Root Cause**: Stale `.next` build cache contains outdated module metadata
-- **Fix**: Added `rm -rf .next` to buildCommand before `npm run build`
-- **Status**: ✓ Resolved (files confirmed present on Render)
-
-**Issue 2: TypeScript Not Installed**
-- **Problem**: Next.js build fails with "typescript is not installed" despite being in devDependencies
-- **Root Cause**: Render sets `NODE_ENV=production` which causes `npm ci` to skip devDependencies
-- **Fix**: Use `npm ci --include=dev` to force installation of build tools
-- **Also Added**: Webpack alias config in next.config.js for explicit module resolution
-
-**Updated Build Command**: 
-```
-npm ci --include=dev && rm -rf .next && npm run build
-```
-
-**Impact**: Build now has access to TypeScript, ESLint, and all required compilation tools during Render deployment
+| Decision | Rationale | Commit |
+|----------|-----------|--------|
+| **BYOK Model Assignment** | Users bring their own API keys, assign models to roles (reasoning/execution/utility), system routes through LiteLLM | `5bd3c25`, `d8dc105` |
+| **LiteLLM as Unified Gateway** | Single OpenAI-compatible interface for all providers (Groq, Gemini, Claude) eliminates provider-specific SDK bloat | Ongoing |
+| **Strict Waterfall Execution** | Tasks block on incomplete dependencies AND memo verification — data-driven sequencing prevents hallucination | Core design |
+| **Memo System as Working Memory** | Foundational context (company profile) + current context (recent clarifications) injected into every Orc/worker call | `143b3f8` |
+| **Removed Onyx (LLM-Agnostic Tool Router)** | Replaced with direct Orchestrator planning + LiteLLM model selection (simpler, no extra abstraction) | Early |
+| **Multi-Tenant RLS from Day 1** | Security hardened: all tables gated by `created_by`; permissive MVP policies deleted | `20260410040000_fix_rls_and_schema` |
+| **Event-Driven Worker (Zero Poll)** | Realtime subscriptions + in-memory watchdog timers replace periodic heartbeats (lower egress, faster response) | `scripts/worker.ts` |
+| **No Direct Provider API Calls** | Frontend credential-agnostic; all requests via LiteLLM proxy (v5.6 fix) | `7d42cdc` |
+| **Force-Dynamic All API Routes** | Next.js static pre-rendering breaks Supabase client at module load; dynamic rendering prevents build-time errors | All 35 routes |
+| **Local Font Files** | Zero external network requests during build/runtime; full 14 weights (Syne, DM Mono, DM Sans) | `53c1d84` |
+| **Lazy Singleton Browser Client** | `lib/supabase-browser.ts` instantiated only at runtime (never at module load); prevents build-time Supabase initialization error | `lib/supabase-browser.ts` |
+| **Health Check via /health/liveliness** | Groq/Gemini direct checks removed (v5.6); only verify LiteLLM gateway (delegating provider health to proxy) | `7d42cdc`, `20dbb4e` |
 
 ---
 
-## 8.2 Build Verification
+## 5. Known Gaps
 
-✅ **Build Status**: `npm run build` completes successfully (22 pages, 0 errors)
-✅ **Warnings Only**: Non-blocking warnings in ArtifactCard.tsx (`<img>` tag optimization)
-✅ **API Routes**: All 35 routes properly exported with `dynamic = 'force-dynamic'`
-✅ **Environment**: Ready for Render deployment with all env vars properly gated
-✅ **Browser/Server Isolation**: `lib/supabase.ts` is server-only; browser client lives in `lib/supabase-browser.ts` (lazy singleton)
+### Security
+- API keys stored plaintext in `user_api_keys` table (TODO: encrypt with libsodium)
+- No rate limiting enforced per user (token budget checked but not hard-blocked)
+- No audit log for API key access/rotation
 
----
+### Performance
+- LiteLLM runs on standard Render containers (no GPU acceleration)
+- Worker uses polling + watchdog (not true Realtime event delegation)
+- No request caching or batch operations
 
-## 8.3 LiteLLM Gateway Service
+### Features
+- No artifact preview in UI (large outputs stored as text only)
+- No retry logic for failed tasks (manual approval required)
+- No conversation branching (single linear goal thread)
+- No export/sharing of goals or synthesis reports
 
-**Service**: `crost-litellm` (Docker-based)
-- **Runtime**: Docker (Python 3.11 + LiteLLM from PyPI)
-- **Base Image**: `python:3.11-slim`
-- **Port**: 4000
-- **Health Check**: `GET /health`
-- **Configuration**: See `litellm/README.md`
-
-**Docker Implementation:**
-- Builds from Python 3.11 base image (lightweight, x86_64 compatible)
-- Installs LiteLLM with `[proxy]` extras (websockets, uvicorn, fastapi)
-- Installs `gettext-base` for `envsubst` (environment variable substitution)
-- Copies `config.yaml` template and `entrypoint.sh` into container
-- Entrypoint script substitutes environment variables before starting LiteLLM
-
-**Entrypoint Script (`litellm/entrypoint.sh`):**
-- Uses `envsubst` to substitute `${VAR}` with environment variables
-- Writes final config to `config.generated.yaml`
-- Starts LiteLLM with: `litellm --config /app/config.generated.yaml --port 4000 --host 0.0.0.0`
-
-**Configuration File (`litellm/config.yaml`):**
-- Template with `${VAR}` placeholders for:
-  - `${GROQ_API_KEY}` → Groq authentication
-  - `${GOOGLE_API_KEY}` → Gemini authentication
-  - `${ANTHROPIC_API_KEY}` → Claude authentication
-  - `${LITELLM_MASTER_KEY}` → Master API key
-- Defines available models (final configuration):
-  - `groq/llama-3.3-70b-versatile` (Groq, fast & free)
-  - `gemini-1.5-flash` (Google, direct API via generative-ai SDK)
-  - `claude-3-5-sonnet-20241022` (Anthropic)
-  - `claude-3-opus-20250219` (Anthropic)
-- Removed: `groq/llama-3.1-70b-versatile` (decommissioned by Groq)
-- Enables debug logging and pre-call checks
-
-**Required Environment Variables** (set in Render dashboard):
-- `LITELLM_MASTER_KEY` — Master API key (e.g., `sk-litellm-...`)
-- Provider API keys (at least one):
-  - `GROQ_API_KEY` — For Groq models (e.g., `llama-3.3-70b-versatile`)
-  - `GOOGLE_API_KEY` — For Gemini models
-  - `ANTHROPIC_API_KEY` — For Claude models
-  - `OPENAI_API_KEY` — For GPT models
-
-**How Frontend & Worker Communicate:**
-- Both services set `LITELLM_BASE_URL=https://crost-litellm.onrender.com`
-- Both services use `LITELLM_MASTER_KEY` for authentication
-- All LLM requests route through LiteLLM's unified `/v1/chat/completions` API
-
-**Setup Steps:**
-1. LiteLLM service auto-deploys when you push to GitHub (included in render.yaml)
-2. Obtain API keys from providers:
-   - Groq: https://console.groq.com
-   - Google: https://ai.google.dev
-   - Anthropic: https://console.anthropic.com
-3. Set environment variables in Render dashboard for `crost-litellm` service
-4. Set `LITELLM_BASE_URL` and `LITELLM_MASTER_KEY` in frontend/worker services
-5. Verify `/api/health` shows LiteLLM as `ok`
+### UX
+- ModelAssignmentForm shows outdated Gemini options (partially fixed v5.6)
+- DeptSettingsForm deprecated Claude versions removed (v5.6)
+- No onboarding guidance for first-time users
+- No model capability comparison UI
 
 ---
 
-## 8.4 Deployment Readiness
+## 6. Notes for Next Builder
 
-**Render Services:**
-- ✅ `crost-frontend` — Next.js web app (Node.js runtime)
-- ✅ `crost-worker` — Background task processor (Node.js runtime)
-- ✅ `crost-litellm` — LLM gateway (Docker runtime)
+### Critical Rules
+1. **All LLM requests MUST go through LiteLLM proxy** — No direct API calls to Groq, Gemini, Claude, or OpenAI endpoints
+2. **LITELLM_BASE_URL must be base URL only** — `https://crost-litellm.onrender.com` NOT `https://crost-litellm.onrender.com/v1` (code appends the path)
+3. **Frontend has NO model provider API keys** — Users' keys stay in LiteLLM environment only
+4. **Health checks verify LiteLLM, not providers** — Delegate provider health to the proxy
+5. **Memo System is the working memory** — Orc decisions depend on foundational + current context; always keep memos up-to-date
 
-**Deployment Checklist:**
-1. ✅ Pushed to GitHub (all services in render.yaml)
-2. ✅ Frontend builds successfully with TypeScript
-3. ✅ Worker module resolution fixed
-4. ✅ LiteLLM service configured with model definitions (current versions)
-5. ✅ Environment variable substitution working (entrypoint script)
-6. ✅ API keys configured in Render dashboard
-7. ✅ LiteLLM health check path fixed (`/health/liveliness` for Render)
-8. ✅ Port configuration explicit (`port: 4000`)
-9. ✅ Model assignments updated (Claude 4.6, Gemini 3.1, Groq 3.3)
-10. ⏳ Verify redeploy completes without timeout (awaiting redeploy)
-11. ⏳ Test frontend → Supabase connection
-12. ⏳ Test onboarding → goal creation → orchestrator calls LiteLLM
+### Build Gotchas
+- `NODE_ENV=production` in Render: set `npm ci --include=dev` to force devDependencies
+- Static pre-rendering breaks Supabase client: all API routes need `export const dynamic = 'force-dynamic'`
+- Stale `.next` cache causes module resolution failures: add `rm -rf .next` before build
+- Browser client must be lazy singleton in `lib/supabase-browser.ts` (never import at module scope)
+- TypeScript must be available at build time (not just devDependencies)
 
-**Current System Status:**
-- ✅ Frontend deployed and running on Render
-- ✅ Worker deployed and running on Render  
-- ✅ LiteLLM proxy deployed and responding to liveness checks
-- ✅ API keys configured and being passed to LLM providers
-- ✅ Model configuration corrected: Groq, Gemini, Claude routed correctly
-- ✅ Health check fixed: Using `/health/liveliness` (unauthenticated) for Render
-- ✅ Model assignments updated to current versions (Claude 4.6, Gemini 3.1, Groq 3.3)
+### Deployment Checklist
+- [ ] Set `LITELLM_BASE_URL` (base only, no /v1)
+- [ ] Set `LITELLM_MASTER_KEY` (any random string, e.g., `sk-litellm-xxxxx`)
+- [ ] Set provider API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`
+- [ ] Set Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] Run all migrations in order (orc_upgrade → rls_policies → multitenant fixes → current_context → user_model_config)
+- [ ] Verify `/api/health` returns all services as `ok`
+- [ ] Test onboarding flow (company profile → goal creation)
+- [ ] Monitor worker logs for stall detection + escalation
 
-**LiteLLM Deployment Journey:**
-1. Docker architecture issue → Fixed with Python 3.11 base image
-2. Missing proxy dependencies → Fixed with `litellm[proxy]` extras
-3. Missing model definitions → Created config.yaml with model routes
-4. Environment variable substitution → Created entrypoint script with `envsubst`
-5. Model name mismatches → Removed prefixes to match provider API specs
-6. Model decommissioning & dependency issues → Updated to current versions:
-   - Removed `groq/llama-3.1-70b-versatile` (decommissioned by Groq on April 11, 2026)
-   - Changed `gemini-2.0-flash` to `gemini-1.5-flash` (avoids Vertex AI dependencies)
-   - Updated Claude models to `claude-sonnet-4.6` and `claude-opus-4.6` (latest Feb 2026)
-   - Kept `groq/llama-3.3-70b-versatile` (stable & healthy)
-7. Health check authentication → Fixed with `/health/liveliness` endpoint:
-   - `/health` endpoint requires LITELLM_MASTER_KEY → causes 401 → Render timeout
-   - `/health/liveliness` endpoint requires no auth → 200 OK → deployment succeeds
-   - Updated render.yaml `healthCheckPath: /health/liveliness` for Render health checks
-   - Added explicit `port: 4000` to render.yaml (was causing :4000 in health check URLs)
+### Architecture Patterns
+- **Orchestrator is the only planner** — Departments execute, don't plan
+- **Memos are immutable records** — Never mutate; append new findings
+- **Dependencies create sequencing** — Strict waterfall prevents concurrent/out-of-order execution
+- **Approvals halt execution** — Founder must explicitly approve before next phase
+- **Events are the audit trail** — All actions logged to `event_log` for post-mortem analysis
 
-**Known Limitations:**
-- API keys stored as-is in DB (TODO: encrypt with libsodium)
-- LiteLLM runs in standard Render container (no GPU acceleration)
-- Worker uses polling for Realtime events (single-instance constraint)
+### Testing Strategy
+- Unit test: Memo context injection (check Orc sees all relevant memos)
+- Unit test: Waterfall gating (verify tasks block on missing dependencies/memos)
+- Integration test: Orchestrator → LiteLLM round-trip (mocked LiteLLM response)
+- End-to-end: Founder input → Goal → Plan → Worker tasks → Synthesis (live Render)
+- Security: Verify RLS blocks cross-user access (test queries from different user contexts)
 
----
+### Common Pitfalls
+- ❌ Adding new departments without updating Orchestrator's available list
+- ❌ Modifying task model without checking LiteLLM config has that model
+- ❌ Storing large artifacts in memos (use `uploadArtifact()` to offload to Supabase Storage)
+- ❌ Calling LLM functions from client components (all LLM logic is server-side in `lib/llm-client.ts`)
+- ❌ Hardcoding API keys or URLs (always use environment variables)
+- ❌ Forgetting `force-dynamic` export on new API routes (causes static pre-rendering)
 
----
-
-## 8.5 Direct API Call Removal (April 11, 2026 - CRITICAL)
-
-**Problem:** Health endpoint and settings routes made direct API calls to Groq, Gemini, and Anthropic, bypassing LiteLLM gateway.
-- Groq: `https://api.groq.com/openai/v1/models` (requires GROQ_API_KEY in frontend)
-- Gemini: `https://generativelanguage.googleapis.com/v1beta/models` (requires GOOGLE_API_KEY in frontend)
-- These exposed credential requirements to the frontend, violating BYOK security model
-
-**Solution:** Route all LLM requests through LiteLLM proxy exclusively
-- Removed `checkGroq()` and `checkGemini()` functions from health endpoint
-- Health check now only verifies LiteLLM gateway status (`/health/liveliness`)
-- Frontend makes NO direct API calls to model providers
-- All model validation and testing goes through LiteLLM's unified `/v1/chat/completions` endpoint
-- Users' API keys stay in LiteLLM environment only, never exposed to frontend
-
-**Files Changed:**
-- `frontend/app/api/health/route.ts` — Removed direct Groq/Gemini checks
-- `frontend/lib/model-routing.ts` — Updated fallbacks: claude-opus-4.6, groq/llama-3.3-70b-versatile, gemini-1.5-flash
-- `frontend/app/api/settings/models/validate/route.ts` — Fixed test model names
-- `frontend/components/settings/ModelAssignmentForm.tsx` — Updated presets to current models only
-- `frontend/components/departments/DeptSettingsForm.tsx` — Removed deprecated Claude/Gemini versions
-
-**Model Name Corrections:**
-Old → New
-- `claude-3-5-haiku` → `claude-sonnet-4.6`
-- `claude-3-5-sonnet` → `claude-sonnet-4.6` or `claude-opus-4.6`
-- `gemini-2.0-flash` → `gemini-1.5-flash`
-- `mixtral-8x7b-32768` → `llama-3.3-70b-versatile`
-- `groq-mixtral-8x7b-32768` → `groq/llama-3.3-70b-versatile`
-
-**Impact:**
-✅ Frontend now credential-agnostic (no API keys needed)
-✅ Complete security isolation via LiteLLM gateway
-✅ BYOK model properly enforced (users provide keys only to LiteLLM)
-✅ All model requests follow OpenAI-compatible interface
-✅ Commit: 7d42cdc
-
----
-
-## 8.6 Latest Fixes (April 11, 2026 - 00:59 UTC)
-
-### LiteLLM Health Check Deployment Timeout Fix
-
-**Problem:** Render deployment timing out when waiting for LiteLLM health check
-- Render's health check was hitting `/health` endpoint
-- LiteLLM's `/health` requires LITELLM_MASTER_KEY authentication
-- Health check received 401 Unauthorized every 10 seconds
-- Render marked service as unhealthy and timeout after ~15 minutes
-
-**Solution:** Use `/health/liveliness` endpoint instead
-- LiteLLM exposes two health endpoints with different requirements:
-  - `/health` - Full model health check (requires master key) 
-  - `/health/liveliness` - Server liveness check (no auth required)
-- Updated `render.yaml` to use `healthCheckPath: /health/liveliness`
-- Removed invalid `allow_unauth_routes` config
-- Added explicit `port: 4000` declaration (was causing `:4000` in URLs)
-
-**Commits:**
-- `377ff79` - Updated model assignments to current versions
-- `5bd3c25` - Fixed LiteLLM config (removed decommissioned models)
-- `d8dc105` - Updated Claude to latest versions (4.6)
-- `daa4557` - Added port declaration, removed broken healthCheckPath
-- `453acb5` - Attempted `allow_unauth_routes` (reverted)
-- `20dbb4e` - **Final fix**: Use `/health/liveliness` for Render health checks
-
----
-
-*Crost: Think Global, Act Local. Built for the world's founders.*
-*Ready for solo founder deployment on Render. V5.4 — April 2026.*
+### Version History
+| Version | Date | Change |
+|---------|------|--------|
+| v5.6 | Apr 11 2026 | Direct API call removal, no frontend credentials, LiteLLM-only routing |
+| v5.5 | Apr 11 2026 | Orchestrator model fix, render.yaml port fix, health endpoint fixes |
+| v5.4 | Apr 11 2026 | LiteLLM health check auth fix, model updates (Groq 3.3, Gemini 1.5, Claude 4.6) |
+| v5.3 | Apr 10 2026 | Force-dynamic exports, browser/server isolation, font restoration, npm resilience |
+| v5.2 | Apr 10 2026 | Worker module resolution fix, ESLint cleanup |
+| v5.1 | Apr 10 2026 | Render deployment baseline, health checks, model assignment |
