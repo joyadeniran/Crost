@@ -92,12 +92,19 @@ export default function ActivatePage() {
         body: JSON.stringify({ goal })
       })
       const data = await res.json()
-      
+
       if (data.plan) {
         setOrcPlan(data.plan)
         setFirstGoal(goal)
       }
-      
+
+      // Hand the goal ID to the War Room via localStorage.
+      // The hard redirect clears React state, so the War Room reads this key on mount
+      // and loads the pending goal so the founder sees the plan immediately.
+      if (data.goal_id) {
+        try { localStorage.setItem('crost-pending-goal-id', data.goal_id) } catch {}
+      }
+
       // Successfully got plan, finalize progress
       setProgress(4)
       setTimeout(finalizeAndRedirect, 2000)
