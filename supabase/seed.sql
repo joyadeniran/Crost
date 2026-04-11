@@ -23,12 +23,12 @@ Every task must have a non-empty reasoning field. A task without reasoning is a 
   '["goal_decomposition","department_coordination","risk_assessment","json_planning"]',
   '["cannot_execute_tasks_directly","cannot_contact_customers","json_output_only"]',
   '[]',
-  'gemini', 'cloud/gemini-pro', 'cpu', '#818cf8',
+  'gemini', 'gemini/gemini-1.5-pro', 'cpu', '#818cf8',
   'active', TRUE
 )
 ON CONFLICT (slug) DO NOTHING;
 
--- 2. Sales (local by default — retailer/customer data stays on machine)
+-- 2. Sales (Fast inference via Groq)
 INSERT INTO departments (
   name, slug, persona_prompt, capabilities, restrictions,
   tools, model_provider, model_name, icon, color,
@@ -52,12 +52,12 @@ YOUR RULES:
   '["supabase_query_readonly","retailer_data_analysis","pipeline_reporting","lead_filtering"]',
   '["cannot_write_to_database","cannot_send_messages","cannot_share_raw_customer_data"]',
   '["supabase_query"]',
-  'gemini', 'cloud/gemini-pro', 'handshake', '#22c55e',
+  'groq', 'groq/llama3-70b-8192', 'handshake', '#22c55e',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;
 
--- 3. Marketing (cloud by default — creative output benefits from stronger model)
+-- 3. Marketing (Fast inference via Groq)
 INSERT INTO departments (
   name, slug, persona_prompt, capabilities, restrictions,
   tools, model_provider, model_name, icon, color,
@@ -82,12 +82,12 @@ YOUR RULES:
   '["draft_whatsapp_templates","draft_email_campaigns","draft_social_posts","draft_promotional_copy"]',
   '["cannot_send_messages","cannot_access_customer_contacts","cannot_make_pricing_commitments"]',
   '["gmail_draft"]',
-  'gemini', 'cloud/gemini-pro', 'megaphone', '#ec4899',
+  'groq', 'groq/llama3-70b-8192', 'megaphone', '#ec4899',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;
 
--- 4. Ops (local by default — business data stays on machine)
+-- 4. Ops (Fast inference via Groq)
 INSERT INTO departments (
   name, slug, persona_prompt, capabilities, restrictions,
   tools, model_provider, model_name, icon, color,
@@ -111,7 +111,29 @@ YOUR RULES:
   '["supabase_query_readonly","web_search","inventory_monitoring","credit_limit_review","supplier_status"]',
   '["cannot_modify_inventory","cannot_change_credit_limits","cannot_make_purchases"]',
   '["supabase_query","web_search"]',
-  'gemini', 'cloud/gemini-pro', 'settings-2', '#14b8a6',
+  'groq', 'groq/llama3-70b-8192', 'settings-2', '#14b8a6',
+  'active', FALSE
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- 5. Finance (Fast inference via Groq)
+INSERT INTO departments (
+  name, slug, persona_prompt, capabilities, restrictions,
+  tools, model_provider, model_name, icon, color,
+  activation_stage, is_orchestrator
+)
+VALUES (
+  'Finance', 'finance',
+  'You are the Finance Department. You manage burn rate, runway, and financial strategy.
+
+YOUR RULES:
+- NEVER commit funds or authorize payments without approval.
+- ALWAYS flag low runway (< 6 months).
+- BRAIN over TOOL: Use your financial strategy brain before querying raw ledgers.',
+  '["burn_rate_analysis","runway_modeling","budget_planning"]',
+  '["cannot_authorize_payments","cannot_modify_ledgers"]',
+  '["supabase_query"]',
+  'groq', 'groq/llama3-70b-8192', 'bar-chart-3', '#a855f7',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;

@@ -18,7 +18,8 @@
 - ✅ **LiteLLM Proxy Gateway** — Unified OpenAI-compatible interface for all LLM requests (Groq, Gemini, Claude)
 - ✅ **Memo System** — Foundational context + current context for dynamic knowledge injection
 - ✅ **Orchestrator (Orc v2.5)** — Chief of Staff that reads state, plans tasks, synthesizes results
-- ✅ **Waterfall Execution Engine** — Strict dependency gating with memo verification (data-driven sequencing)
+- ✅ **Internal Tool Execution Engine** — Real (not mocked) `supabase_query` and `company_memos` tools for research
+- ✅ **Strict Waterfall Execution** — Dependency gating verified by both task status AND physical memo existence
 - ✅ **BYOK Model Assignment** — Users provide API keys, select models per role (reasoning/execution/utility)
 - ✅ **Multi-Tenant Security (RLS)** — Hardened Supabase policies, users only access own goals/memos/tasks
 - ✅ **Event-Driven Worker Supervision** — Zero-poll architecture with Realtime subscriptions + watchdog timers
@@ -94,6 +95,9 @@
 - [x] **Settings Identity Persistence** — company_profile fallback query
 - [x] **Onboarding Department Selection** — Global template cloning fixed
 - [x] **Model Presets** — All Gemini 1.5 Flash → 2.5 Flash
+- [x] **Model Standardisation** — Replaced `cloud/*` names with correct LiteLLM prefixes (`gemini/`, `groq/`)
+- [x] **Finance Department** — Added template to seed and DB; updated wizard options
+- [x] **Constitution** — Verified single source of truth in DB; editor correctly handles core clauses
 
 **PREVIOUSLY COMPLETED**
 - [x] **Encrypt User API Keys** — AES-256-GCM via `lib/crypto.ts`, set `USER_API_ENCRYPTION_KEY` in Render dashboard

@@ -4,6 +4,8 @@
 // Server-side ONLY — never import from a client component.
 
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { decryptApiKey } from './crypto'
+import { getModelForTask } from './model-routing'
 import type {
   Department,
   OrchestratorPlan,
@@ -23,14 +25,34 @@ const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL ?? 'http://localhost:4000'
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || process.env.LITELLM_KEY
 
-export function getModel(taskType: 'planning' | 'execution' | 'analysis' | 'summarization'): string {
+export async function getModel(
+  taskType: 'planning' | 'execution' | 'analysis' | 'summarization',
+  userId?: string | null
+): Promise<{ model: string; provider?: string }> {
+  const roleMap: Record<string, string> = {
+    planning: 'orc_planning',
+    execution: 'tool_execution',
+    analysis: 'analysis',
+    summarization: 'synthesis'
+  }
+  const role = roleMap[taskType] || 'tool_execution'
+
+  if (userId) {
+    try {
+      return await getModelForTask(userId, role)
+    } catch (err) {
+      console.warn(`[llm-client] Failed to fetch model for role ${role}, using fallback`)
+    }
+  }
+
   const MODELS: Record<string, string> = {
     planning: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
     execution: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile',
     analysis: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
     summarization: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
   }
-  return MODELS[taskType] || MODELS.execution
+  const model = MODELS[taskType] || MODELS.execution
+  return { model, provider: model.split('/')[0] }
 }
 
 // Default fallback tone when local_identity not yet set
@@ -352,12 +374,45 @@ async function saveContextMemo(goalId: string, content: string, userId: string |
 async function callLiteLLM(
   model: string, 
   prompt: string, 
-  systemNote?: string
+  systemNote?: string,
+  userId?: string | null,
+  providerOverride?: string
 ): Promise<{ content: string; tokensUsed: number }> {
   // Map internal slugs to LiteLLM config names if needed
   let modelName = model
-  if (model === 'cloud' || model === 'local') {
-    modelName = getModel('execution')
+  let apiKey: string | null = null
+
+  if (userId) {
+    const supabase = createServerSupabaseClient()
+    
+    // Determine provider if not explicitly passed
+    let provider = providerOverride
+    if (!provider) {
+       const { data: assignment } = await supabase
+        .from('user_model_assignments')
+        .select('provider')
+        .eq('created_by', userId)
+        .eq('model_name', model)
+        .maybeSingle()
+       provider = assignment?.provider
+    }
+
+    if (provider) {
+      const { data: keyRow } = await supabase
+        .from('user_api_keys')
+        .select('encrypted_key')
+        .eq('created_by', userId)
+        .eq('provider', provider)
+        .maybeSingle()
+      
+      if (keyRow) {
+        try {
+          apiKey = decryptApiKey(keyRow.encrypted_key)
+        } catch (e) {
+          console.error(`[callLiteLLM] Decryption failed for user ${userId} / ${provider}`, e)
+        }
+      }
+    }
   }
 
   const messages: any[] = []
@@ -366,17 +421,24 @@ async function callLiteLLM(
   }
   messages.push({ role: 'user', content: prompt })
 
+  const body: any = {
+    model: modelName,
+    messages,
+    temperature: 0.3,
+  }
+
+  // Pass user's own API key to LiteLLM if we have it
+  if (apiKey) {
+    body.api_key = apiKey
+  }
+
   const res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
     },
-    body: JSON.stringify({
-      model: modelName,
-      messages,
-      temperature: 0.3,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -394,9 +456,11 @@ async function callLiteLLM(
 export async function callLLM(
   model: string,
   prompt: string,
-  systemNote?: string
+  systemNote?: string,
+  userId?: string | null,
+  providerOverride?: string
 ): Promise<{ content: string; tokensUsed: number }> {
-  return callLiteLLM(model, prompt, systemNote)
+  return callLiteLLM(model, prompt, systemNote, userId, providerOverride)
 }
 
 // ─── Token budget check ─────────────────────────────────────────────────────
@@ -560,7 +624,8 @@ export async function runOrchestratorTask(
   const budget = await checkTokenBudget()
   if (!budget.allowed) throw new Error('TOKEN_BUDGET_EXCEEDED')
 
-  const { content, tokensUsed } = await callLLM(getModel('planning'), finalPrompt, ORCHESTRATOR_SYSTEM_NOTE)
+  const { model: planModel, provider: planProvider } = await getModel('planning', userId)
+  const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
   const result = parseOrchestratorResponse(content)
   
   if (!result.ok) throw new Error(result.reason)
@@ -577,6 +642,9 @@ export async function runOrchestratorTask(
   await supabase.from('goal_tasks').delete().eq('goal_id', goalId).in('status', ['pending', 'planned', 'awaiting_approval'])
 
   if (plan.tasks.length > 0) {
+    // Determine default model for tasks if not specified in plan
+    const { model: execModel } = await getModel('execution', userId)
+
     const taskRows = plan.tasks.map((t: any) => ({
       goal_id: goalId,
       task_id: t.id,
@@ -589,7 +657,7 @@ export async function runOrchestratorTask(
       params: t.params,
       risk_level: t.risk_level,
       depends_on: t.depends_on,
-      model: t.model,
+      model: t.model === 'cloud' ? execModel : (t.model || execModel),
       status: 'pending',
     }))
     await supabase.from('goal_tasks').insert(taskRows)
@@ -637,7 +705,13 @@ export async function runWorkerTask(
     goalId
   )
 
-  const { content, tokensUsed } = await callLLM(task.model || getModel('execution'), finalPrompt)
+  let modelName = task.model
+  if (!modelName || modelName === 'cloud' || modelName === 'local') {
+    const { model: execModel } = await getModel('execution', userId)
+    modelName = execModel
+  }
+
+  const { content, tokensUsed } = await callLLM(modelName, finalPrompt, undefined, userId)
 
   const approvalRequest = parseApprovalRequest(content)
   if (approvalRequest === 'BLOCKED') throw new Error('APPROVAL_PARSE_BLOCKED')
@@ -668,8 +742,26 @@ export async function runWorkerTask(
       const parsed = JSON.parse(jsonMatch[0])
       workerResult.status = parsed.needs_more_data ? 'needs_data' : 'completed'
       workerResult.result = parsed
-      workerResult.memo_summary = parsed.summary || content.slice(0, 200)
+      workerResult.memo_summary = parsed.summary || content.slice(0, 500)
     } catch (e) { console.error('Worker JSON parse fail', e) }
+  }
+
+  // Artefact Logic: If content is large or explicitly requested, save as artifact
+  let artifactUrl: string | null = null
+  if (content.length > 1000) {
+    artifactUrl = await uploadArtifact(goalId || null, task.id, content)
+    if (artifactUrl) {
+      await supabase.from('artifacts').insert({
+        goal_id: goalId || null,
+        created_by: userId,
+        department_slug: dept,
+        department_id: deptRow.id,
+        artifact_type: 'document',
+        title: `Output: ${task.label}`,
+        file_url: artifactUrl,
+        metadata: { task_id: task.id, action: task.action }
+      })
+    }
   }
 
   await supabase.from('company_memos').insert({
@@ -678,7 +770,7 @@ export async function runWorkerTask(
     from_department: deptRow.name,
     from_department_id: deptRow.id,
     title: `[${task.action}] ${task.label}`,
-    body: formatMemoBody(workerResult.memo_summary),
+    body: formatMemoBody(workerResult.memo_summary + (artifactUrl ? `\n\nFull output saved as artifact: ${artifactUrl}` : '')),
     tags: [task.action, dept],
     confidence: 0.8,
     source_type: 'agent',
@@ -719,7 +811,8 @@ export async function runOrcReport(goalId: string): Promise<void> {
   const prompt = `Goal: ${goal.founder_input}\n\nFindings:\n${context}\n\nSynthesize into a strategic report.`
 
   try {
-    const { content } = await callLLM(CLOUD_MODEL, prompt, "You are the Orc Chief of Staff. Synthesize results.")
+    const { model: reportModel } = await getModel('summarization', goal.created_by)
+    const { content } = await callLLM(reportModel, prompt, "You are the Orc Chief of Staff. Synthesize results.", goal.created_by)
     await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',

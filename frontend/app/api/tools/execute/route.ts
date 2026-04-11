@@ -50,7 +50,29 @@ export async function POST(req: NextRequest) {
 
     // 4. Fallback to Mock Registry (for other tools not yet upgraded to Nango)
     const MOCK_TOOLS: Record<string, (params: any, context: any) => Promise<any>> = {
-      supabase_query: async (p) => ({ status: 'success', query: p.query, rows: [{ id: 1, revenue: 1200 }] }),
+      supabase_query: async (p) => {
+        if (!p.query) throw new Error('Query parameter is required')
+        const { data, error } = await supabase.rpc('read_only_query', { query_text: p.query })
+        if (error) throw error
+        return { status: 'success', query: p.query, rows: data }
+      },
+      company_memos: async (p, ctx) => {
+        const query = supabase
+          .from('company_memos')
+          .select('title, body, from_department, priority, created_at')
+          .order('created_at', { ascending: false })
+          .limit(p.limit || 5)
+        
+        if (ctx.goal_id) {
+          query.eq('goal_id', ctx.goal_id)
+        } else {
+          query.eq('created_by', user.id)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        return { status: 'success', memos: data }
+      },
       get_sales_data: async (p) => ({ status: 'success', revenue: '$14,250.00' }),
       save_document: async (p, ctx) => {
         const { data } = await supabase.from('artifacts').insert({

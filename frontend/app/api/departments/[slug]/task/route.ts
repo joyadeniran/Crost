@@ -109,10 +109,10 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   try {
     // Build constitution-first prompt
-    const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task)
+    const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug)
 
     // Cloud-only path
-    const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt)
+    const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt, undefined, dept.created_by)
     answer = content
     tokensUsed = used
 

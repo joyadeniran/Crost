@@ -78,14 +78,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     // ─── CHAIN REACTION HANDLER ─────────────────────────────────────────────
     if (task_id === 'CHAIN_REACTION') {
       console.log(`[Dispatch] Chain Reaction triggered for goal ${goal.id}`)
-      const { data: allTasks } = await supabase.from('goal_tasks').select('*').eq('goal_id', goal.id)
+      const [{ data: allTasks }, { data: allMemos }] = await Promise.all([
+        supabase.from('goal_tasks').select('*').eq('goal_id', goal.id),
+        supabase.from('company_memos').select('task_id').eq('goal_id', goal.id)
+      ])
+      
       const planned = (allTasks || []).filter(t => t.status === 'planned')
+      const memoIds = new Set((allMemos || []).map(m => m.task_id))
       
       let count = 0
       for (const t of planned) {
         const blockers = (t.depends_on || []).filter((depId: string) => {
           const depTask = (allTasks || []).find(at => at.task_id === depId)
-          return !depTask || depTask.status !== 'completed'
+          return !depTask || depTask.status !== 'completed' || !memoIds.has(depId)
         })
         
         if (blockers.length === 0) {
@@ -134,14 +139,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // ─── Depends_on enforcement ───────────────────────────────────────────────
     if (task.depends_on && task.depends_on.length > 0) {
-      const { data: depTasks } = await supabase
-        .from('goal_tasks')
-        .select('task_id, status')
-        .eq('goal_id', params.id)
-        .in('task_id', task.depends_on)
+      const [{ data: depTasks }, { data: depMemos }] = await Promise.all([
+        supabase.from('goal_tasks').select('task_id, status').eq('goal_id', params.id).in('task_id', task.depends_on),
+        supabase.from('company_memos').select('task_id').eq('goal_id', params.id).in('task_id', task.depends_on)
+      ])
 
       const depList = depTasks ?? []
-      const finishedIds = depList.filter(d => d.status === 'completed').map(d => d.task_id)
+      const memoIds = new Set((depMemos ?? []).map(m => m.task_id))
+      
+      const finishedIds = depList.filter(d => d.status === 'completed' && memoIds.has(d.task_id)).map(d => d.task_id)
       const missingOrPending = task.depends_on.filter(id => !finishedIds.includes(id))
 
       if (missingOrPending.length > 0) {
