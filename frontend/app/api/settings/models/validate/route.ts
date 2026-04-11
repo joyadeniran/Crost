@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { encryptApiKey } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,14 +64,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Store encrypted key
+    // Store encrypted key (AES-256-GCM, key from USER_API_ENCRYPTION_KEY env var)
     const { error: insertError } = await supabase
       .from('user_api_keys')
       .upsert(
         {
           created_by: user.id,
           provider,
-          encrypted_key: api_key, // In production, encrypt this
+          encrypted_key: encryptApiKey(api_key),
           is_valid: true,
           last_validated_at: new Date().toISOString()
         },
