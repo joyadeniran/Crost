@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 5.6  
+**Current Version:** 5.7  
 **Last Updated:** April 11, 2026  
-**Deployment Status:** 🚀 Ready for Production (Pending manual Render config)
+**Deployment Status:** 🚀 Ready for Production (Pending manual Render config + USER_API_ENCRYPTION_KEY)
 
 ---
 
@@ -55,7 +55,7 @@
 
 - ⚠️ **LITELLM_BASE_URL Path Issue** — Render env var needs manual update to remove `/v1` suffix (causes doubled path like `/v1/chat/completions/v1/chat/completions`)
 - ⚠️ **Frontend Redeploy Pending** — Needs to pick up orchestrator model fix (eb74246) + health check fix (8e3504b)
-- ⚠️ **API Keys Unencrypted** — Stored as plaintext in DB (needs libsodium or similar encryption)
+- ✅ **API Keys Encrypted** — AES-256-GCM at rest (`lib/crypto.ts`), requires `USER_API_ENCRYPTION_KEY` in Render env
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
 - ⚠️ **No Artifact Preview** — Large outputs not rendered in UI, only stored as text
@@ -77,7 +77,7 @@
 - [ ] **Manual Render Config** — Update crost-frontend env var `LITELLM_BASE_URL` from `https://crost-litellm.onrender.com/v1` to `https://crost-litellm.onrender.com` (remove `/v1` path suffix)
 - [ ] **Trigger Frontend Redeploy** — Render dashboard → Services → crost-frontend → Manual Deploy
 - [ ] **Verify E2E Flow** — Create test goal → Check orchestrator calls LiteLLM → Verify worker executes → Check synthesis report generated
-- [ ] **Encrypt User API Keys** — Implement libsodium encryption for `user_api_keys.encrypted_key` column
+- [x] **Encrypt User API Keys** — AES-256-GCM via `lib/crypto.ts`, set `USER_API_ENCRYPTION_KEY` in Render dashboard (64-char hex: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - [ ] **Update UI Model Presets** — Finalize ModelAssignmentForm/DeptSettingsForm with gemini-2.0-flash or gemini-3.1-pro (when available)
 - [ ] **Add Retry Logic** — Implement exponential backoff for failed task re-execution
 - [ ] **WebSocket Realtime** — Replace polling with true event delegation for worker tasks
@@ -108,7 +108,7 @@
 ## 5. Known Gaps
 
 ### Security
-- API keys stored plaintext in `user_api_keys` table (TODO: encrypt with libsodium)
+- ✅ API keys encrypted at rest (AES-256-GCM via `lib/crypto.ts`) — requires `USER_API_ENCRYPTION_KEY` in Render
 - No rate limiting enforced per user (token budget checked but not hard-blocked)
 - No audit log for API key access/rotation
 
