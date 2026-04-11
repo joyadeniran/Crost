@@ -132,10 +132,20 @@ export async function POST(req: NextRequest) {
             .maybeSingle()
 
           if (template) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { id, created_at, updated_at, ...rest } = template
+            // Clone template: copy all fields except ID/timestamps, add user context
             await supabase.from('departments').insert({
-              ...rest,
+              name: template.name,
+              slug: template.slug,
+              persona_prompt: template.persona_prompt,
+              tone_override: template.tone_override,
+              capabilities: template.capabilities,
+              restrictions: template.restrictions,
+              tools: template.tools,
+              model_provider: template.model_provider,
+              model_name: template.model_name,
+              icon: template.icon,
+              color: template.color,
+              is_orchestrator: template.is_orchestrator,
               created_by: user.id,
               activation_stage: 'active',
               status: 'idle',
@@ -161,10 +171,20 @@ export async function POST(req: NextRequest) {
           .maybeSingle()
 
         if (orcTemplate) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { id, created_at, updated_at, ...rest } = orcTemplate
+          // Clone Orc template for this user
           await supabase.from('departments').insert({
-            ...rest,
+            name: orcTemplate.name,
+            slug: orcTemplate.slug,
+            persona_prompt: orcTemplate.persona_prompt,
+            tone_override: orcTemplate.tone_override,
+            capabilities: orcTemplate.capabilities,
+            restrictions: orcTemplate.restrictions,
+            tools: orcTemplate.tools,
+            model_provider: orcTemplate.model_provider,
+            model_name: orcTemplate.model_name,
+            icon: orcTemplate.icon,
+            color: orcTemplate.color,
+            is_orchestrator: orcTemplate.is_orchestrator,
             created_by: user.id,
             activation_stage: 'active',
             status: 'idle',
