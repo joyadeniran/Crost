@@ -8,36 +8,30 @@ model_list:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
 
-  # Google Gemini Models (Primary Orchestration)
+  # Google Gemini Models
   - model_name: gemini/gemini-2.5-flash
     litellm_params:
-      model: gemini/gemini-1.5-flash
-      api_key: os.environ/GEMINI_API_KEY
-
-  - model_name: gemini/gemini-1.5-pro
-    litellm_params:
-      model: gemini/gemini-1.5-pro
+      model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
 
   # Anthropic Claude Models
   - model_name: anthropic/claude-sonnet-4.6
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-20241022
+      model: anthropic/claude-sonnet-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: anthropic/claude-opus-4.6
     litellm_params:
-      model: anthropic/claude-3-opus-20240229
+      model: anthropic/claude-opus-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
 
 # General settings
-general:
-  master_key: ${LITELLM_MASTER_KEY}
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
   debug: true
   log_level: INFO
 
 # Router settings
-router:
-  # Enable dynamic rate limiting
+router_settings:
   enable_pre_call_checks: true
   rpm_limit: 100

@@ -574,7 +574,12 @@ function parseOrchestratorResponse(raw: string): any {
     if (parsed.is_valid_goal && parsed.plan?.tasks) {
       for (const t of parsed.plan.tasks) {
         t.id = crypto.randomUUID()
-        if (!t.model) t.model = CLOUD_MODEL
+        // Normalize legacy/invalid model aliases to 'cloud' sentinel so
+        // runWorkerTask resolves them via user_model_assignments at runtime
+        const isLegacyAlias = !t.model
+          || t.model.startsWith('cloud/')
+          || t.model.startsWith('local/')
+        if (isLegacyAlias) t.model = 'cloud'
       }
     }
     return { ok: true, ...parsed }
@@ -706,7 +711,14 @@ export async function runWorkerTask(
   )
 
   let modelName = task.model
-  if (!modelName || modelName === 'cloud' || modelName === 'local') {
+  // Resolve 'cloud'/'local' sentinels AND any legacy cloud/* or local/* aliases
+  // that may have been stored before the model naming was standardised
+  const isUnresolvedAlias = !modelName
+    || modelName === 'cloud'
+    || modelName === 'local'
+    || modelName.startsWith('cloud/')
+    || modelName.startsWith('local/')
+  if (isUnresolvedAlias) {
     const { model: execModel } = await getModel('execution', userId)
     modelName = execModel
   }

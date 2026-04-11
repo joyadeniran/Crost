@@ -23,7 +23,7 @@ Every task must have a non-empty reasoning field. A task without reasoning is a 
   '["goal_decomposition","department_coordination","risk_assessment","json_planning"]',
   '["cannot_execute_tasks_directly","cannot_contact_customers","json_output_only"]',
   '[]',
-  'gemini', 'gemini/gemini-1.5-pro', 'cpu', '#818cf8',
+  'gemini', 'gemini/gemini-2.5-flash', 'cpu', '#818cf8',
   'active', TRUE
 )
 ON CONFLICT (slug) DO NOTHING;
@@ -52,7 +52,7 @@ YOUR RULES:
   '["supabase_query_readonly","retailer_data_analysis","pipeline_reporting","lead_filtering"]',
   '["cannot_write_to_database","cannot_send_messages","cannot_share_raw_customer_data"]',
   '["supabase_query"]',
-  'groq', 'groq/llama3-70b-8192', 'handshake', '#22c55e',
+  'groq', 'groq/llama-3.3-70b-versatile', 'handshake', '#22c55e',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;
@@ -82,7 +82,7 @@ YOUR RULES:
   '["draft_whatsapp_templates","draft_email_campaigns","draft_social_posts","draft_promotional_copy"]',
   '["cannot_send_messages","cannot_access_customer_contacts","cannot_make_pricing_commitments"]',
   '["gmail_draft"]',
-  'groq', 'groq/llama3-70b-8192', 'megaphone', '#ec4899',
+  'groq', 'groq/llama-3.3-70b-versatile', 'megaphone', '#ec4899',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;
@@ -111,7 +111,7 @@ YOUR RULES:
   '["supabase_query_readonly","web_search","inventory_monitoring","credit_limit_review","supplier_status"]',
   '["cannot_modify_inventory","cannot_change_credit_limits","cannot_make_purchases"]',
   '["supabase_query","web_search"]',
-  'groq', 'groq/llama3-70b-8192', 'settings-2', '#14b8a6',
+  'groq', 'groq/llama-3.3-70b-versatile', 'settings-2', '#14b8a6',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;
@@ -133,7 +133,7 @@ YOUR RULES:
   '["burn_rate_analysis","runway_modeling","budget_planning"]',
   '["cannot_authorize_payments","cannot_modify_ledgers"]',
   '["supabase_query"]',
-  'groq', 'groq/llama3-70b-8192', 'bar-chart-3', '#a855f7',
+  'groq', 'groq/llama-3.3-70b-versatile', 'bar-chart-3', '#a855f7',
   'active', FALSE
 )
 ON CONFLICT (slug) DO NOTHING;

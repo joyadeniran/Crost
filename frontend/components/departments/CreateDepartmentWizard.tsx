@@ -27,11 +27,10 @@ const COLOR_OPTIONS = [
 ]
 
 const MODEL_OPTIONS = [
-  { value: 'local/gemma3',      label: 'Gemma 3 4B (Local)' },
-  { value: 'local/llama3',      label: 'Llama 3 8B (Local, code)' },
-  { value: 'gemini/gemini-1.5-pro',  label: 'Gemini 1.5 Pro (Cloud, Smart)' },
-  { value: 'anthropic/claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Cloud, Premium)' },
-  { value: 'groq/llama3-70b-8192',  label: 'Groq Llama 3 70B (Cloud, Fast)' },
+  { value: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B — Groq (fast, free tier)' },
+  { value: 'gemini/gemini-2.5-flash',       label: 'Gemini 2.5 Flash — Google' },
+  { value: 'anthropic/claude-sonnet-4.6',   label: 'Claude Sonnet 4.6 — Anthropic' },
+  { value: 'anthropic/claude-opus-4.6',     label: 'Claude Opus 4.6 — Anthropic (premium)' },
 ]
 
 const PRESET_CAPABILITIES = [
@@ -63,7 +62,7 @@ export function CreateDepartmentWizard({ onClose }: Props) {
   const [capabilities, setCapabilities] = useState<string[]>([])
   const [customCap, setCustomCap] = useState('')
   const [selectedTools, setSelectedTools] = useState<string[]>([])
-  const [modelName, setModelName] = useState('local/gemma3')
+  const [modelName, setModelName] = useState('groq/llama-3.3-70b-versatile')
 
   // Load from draft
   useEffect(() => {
@@ -129,7 +128,9 @@ export function CreateDepartmentWizard({ onClose }: Props) {
     setSubmitting(true)
     setError(null)
     try {
-      const provider = modelName.includes('/') ? modelName.split('/')[0] : 'local'
+      // Map LiteLLM prefix → DB model_provider enum ('local','gemini','claude','groq')
+      const prefix = modelName.includes('/') ? modelName.split('/')[0] : 'local'
+      const provider = prefix === 'anthropic' ? 'claude' : prefix
       const res = await fetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
