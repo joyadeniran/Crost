@@ -30,6 +30,7 @@ general:
   master_key: ${LITELLM_MASTER_KEY}
   debug: true
   log_level: DEBUG
+  allow_unauth_routes: ["/health"]
 
 # Router settings
 router:
