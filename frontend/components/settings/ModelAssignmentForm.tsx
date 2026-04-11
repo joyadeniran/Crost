@@ -8,17 +8,17 @@ const PRESETS = ['budget', 'fast', 'premium']
 
 const MODEL_MAP: Record<string, Record<string, string>> = {
   'claude': {
-    'budget': 'claude-haiku-4.5',
+    'budget': 'claude-sonnet-4.6',
     'fast': 'claude-sonnet-4.6',
     'premium': 'claude-opus-4.6'
   },
   'gemini': {
     'budget': 'gemini-1.5-flash',
-    'fast': 'gemini-3.1-pro',
-    'premium': 'gemini-3.1-pro'
+    'fast': 'gemini-1.5-flash',
+    'premium': 'gemini-1.5-flash'
   },
   'groq': {
-    'budget': 'mixtral-8x7b',
+    'budget': 'llama-3.3-70b-versatile',
     'fast': 'llama-3.3-70b-versatile',
     'premium': 'llama-3.3-70b-versatile'
   }
