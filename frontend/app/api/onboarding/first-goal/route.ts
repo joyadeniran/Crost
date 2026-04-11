@@ -49,28 +49,15 @@ export async function POST(req: NextRequest) {
     const res = await runOrchestratorTask(onboardingGoal, goalRow.id)
 
     if (res.plan) {
-      // 3. Write each task to approval_queue with status 'pending' (Following Spec)
-      // This makes them appear in the "Approvals" feed in the dashboard.
-      const approvalTasks = res.plan.tasks.map((task: any) => ({
-        goal_id: goalRow.id,
-        action_type: 'orchestrator_plan_task',
-        action_label: task.label,
-        reasoning: task.reasoning,
-        payload: task,
-        risk_level: task.risk_level,
-        status: 'pending'
-      }))
+      // Tasks are already in goal_tasks (inserted by runOrchestratorTask).
+      // Goal is in status 'awaiting_approval' with orchestrator_plan set.
+      // The War Room will pick this up via the pending goal ID stored in localStorage.
 
-      if (approvalTasks.length > 0) {
-        await supabase.from('approval_queue').insert(approvalTasks)
-      }
-      
-      // Mark onboarding complete in system_config
+      // Mark onboarding complete
       await supabase.from('system_config').upsert({
         key: 'onboarding_complete', value: true
       })
 
-      // NEW: Update user metadata to 'complete'
       await supabase.auth.admin.updateUserById(user.id, {
         user_metadata: { onboarding_step: 'complete' }
       })

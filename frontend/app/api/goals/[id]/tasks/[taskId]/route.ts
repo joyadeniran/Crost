@@ -1,6 +1,7 @@
 // PATCH /api/goals/[id]/tasks/[taskId]
-// Allows founder to manually set a task status (skip = 'rejected').
-// Restricted to 'rejected' only — other transitions go through the dispatch flow.
+// Allows founder to manually set a task status:
+//   'rejected' = skip (unblocks chain)
+//   'completed' = mark done override (forces completion for stuck tasks)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
 type Params = { params: { id: string; taskId: string } }
 
 const PatchTaskSchema = z.object({
-  status: z.enum(['rejected']),
+  status: z.enum(['rejected', 'completed']),
 })
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -48,8 +49,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     await supabase.from('event_log').insert({
       goal_id: params.id,
-      event_type: 'task_skipped',
-      description: `Task ${params.taskId} skipped by founder`,
+      event_type: status === 'completed' ? 'task_force_completed' : 'task_skipped',
+      description: status === 'completed'
+        ? `Task ${params.taskId} manually marked done by founder`
+        : `Task ${params.taskId} skipped by founder`,
       metadata: { task_id: params.taskId, goal_id: params.id },
       created_by: user.id,
     })

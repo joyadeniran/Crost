@@ -215,6 +215,7 @@ function TaskApprovalItem({
   onHold,
   onRetry,
   onSkip,
+  onMarkDone,
   departments,
 }: {
   task: OrchestratorTask
@@ -225,6 +226,7 @@ function TaskApprovalItem({
   onHold: () => void
   onRetry?: () => void
   onSkip?: () => void
+  onMarkDone?: () => void
   departments: Department[]
 }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -403,6 +405,22 @@ function TaskApprovalItem({
               </div>
             </div>
           )}
+          {(resolvedStatus === 'dispatched' || resolvedStatus === 'running') && onMarkDone && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{
+                fontFamily: 'var(--font-dm-sans, sans-serif)',
+                fontSize: 11,
+                color: '#60a5fa',
+                opacity: 0.7,
+                marginBottom: 6,
+              }}>
+                Task is running. If it finished outside the system, mark it done.
+              </div>
+              <button onClick={onMarkDone} style={btnStyle('#4ade80', '#4ade8022')}>
+                ✓ Mark Done
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 6 }}>
@@ -479,6 +497,7 @@ function PlanCard({
   onCancel,
   onRetry,
   onSkip,
+  onMarkDone,
   decisions,
   onApproveAll,
   departments,
@@ -491,6 +510,7 @@ function PlanCard({
   onCancel: () => void
   onRetry: (taskId: string) => void
   onSkip: (taskId: string) => void
+  onMarkDone: (taskId: string) => void
   decisions: Record<string, TaskDecision>
   onApproveAll: () => void
   departments: Department[]
@@ -609,6 +629,7 @@ function PlanCard({
             onHold={() => onHold(task.id)}
             onRetry={() => onRetry(task.id)}
             onSkip={() => onSkip(task.id)}
+            onMarkDone={() => onMarkDone(task.id)}
             departments={departments}
           />
         ))}
@@ -927,6 +948,23 @@ export function WarRoom() {
     setDecisions({})
   }, [activeGoal?.id])
 
+  // On mount: pick up any pending goal left by the onboarding flow
+  useEffect(() => {
+    if (activeGoal) return // already have a goal in store
+    try {
+      const pendingId = localStorage.getItem('crost-pending-goal-id')
+      if (!pendingId) return
+      localStorage.removeItem('crost-pending-goal-id')
+      fetch(`/api/goals/${pendingId}`)
+        .then(r => r.json())
+        .then(json => {
+          if (json.success && json.data) setActiveGoal(json.data)
+        })
+        .catch(() => {})
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Poll for plan when goal is in 'planning' or 'executing' or 'awaiting_approval' status
   useEffect(() => {
     if (!activeGoal || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoal.status)) return
@@ -1071,6 +1109,20 @@ export function WarRoom() {
     }
   }, [activeGoal])
 
+  const handleMarkDoneTask = useCallback(async (taskId: string) => {
+    if (!activeGoal) return
+    setDecisions(d => ({ ...d, [taskId]: 'approved' }))
+    try {
+      await fetch(`/api/goals/${activeGoal.id}/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+    } catch (err) {
+      console.error('[WarRoom] mark done failed', err)
+    }
+  }, [activeGoal])
+
   const isPlanning = activeGoal && ['pending', 'planning'].includes(activeGoal.status)
   const hasPlan = activeGoal && activeGoal.orchestrator_plan && activeGoal.status !== 'failed'
   const isClarifying = activeGoal?.status === 'clarifying'
@@ -1119,6 +1171,7 @@ export function WarRoom() {
           onCancel={handleCancelGoal}
           onRetry={handleRetryTask}
           onSkip={handleSkipTask}
+          onMarkDone={handleMarkDoneTask}
           onApproveAll={handleApproveAll}
           departments={departments}
         />
