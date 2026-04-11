@@ -171,5 +171,6 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO available_tools (id, label, description, requires_config, is_configured, risk_level) VALUES
 ('supabase_query', 'Supabase Query', 'Read-only query access to the founder''s Supabase database', TRUE, TRUE, 'low'),
 ('gmail_draft', 'Gmail / WhatsApp Draft', 'Draft emails and WhatsApp messages — never sends without approval', TRUE, FALSE, 'medium'),
-('web_search', 'Web Search', 'Search the web for market data, competitor research, and general information', FALSE, TRUE, 'low')
+('web_search', 'Web Search', 'Search the web for market data, competitor research, and general information', FALSE, TRUE, 'low'),
+('render_mcp', 'Render Service Manager', 'Manage Render services: trigger redeploys, check status, list services', TRUE, TRUE, 'medium')
 ON CONFLICT (id) DO NOTHING;
