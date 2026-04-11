@@ -1,6 +1,6 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.2 (Browser Client Isolation & Build Stability)
-**Last Updated:** April 10, 2026
+**Version:** 5.3 (LiteLLM Model Optimization & Health Verification)
+**Last Updated:** April 11, 2026
 **Deployment Status:** 🚀 Ready for Render
 **Purpose:** The single, definitive technical and operational specification of Crost.
 
@@ -343,7 +343,12 @@ npm ci --include=dev && rm -rf .next && npm run build
   - `${GOOGLE_API_KEY}` → Gemini authentication
   - `${ANTHROPIC_API_KEY}` → Claude authentication
   - `${LITELLM_MASTER_KEY}` → Master API key
-- Defines available models (Groq, Gemini, Claude)
+- Defines available models (final configuration):
+  - `groq/llama-3.3-70b-versatile` (Groq, fast & free)
+  - `gemini-1.5-flash` (Google, direct API via generative-ai SDK)
+  - `claude-3-5-sonnet-20241022` (Anthropic)
+  - `claude-3-opus-20250219` (Anthropic)
+- Removed: `groq/llama-3.1-70b-versatile` (decommissioned by Groq)
 - Enables debug logging and pre-call checks
 
 **Required Environment Variables** (set in Render dashboard):
@@ -382,10 +387,33 @@ npm ci --include=dev && rm -rf .next && npm run build
 1. ✅ Pushed to GitHub (all services in render.yaml)
 2. ✅ Frontend builds successfully with TypeScript
 3. ✅ Worker module resolution fixed
-4. ✅ LiteLLM service configured
-5. ⏳ Configure API keys in Render dashboard
-6. ⏳ Verify health checks at `/api/health` show all services as `ok`
-7. ⏳ Test onboarding → goal creation → orchestrator response
+4. ✅ LiteLLM service configured with model definitions
+5. ✅ Environment variable substitution working (entrypoint script)
+6. ✅ API keys configured in Render dashboard
+7. ✅ LiteLLM health check returning 200 OK
+8. ✅ All models verified healthy (groq/llama-3.3-70b, gemini-1.5-flash, claude models)
+9. ⏳ Test frontend → Supabase connection
+10. ⏳ Test onboarding → goal creation → orchestrator calls LiteLLM
+
+**Current System Status:**
+- ✅ Frontend deployed and running on Render
+- ✅ Worker deployed and running on Render  
+- ✅ LiteLLM proxy deployed and responding to health checks
+- ✅ API keys configured and being passed to LLM providers
+- ✅ Model configuration corrected: Groq, Gemini, Claude routed correctly
+- ✅ Health check shows 3/3 models healthy (groq/llama-3.3, gemini-1.5-flash, claude-3-5-sonnet)
+
+**LiteLLM Deployment Journey:**
+1. Docker architecture issue → Fixed with Python 3.11 base image
+2. Missing proxy dependencies → Fixed with `litellm[proxy]` extras
+3. Missing model definitions → Created config.yaml with model routes
+4. Environment variable substitution → Created entrypoint script with `envsubst`
+5. Model name mismatches → Removed prefixes to match provider API specs
+6. Model decommissioning & dependency issues → Final refinement:
+   - Removed `groq/llama-3.1-70b-versatile` (decommissioned by Groq)
+   - Changed `gemini-2.0-flash` to `gemini-1.5-flash` (avoids Vertex AI dependencies)
+   - Kept `groq/llama-3.3-70b-versatile` (stable & healthy)
+   - Kept Claude models `claude-3-5-sonnet` and `claude-3-opus` (stable & healthy)
 
 **Known Limitations:**
 - API keys stored as-is in DB (TODO: encrypt with libsodium)
@@ -395,4 +423,4 @@ npm ci --include=dev && rm -rf .next && npm run build
 ---
 
 *Crost: Think Global, Act Local. Built for the world's founders.*
-*Ready for solo founder deployment on Render. V5.1 — April 2026.*
+*Ready for solo founder deployment on Render. V5.3 — April 2026.*
