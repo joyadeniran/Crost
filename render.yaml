@@ -18,6 +18,10 @@ services:
         sync: false
       - key: LITELLM_MASTER_KEY
         sync: false
+      - key: CLOUD_MODEL
+        value: groq/llama-3.3-70b-versatile
+      - key: CLOUD_MODEL_WORKER
+        value: groq/llama-3.3-70b-versatile
     healthCheckPath: /api/health
 
   - type: web

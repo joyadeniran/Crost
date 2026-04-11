@@ -16,19 +16,19 @@ import { truncateString, cleanLargePayload, formatMemoBody } from './utils'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-// Default models - names must match litellm_config.yaml model_list
-export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'cloud/groq-llama'
-const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'cloud/groq-llama'
+// Default models - names must match litellm config.yaml model_list entries
+export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile'
+const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
 
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL ?? 'http://localhost:4000'
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || process.env.LITELLM_KEY
 
 export function getModel(taskType: 'planning' | 'execution' | 'analysis' | 'summarization'): string {
   const MODELS: Record<string, string> = {
-    planning: process.env.CLOUD_MODEL ?? 'cloud/groq-llama',
-    execution: process.env.CLOUD_MODEL_WORKER ?? 'cloud/groq-llama',
-    analysis: process.env.CLOUD_MODEL ?? 'cloud/groq-llama',
-    summarization: process.env.CLOUD_MODEL_WORKER ?? 'cloud/groq-llama'
+    planning: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
+    execution: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile',
+    analysis: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
+    summarization: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
   }
   return MODELS[taskType] || MODELS.execution
 }
