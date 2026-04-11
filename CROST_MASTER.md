@@ -1,7 +1,7 @@
 # Project Crost: Master Source of Truth
-**Version:** 5.5 (Orchestrator Model Fix & URL Path Correction)
-**Last Updated:** April 11, 2026 (Latest: 01:39 UTC)
-**Deployment Status:** 🚀 Ready for Render (Frontend redeploy pending)
+**Version:** 5.6 (Direct API Call Removal & Gateway Consolidation)
+**Last Updated:** April 11, 2026 (Latest: Direct API Fix)
+**Deployment Status:** 🚀 Ready for Render (All requests now via LiteLLM)
 **Purpose:** The single, definitive technical and operational specification of Crost.
 
 ---
@@ -120,13 +120,14 @@ See `RENDER_DEPLOYMENT.md` for step-by-step Render setup (web + worker services,
 
 ---
 
-## 8. Current Status (April 10, 2026)
+## 8. Current Status (April 11, 2026)
 
 ✅ **Phase 1-7 Complete**: All core features implemented.
-✅ **BYOK System**: Role-based model assignment with API key management.
+✅ **BYOK System**: Role-based model assignment with API key management (LiteLLM-only).
 ✅ **Render-Ready**: Web service + worker background job configured.
 ✅ **Build Fixed**: All TypeScript, ESLint, and static rendering errors resolved.
 ✅ **Deployment Verified**: Build succeeds with no blocking errors.
+✅ **Security Hardened**: No direct API calls to model providers; all requests via LiteLLM gateway.
 
 ---
 
@@ -432,7 +433,45 @@ npm ci --include=dev && rm -rf .next && npm run build
 
 ---
 
-## 8.5 Latest Fixes (April 11, 2026 - 00:59 UTC)
+## 8.5 Direct API Call Removal (April 11, 2026 - CRITICAL)
+
+**Problem:** Health endpoint and settings routes made direct API calls to Groq, Gemini, and Anthropic, bypassing LiteLLM gateway.
+- Groq: `https://api.groq.com/openai/v1/models` (requires GROQ_API_KEY in frontend)
+- Gemini: `https://generativelanguage.googleapis.com/v1beta/models` (requires GOOGLE_API_KEY in frontend)
+- These exposed credential requirements to the frontend, violating BYOK security model
+
+**Solution:** Route all LLM requests through LiteLLM proxy exclusively
+- Removed `checkGroq()` and `checkGemini()` functions from health endpoint
+- Health check now only verifies LiteLLM gateway status (`/health/liveliness`)
+- Frontend makes NO direct API calls to model providers
+- All model validation and testing goes through LiteLLM's unified `/v1/chat/completions` endpoint
+- Users' API keys stay in LiteLLM environment only, never exposed to frontend
+
+**Files Changed:**
+- `frontend/app/api/health/route.ts` — Removed direct Groq/Gemini checks
+- `frontend/lib/model-routing.ts` — Updated fallbacks: claude-opus-4.6, groq/llama-3.3-70b-versatile, gemini-1.5-flash
+- `frontend/app/api/settings/models/validate/route.ts` — Fixed test model names
+- `frontend/components/settings/ModelAssignmentForm.tsx` — Updated presets to current models only
+- `frontend/components/departments/DeptSettingsForm.tsx` — Removed deprecated Claude/Gemini versions
+
+**Model Name Corrections:**
+Old → New
+- `claude-3-5-haiku` → `claude-sonnet-4.6`
+- `claude-3-5-sonnet` → `claude-sonnet-4.6` or `claude-opus-4.6`
+- `gemini-2.0-flash` → `gemini-1.5-flash`
+- `mixtral-8x7b-32768` → `llama-3.3-70b-versatile`
+- `groq-mixtral-8x7b-32768` → `groq/llama-3.3-70b-versatile`
+
+**Impact:**
+✅ Frontend now credential-agnostic (no API keys needed)
+✅ Complete security isolation via LiteLLM gateway
+✅ BYOK model properly enforced (users provide keys only to LiteLLM)
+✅ All model requests follow OpenAI-compatible interface
+✅ Commit: 7d42cdc
+
+---
+
+## 8.6 Latest Fixes (April 11, 2026 - 00:59 UTC)
 
 ### LiteLLM Health Check Deployment Timeout Fix
 
