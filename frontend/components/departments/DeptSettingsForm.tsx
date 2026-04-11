@@ -11,10 +11,10 @@ const AVAILABLE_TOOLS = [
 ]
 
 const MODEL_OPTIONS: { provider: Department['model_provider']; name: string; label: string }[] = [
-  { provider: 'gemini', name: 'gemini-2.5-flash',   label: 'Gemini 2.5 Flash' },
-  { provider: 'claude', name: 'claude-sonnet-4.6',   label: 'Claude Sonnet 4.6' },
-  { provider: 'claude', name: 'claude-opus-4.6',     label: 'Claude Opus 4.6' },
-  { provider: 'groq',   name: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
+  { provider: 'gemini', name: 'gemini/gemini-2.5-flash',   label: 'Gemini 2.5 Flash' },
+  { provider: 'claude', name: 'anthropic/claude-sonnet-4.6',   label: 'Claude Sonnet 4.6' },
+  { provider: 'claude', name: 'anthropic/claude-opus-4.6',     label: 'Claude Opus 4.6' },
+  { provider: 'groq',   name: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)' },
 ]
 
 interface Props {
