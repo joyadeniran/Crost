@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 5.7  
+**Current Version:** 5.8  
 **Last Updated:** April 11, 2026  
-**Deployment Status:** 🚀 Ready for Production (Pending manual Render config + USER_API_ENCRYPTION_KEY)
+**Deployment Status:** 🚀 Ready for Production (Pending manual Render config + 2 env vars)
 
 ---
 
@@ -59,7 +59,9 @@
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
 - ⚠️ **No Artifact Preview** — Large outputs not rendered in UI, only stored as text
-- ⚠️ **No Retry Logic** — Failed tasks don't auto-retry
+- ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
+- ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
+- ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
 - ⚠️ **UI Model Presets Outdated** — ModelAssignmentForm still shows deprecated Gemini 3.1 options (partially fixed in v5.6)
 
 ---
@@ -79,7 +81,9 @@
 - [ ] **Verify E2E Flow** — Create test goal → Check orchestrator calls LiteLLM → Verify worker executes → Check synthesis report generated
 - [x] **Encrypt User API Keys** — AES-256-GCM via `lib/crypto.ts`, set `USER_API_ENCRYPTION_KEY` in Render dashboard (64-char hex: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - [ ] **Update UI Model Presets** — Finalize ModelAssignmentForm/DeptSettingsForm with gemini-2.0-flash or gemini-3.1-pro (when available)
-- [ ] **Add Retry Logic** — Implement exponential backoff for failed task re-execution
+- [x] **Task Retry/Skip on Failure** — Retry re-dispatches failed task; Skip marks it rejected and unblocks chain
+- [x] **Goal Cancellation** — Cancel button in War Room; marks all non-terminal tasks rejected
+- [x] **Approval Expiry Cron** — Set `CRON_SECRET` in Render dashboard for `crost-approval-expiry` service
 - [ ] **WebSocket Realtime** — Replace polling with true event delegation for worker tasks
 - [ ] **Artifact Preview UI** — Render markdown/JSON artifacts inline in dashboard
 - [ ] **Rate Limiting** — Per-user token budget enforcement (already checked but not enforced)
@@ -119,7 +123,7 @@
 
 ### Features
 - No artifact preview in UI (large outputs stored as text only)
-- No retry logic for failed tasks (manual approval required)
+- ✅ Task retry/skip now available in War Room on failed tasks
 - No conversation branching (single linear goal thread)
 - No export/sharing of goals or synthesis reports
 
