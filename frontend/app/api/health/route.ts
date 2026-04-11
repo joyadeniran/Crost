@@ -25,7 +25,8 @@ async function checkLiteLLM(): Promise<boolean> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch(`${url}/health`, { signal: controller.signal })
+    // Use /health/liveliness — no auth required, designed for uptime checks
+    const res = await fetch(`${url}/health/liveliness`, { signal: controller.signal })
     clearTimeout(timeoutId)
     return res.ok
   } catch {
@@ -34,7 +35,7 @@ async function checkLiteLLM(): Promise<boolean> {
 }
 
 async function checkGemini(): Promise<boolean> {
-  const key = process.env.GEMINI_API_KEY
+  const key = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
   if (!key) return false // Gemini not configured
 
   try {
