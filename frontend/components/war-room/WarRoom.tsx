@@ -213,6 +213,8 @@ function TaskApprovalItem({
   onApprove,
   onReject,
   onHold,
+  onRetry,
+  onSkip,
   departments,
 }: {
   task: OrchestratorTask
@@ -221,6 +223,8 @@ function TaskApprovalItem({
   onApprove: (overrides?: { label?: string; reasoning?: string }) => void
   onReject: () => void
   onHold: () => void
+  onRetry?: () => void
+  onSkip?: () => void
   departments: Department[]
 }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -362,16 +366,43 @@ function TaskApprovalItem({
 
       {/* Action buttons or decision indicator */}
       {decision ? (
-        <div style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
-          fontSize: 10,
-          color: resolvedStatus === 'completed' ? '#4ade80' : 
-                 resolvedStatus === 'failed' ? '#f87171' :
-                 (resolvedStatus === 'running' || resolvedStatus === 'dispatched') ? '#60a5fa' :
-                 resolvedStatus === 'held' ? '#facc15' : 'var(--text-3)',
-          letterSpacing: '0.06em',
-        }}>
-          {statusLabel}
+        <div>
+          <div style={{
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 10,
+            color: resolvedStatus === 'completed' ? '#4ade80' :
+                   resolvedStatus === 'failed' ? '#f87171' :
+                   (resolvedStatus === 'running' || resolvedStatus === 'dispatched') ? '#60a5fa' :
+                   resolvedStatus === 'held' ? '#facc15' : 'var(--text-3)',
+            letterSpacing: '0.06em',
+          }}>
+            {statusLabel}
+          </div>
+          {resolvedStatus === 'failed' && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{
+                fontFamily: 'var(--font-dm-sans, sans-serif)',
+                fontSize: 11,
+                color: '#f87171',
+                opacity: 0.8,
+                marginBottom: 6,
+              }}>
+                This task failed. Retry or skip to continue.
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {onRetry && (
+                  <button onClick={onRetry} style={btnStyle('#facc15', '#facc1522')}>
+                    ↻ Retry
+                  </button>
+                )}
+                {onSkip && (
+                  <button onClick={onSkip} style={btnStyle('var(--text-3)', 'var(--bg-3)')}>
+                    Skip
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 6 }}>
@@ -445,6 +476,9 @@ function PlanCard({
   onReject,
   onHold,
   onDismiss,
+  onCancel,
+  onRetry,
+  onSkip,
   decisions,
   onApproveAll,
   departments,
@@ -454,6 +488,9 @@ function PlanCard({
   onReject: (taskId: string) => void
   onHold: (taskId: string) => void
   onDismiss: () => void
+  onCancel: () => void
+  onRetry: (taskId: string) => void
+  onSkip: (taskId: string) => void
   decisions: Record<string, TaskDecision>
   onApproveAll: () => void
   departments: Department[]
@@ -501,23 +538,40 @@ function PlanCard({
           </div>
         </div>
 
-        {pendingCount > 1 && !allDone && (
-          <button onClick={onApproveAll} style={{
-            background: 'rgba(99,102,241,0.15)',
-            color: '#818cf8',
-            border: '1px solid rgba(99,102,241,0.3)',
-            borderRadius: 4,
-            padding: '5px 12px',
-            fontFamily: 'var(--font-dm-mono, monospace)',
-            fontSize: 10,
-            cursor: 'pointer',
-            letterSpacing: '0.04em',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}>
-            Approve All ({pendingCount})
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {pendingCount > 1 && !allDone && (
+            <button onClick={onApproveAll} style={{
+              background: 'rgba(99,102,241,0.15)',
+              color: '#818cf8',
+              border: '1px solid rgba(99,102,241,0.3)',
+              borderRadius: 4,
+              padding: '5px 12px',
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              cursor: 'pointer',
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+            }}>
+              Approve All ({pendingCount})
+            </button>
+          )}
+          {['awaiting_approval', 'executing'].includes(goal.status) && (
+            <button onClick={onCancel} style={{
+              background: 'rgba(239,68,68,0.08)',
+              color: '#f87171',
+              border: '1px solid rgba(239,68,68,0.25)',
+              borderRadius: 4,
+              padding: '5px 12px',
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              cursor: 'pointer',
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+            }}>
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Risk note — PROMINENT per spec */}
@@ -553,6 +607,8 @@ function PlanCard({
             onApprove={(overrides) => onDispatch(task.id, overrides)}
             onReject={() => onReject(task.id)}
             onHold={() => onHold(task.id)}
+            onRetry={() => onRetry(task.id)}
+            onSkip={() => onSkip(task.id)}
             departments={departments}
           />
         ))}
@@ -978,6 +1034,43 @@ export function WarRoom() {
     pending.forEach(t => handleDispatch(t.id))
   }, [activeGoal, decisions, handleDispatch])
 
+  const handleCancelGoal = useCallback(async () => {
+    if (!activeGoal) return
+    try {
+      await fetch(`/api/goals/${activeGoal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      })
+    } catch (err) {
+      console.error('[WarRoom] cancel goal failed', err)
+    } finally {
+      setActiveGoal(null)
+    }
+  }, [activeGoal, setActiveGoal])
+
+  const handleRetryTask = useCallback(async (taskId: string) => {
+    if (!activeGoal) return
+    // Clear failed decision so the task re-enters dispatching state
+    setDecisions(d => ({ ...d, [taskId]: null }))
+    await handleDispatch(taskId)
+  }, [activeGoal, handleDispatch])
+
+  const handleSkipTask = useCallback(async (taskId: string) => {
+    if (!activeGoal) return
+    setDecisions(d => ({ ...d, [taskId]: 'rejected' }))
+    try {
+      await fetch(`/api/goals/${activeGoal.id}/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' }),
+      })
+    } catch (err) {
+      console.error('[WarRoom] skip task failed', err)
+      // Keep decision as rejected even on network error — UI stays consistent
+    }
+  }, [activeGoal])
+
   const isPlanning = activeGoal && ['pending', 'planning'].includes(activeGoal.status)
   const hasPlan = activeGoal && activeGoal.orchestrator_plan && activeGoal.status !== 'failed'
   const isClarifying = activeGoal?.status === 'clarifying'
@@ -1023,6 +1116,9 @@ export function WarRoom() {
           onReject={handleReject}
           onHold={handleHold}
           onDismiss={() => setActiveGoal(null)}
+          onCancel={handleCancelGoal}
+          onRetry={handleRetryTask}
+          onSkip={handleSkipTask}
           onApproveAll={handleApproveAll}
           departments={departments}
         />

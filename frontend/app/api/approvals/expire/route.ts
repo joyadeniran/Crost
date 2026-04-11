@@ -1,12 +1,20 @@
 // POST /api/approvals/expire — marks pending approvals older than 24h as expired
-// Call this from a cron job or manually from the Settings page
+// Called every hour by the crost-approval-expiry cron job via x-cron-secret header.
+// Can also be called manually from the Settings page (same secret required).
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret) {
+    const provided = req.headers.get('x-cron-secret')
+    if (provided !== cronSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
   try {
     const supabase = createServerSupabaseClient()
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
