@@ -27,13 +27,11 @@ const COLOR_OPTIONS = [
 ]
 
 const MODEL_OPTIONS = [
-  { value: 'local/gemma3',      label: 'Gemma 3 12B (Local)' },
-  { value: 'local/gemma3-lite', label: 'Gemma 3 4B (Local, fast)' },
-  { value: 'local/llama3',      label: 'Llama 3 (Local, code)' },
-  { value: 'local/mistral',     label: 'Mistral (Local, fallback)' },
-  { value: 'cloud/gemini-pro',  label: 'Gemini Pro (Cloud)' },
-  { value: 'cloud/claude-sonnet', label: 'Claude Sonnet (Cloud)' },
-  { value: 'cloud/groq-llama',  label: 'Groq Llama (Cloud, fast)' },
+  { value: 'local/gemma3',      label: 'Gemma 3 4B (Local)' },
+  { value: 'local/llama3',      label: 'Llama 3 8B (Local, code)' },
+  { value: 'gemini/gemini-1.5-pro',  label: 'Gemini 1.5 Pro (Cloud, Smart)' },
+  { value: 'anthropic/claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Cloud, Premium)' },
+  { value: 'groq/llama3-70b-8192',  label: 'Groq Llama 3 70B (Cloud, Fast)' },
 ]
 
 const PRESET_CAPABILITIES = [
@@ -131,7 +129,7 @@ export function CreateDepartmentWizard({ onClose }: Props) {
     setSubmitting(true)
     setError(null)
     try {
-      const provider = modelName.startsWith('cloud/') ? modelName.split('/')[1] : 'local'
+      const provider = modelName.includes('/') ? modelName.split('/')[0] : 'local'
       const res = await fetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -139,7 +137,7 @@ export function CreateDepartmentWizard({ onClose }: Props) {
           name,
           slug,
           persona_prompt: personaPrompt,
-          model_provider: provider === 'gemini' || provider === 'claude' || provider === 'groq' ? provider : 'local',
+          model_provider: provider,
           model_name: modelName,
           tools: selectedTools,
           capabilities,

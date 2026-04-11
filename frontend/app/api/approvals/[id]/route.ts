@@ -77,21 +77,49 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
 
     // ─── AGENT EXECUTION LOOP ────────────────────────────────────────────────
-    // If approved, and it's a tool-based action (Composio), execute it now.
-    if (decision === 'approved' && process.env.COMPOSIO_API_KEY) {
+    // If approved, execute the tool call.
+    if (decision === 'approved') {
       const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
       
       const normalizedAction = approval.action_type.toLowerCase()
-      const isComposioAction = SUPPORTED_TOOLKITS.some(kit => normalizedAction.startsWith(kit + '_')) || 
-                               (approval.action_type.includes('_') && approval.action_type === approval.action_type.toUpperCase())
+      const isComposioAction = process.env.COMPOSIO_API_KEY && (
+        SUPPORTED_TOOLKITS.some(kit => normalizedAction.startsWith(kit + '_')) || 
+        (approval.action_type.includes('_') && approval.action_type === approval.action_type.toUpperCase())
+      )
       
-      if (isComposioAction) {
+      const isInternalTool = ['supabase_query', 'company_memos', 'save_document', 'get_sales_data'].includes(normalizedAction)
+
+      if (isComposioAction || isInternalTool) {
         try {
-          console.log(`[Approval Execution] Executing Composio action "${approval.action_type}" for user ${user.id}`)
-          const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
-          const entity = await composio.create(user.id)
-          
-          const result = await (entity as any).executeAction(approval.action_type, approval.payload)
+          let result: any;
+
+          if (isComposioAction) {
+            console.log(`[Approval Execution] Executing Composio action "${approval.action_type}" for user ${user.id}`)
+            const { Composio } = await import("@composio/core")
+            const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
+            const entity = await composio.create(user.id)
+            result = await (entity as any).executeAction(approval.action_type, approval.payload)
+          } else {
+            console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)
+            // Call our own internal tool execution endpoint
+            const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/tools/execute`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Cookie': req.headers.get('cookie') || '' // Forward auth cookies
+              },
+              body: JSON.stringify({
+                tool: normalizedAction,
+                params: approval.payload,
+                goal_id: approval.goal_id,
+                department_slug: approval.department_slug,
+                department_id: approval.department_id
+              })
+            })
+            if (!res.ok) throw new Error(`Internal tool execution failed: ${await res.text()}`)
+            const json = await res.json()
+            result = json.data
+          }
           
           // Persist result
           let bodyText = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
@@ -102,7 +130,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             goal_id: approval.goal_id,
             title: `Execution Result: ${approval.action_label}`,
             body: bodyText,
-            tags: ['execution_result', `approval_${params.id}`],
+            tags: ['execution_result', `approval_${params.id}`, normalizedAction],
             source_type: 'agent',
             created_by: user.id
           })
@@ -117,7 +145,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             goal_id: approval.goal_id,
             event_type: 'action_executed',
             description: `Executed approved action: ${approval.action_label}`,
-            metadata: { result: cleanLargePayload(result) },
+            metadata: { result: cleanLargePayload(result), tool: normalizedAction },
             created_by: user.id
           })
 
@@ -132,13 +160,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             }).eq('goal_id', approval.goal_id).eq('task_id', taskId)
 
             // Trigger chain reaction dispatch for downstream tasks
-            fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`, {
+            // We use a relative path or the configured APP_URL
+            const dispatchUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`
+            fetch(dispatchUrl, {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json',
                 'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
               },
-              body: JSON.stringify({ task_id: 'CHAIN_REACTION' }) // Special signal to scan all planned tasks
+              body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
             }).catch(e => console.error('[Approval Execution] Chain reaction failed:', e))
           }
           

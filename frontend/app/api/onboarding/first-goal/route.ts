@@ -55,7 +55,9 @@ export async function POST(req: NextRequest) {
 
       // Mark onboarding complete
       await supabase.from('system_config').upsert({
-        key: 'onboarding_complete', value: true
+        key: 'onboarding_complete', 
+        value: true,
+        created_by: user.id
       })
 
       await supabase.auth.admin.updateUserById(user.id, {
