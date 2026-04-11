@@ -23,13 +23,7 @@ export default async function ConstitutionPage() {
       </div>
 
       <div style={{ maxWidth: 800 }}>
-        {constitution ? (
-          <ConstitutionEditor constitution={constitution} />
-        ) : (
-          <div style={{ color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12 }}>
-            Constitution not found. Check system_config table.
-          </div>
-        )}
+        <ConstitutionEditor constitution={constitution ?? ''} />
       </div>
     </div>
   )

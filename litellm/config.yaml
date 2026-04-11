@@ -9,9 +9,9 @@ model_list:
       api_key: ${GROQ_API_KEY}
 
   # Google Gemini Models (via generative-ai SDK)
-  - model_name: gemini-1.5-flash
+  - model_name: gemini-2.5-flash
     litellm_params:
-      model: gemini-1.5-flash
+      model: gemini/gemini-2.5-flash
       api_key: ${GOOGLE_API_KEY}
 
   # Anthropic Claude Models

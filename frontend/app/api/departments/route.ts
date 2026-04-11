@@ -15,14 +15,23 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     const supabase = createServerSupabaseClient()
+    // Return user's own departments OR global templates (created_by IS NULL from seed)
+    // This ensures the onboarding team page shows departments for new users who haven't created any yet
     const { data, error } = await supabase
       .from('departments')
       .select('*')
-      .eq('created_by', user.id)
+      .or(`created_by.eq.${user.id},created_by.is.null`)
       .neq('activation_stage', 'deprecated')
       .order('created_at')
     if (error) throw error
-    return NextResponse.json({ data })
+
+    // If user has their own departments, prefer those over templates to avoid duplicates
+    const userDepts = (data ?? []).filter((d: any) => d.created_by === user.id)
+    const templateDepts = (data ?? []).filter((d: any) => d.created_by === null)
+    // Use user depts if they exist; fall back to templates (onboarding case)
+    const result = userDepts.length > 0 ? userDepts : templateDepts
+
+    return NextResponse.json({ data: result })
   } catch (err) {
     console.error('[GET /api/departments]', err)
     return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 })

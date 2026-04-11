@@ -28,7 +28,13 @@ async function checkLiteLLM(): Promise<boolean> {
     // Use /health/liveliness — no auth required, designed for uptime checks
     const res = await fetch(`${url}/health/liveliness`, { signal: controller.signal })
     clearTimeout(timeoutId)
-    return res.ok
+    // res.ok checks 2xx status. Also verify it's not HTML (e.g. Render "Service Suspended" page
+    // can return 200 with HTML on some CDN paths, or the content-type will be text/html for 503).
+    if (!res.ok) return false
+    const contentType = res.headers.get('content-type') || ''
+    // LiteLLM returns JSON or text/plain — Render suspended page returns text/html
+    if (contentType.includes('text/html')) return false
+    return true
   } catch {
     return false
   }
