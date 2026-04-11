@@ -8,30 +8,36 @@ model_list:
       model: groq/llama-3.3-70b-versatile
       api_key: ${GROQ_API_KEY}
 
-  # Google Gemini Models (via generative-ai SDK)
+  # Google Gemini Models (Primary Orchestration)
   - model_name: gemini-2.5-flash
     litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: ${GOOGLE_API_KEY}
+      model: gemini/gemini-1.5-flash
+      api_key: ${GEMINI_API_KEY}
+
+  - model_name: gemini/gemini-1.5-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: ${GEMINI_API_KEY}
 
   # Anthropic Claude Models
   - model_name: claude-sonnet-4.6
     litellm_params:
-      model: claude-sonnet-4.6
+      model: anthropic/claude-3-5-sonnet-20241022
       api_key: ${ANTHROPIC_API_KEY}
 
   - model_name: claude-opus-4.6
     litellm_params:
-      model: claude-opus-4.6
+      model: anthropic/claude-3-opus-20240229
       api_key: ${ANTHROPIC_API_KEY}
 
 # General settings
 general:
   master_key: ${LITELLM_MASTER_KEY}
   debug: true
-  log_level: DEBUG
+  log_level: INFO
 
 # Router settings
 router:
   # Enable dynamic rate limiting
   enable_pre_call_checks: true
+  rpm_limit: 100
