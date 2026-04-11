@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 5.9  
-**Last Updated:** April 11, 2026 (17:45 UTC)  
-**Deployment Status:** 🚀 Ready for Production (Pending manual Render config)
+**Current Version:** 6.0  
+**Last Updated:** April 11, 2026  
+**Deployment Status:** 🚀 Live — LiteLLM routing fixed, all departments healthy
 
 ---
 
@@ -54,7 +54,10 @@
 
 ### What is Broken / Incomplete ⚠️
 
-- ⚠️ **LITELLM_BASE_URL Path Issue** — Render env var needs manual update to remove `/v1` suffix (causes doubled path like `/v1/chat/completions/v1/chat/completions`)
+- ⚠️ **Render Env Vars Stale** — `CLOUD_MODEL` and `CLOUD_MODEL_WORKER` in Render dashboard still set to `cloud/groq-llama` (code now handles this defensively, but should be updated to `groq/llama-3.3-70b-versatile` for clarity)
+- ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
+- ✅ **Finance/All Dept Model Names** — DB migration fixed all `cloud/*` and `local/*` model aliases to valid LiteLLM names (v6.0)
+- ✅ **Orchestrator Fallback** — `cloud/groq-llama` legacy aliases now normalized defensively in llm-client.ts (v6.0)
 - ✅ **Health Check System** — Now correctly rejects HTML responses from suspended services (v5.9)
 - ✅ **Constitution Page** — Always renders editor with 8 core clauses; shows fallback when no DB row exists (v5.9)
 - ✅ **Memos Filtering** — Founder clarification dialogues excluded from memo feed (v5.9)
@@ -68,7 +71,7 @@
 - ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
 - ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
 - ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
-- ✅ **UI Model Presets Updated** — All Gemini references updated to 2.5 Flash (ModelAssignmentForm, DeptSettingsForm, model-routing.ts, litellm/config.yaml) (v5.9)
+- ✅ **UI Model Presets Updated** — All model references updated to current versions across UI, seed.sql, and wizard (v6.0)
 
 ---
 
@@ -83,9 +86,9 @@
 ## 3. Next Tasks
 
 **CRITICAL PATH (Blocking)**
-- [ ] **Manual Render Config** — Update crost-frontend env var `LITELLM_BASE_URL` from `https://crost-litellm.onrender.com/v1` to `https://crost-litellm.onrender.com` (remove `/v1` path suffix) → Trigger manual deploy
-- [ ] **Verify Build Success** — Check Render crost-frontend build completes (ESLint fix applied in 6f70a62)
-- [ ] **Verify E2E Flow** — Create test goal → Check orchestrator calls LiteLLM → Verify worker executes → Check synthesis report generated
+- [ ] **Update Render Env Vars** — In crost-frontend service: set `CLOUD_MODEL=groq/llama-3.3-70b-versatile` and `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile` (currently `cloud/groq-llama` — code handles this defensively but should be cleaned up)
+- [ ] **Redeploy crost-litellm** — Must redeploy to pick up new `litellm/config.yaml` (Claude 4.6 + Gemini 2.5 Flash models)
+- [ ] **Verify E2E Flow** — Create test goal → Orchestrator should plan successfully → Worker executes Finance task → Synthesis report generated
 
 **COMPLETED FIXES (v5.9)**
 - [x] **Health Check** — HTML response rejection added
@@ -199,6 +202,7 @@
 
 ### Common Pitfalls
 - ❌ Adding new departments without updating Orchestrator's available list
+- ❌ Using `cloud/*` or `local/*` model aliases — these are legacy naming from v1; use the exact `model_name` from `litellm/config.yaml` (e.g. `groq/llama-3.3-70b-versatile`, `gemini/gemini-2.5-flash`)
 - ❌ Modifying task model without checking LiteLLM config has that model
 - ❌ Storing large artifacts in memos (use `uploadArtifact()` to offload to Supabase Storage)
 - ❌ Calling LLM functions from client components (all LLM logic is server-side in `lib/llm-client.ts`)
@@ -208,6 +212,7 @@
 ### Version History
 | Version | Date | Change |
 |---------|------|--------|
+| v6.0 | Apr 11 2026 | LiteLLM model routing overhaul: Claude 4.6 + Gemini 2.5 Flash in config.yaml; defensive model alias normalisation in llm-client.ts; DB migration fixing all dept model_names; seed.sql + wizard updated to current model IDs |
 | v5.9 | Apr 11 2026 | 8-bug fix sprint: health check HTML rejection, constitution fallback, memos/artifacts filtering, settings identity persistence, onboarding dept cloning, Gemini 2.5 Flash updates, ESLint fix (explicit field copying) |
 | v5.8 | Apr 11 2026 | Baseline for bug fix testing, all core features working |
 | v5.6 | Apr 11 2026 | Direct API call removal, no frontend credentials, LiteLLM-only routing |
