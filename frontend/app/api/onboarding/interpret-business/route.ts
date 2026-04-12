@@ -19,11 +19,14 @@ Examples: "B2B SaaS for logistics teams", "Consumer fintech for gig workers",
 Return ONLY the phrase. No punctuation, no explanation.
 `
 
-    // Lightweight call, timeout handled by the fetch in callLLM or by the caller
+    // Bootstrap call — always uses system key, exempt from daily limit
     const { content } = await callLLM(
-      CLOUD_MODEL, 
-      prompt, 
-      "You are a business categorization expert. Be concise."
+      CLOUD_MODEL,
+      prompt,
+      "You are a business categorization expert. Be concise.",
+      undefined,    // no userId during onboarding
+      undefined,    // no providerOverride
+      true          // isBootstrap = true
     )
 
     return NextResponse.json({ 

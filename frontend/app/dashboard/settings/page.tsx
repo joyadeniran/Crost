@@ -27,7 +27,6 @@ export default async function SettingsPage() {
   const configs = configsRes.data ?? []
   const tools = toolsRes.data ?? []
 
-  const tokenLimit   = configs.find(c => c.key === 'token_hard_limit_per_session')?.value
   // Prefer system_config value (set via identity editor), fall back to company_profile from onboarding
   const founderName  = configs.find(c => c.key === 'founder_name')?.value ?? profileRes.data?.founder_name
   const companyName  = configs.find(c => c.key === 'company_name')?.value ?? profileRes.data?.company_name
@@ -105,26 +104,7 @@ export default async function SettingsPage() {
             </div>
           </section>
 
-          {/* Token limits */}
-          <section style={{
-            background: 'var(--bg-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '24px 20px',
-          }}>
-            <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>
-              Account Token Budget
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
-              <span style={{ color: 'var(--text-2)' }}>Hard limit per session</span>
-              <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
-                {String(tokenLimit ?? 50000).replace(/"/g, '')}
-              </span>
-            </div>
-            <div style={{ height: 4, background: 'var(--bg-4)', borderRadius: 2, marginTop: 16, position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: '35%', background: 'var(--accent)', borderRadius: 2 }}></div>
-            </div>
-          </section>
+          {/* Token limits — usage meter is rendered inside ApiKeysSettings (client component) */}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
             SYSTEM HEALTH
