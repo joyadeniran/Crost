@@ -7,11 +7,11 @@ export const dynamic = 'force-dynamic'
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || 'http://localhost:4000'
 const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || ''
 
-// Map provider to test models (must match LiteLLM config.yaml)
+// Map canonical provider to fully-qualified LiteLLM model names (must match config.yaml)
 const TEST_MODELS: Record<string, string> = {
-  'claude': 'claude-sonnet-4.6',
-  'gemini': 'gemini-1.5-flash',
-  'groq': 'llama-3.3-70b-versatile'
+  'anthropic': 'anthropic/claude-sonnet-4.6',
+  'gemini':    'gemini/gemini-2.5-flash',
+  'groq':      'groq/llama-3.3-70b-versatile',
 }
 
 export async function POST(req: NextRequest) {
@@ -48,12 +48,10 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${LITELLM_MASTER_KEY}`
       },
       body: JSON.stringify({
-        model: `${provider}/${testModel}`,
+        model: testModel,
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: 5,
-        extra_body: {
-          api_key: api_key
-        }
+        api_key: api_key,
       })
     })
 

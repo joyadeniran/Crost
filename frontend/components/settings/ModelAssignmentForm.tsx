@@ -1,180 +1,118 @@
 'use client'
 
+// ModelAssignmentForm: assigns LLM models to system roles (reasoning/execution/utility).
+// RULE: This component handles model routing ONLY.
+//       API key management belongs exclusively in ApiKeysSettings.
+
 import { useState, useEffect } from 'react'
 
 const ROLES = ['reasoning', 'execution', 'utility']
-const PROVIDERS = ['claude', 'gemini', 'groq']
+
+// Canonical provider slugs (LiteLLM prefix convention)
+const PROVIDERS = ['anthropic', 'gemini', 'groq']
+
 const PRESETS = ['budget', 'fast', 'premium']
 
 const MODEL_MAP: Record<string, Record<string, string>> = {
-  'claude': {
-    'budget': 'anthropic/claude-sonnet-4.6',
-    'fast': 'anthropic/claude-sonnet-4.6',
-    'premium': 'anthropic/claude-opus-4.6'
+  'anthropic': {
+    'budget':  'anthropic/claude-sonnet-4.6',
+    'fast':    'anthropic/claude-sonnet-4.6',
+    'premium': 'anthropic/claude-opus-4.6',
   },
   'gemini': {
-    'budget': 'gemini/gemini-2.5-flash',
-    'fast': 'gemini/gemini-2.5-flash',
-    'premium': 'gemini/gemini-2.5-flash'
+    'budget':  'gemini/gemini-2.5-flash',
+    'fast':    'gemini/gemini-2.5-flash',
+    'premium': 'gemini/gemini-2.5-flash',
   },
   'groq': {
-    'budget': 'groq/llama-3.3-70b-versatile',
-    'fast': 'groq/llama-3.3-70b-versatile',
-    'premium': 'groq/llama-3.3-70b-versatile'
-  }
+    'budget':  'groq/llama-3.3-70b-versatile',
+    'fast':    'groq/llama-3.3-70b-versatile',
+    'premium': 'groq/llama-3.3-70b-versatile',
+  },
+}
+
+// Human-readable labels for canonical provider slugs
+const PROVIDER_LABELS: Record<string, string> = {
+  'anthropic': 'Anthropic',
+  'gemini':    'Gemini',
+  'groq':      'Groq',
 }
 
 export function ModelAssignmentForm() {
   const [assignments, setAssignments] = useState<Record<string, any>>({})
-  const [keys, setKeys] = useState<Record<string, boolean>>({})
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState('claude')
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
     fetchConfig()
   }, [])
 
   const fetchConfig = async () => {
-    const res = await fetch('/api/settings/models')
+    const res  = await fetch('/api/settings/models')
     const data = await res.json()
 
     const assignmentMap: Record<string, any> = {}
-    data.assignments.forEach((a: any) => {
+    ;(data.assignments ?? []).forEach((a: any) => {
       assignmentMap[a.role] = a
     })
     setAssignments(assignmentMap)
-
-    const keyMap: Record<string, boolean> = {}
-    data.keys.forEach((k: any) => {
-      keyMap[k.provider] = k.is_valid
-    })
-    setKeys(keyMap)
     setLoading(false)
-  }
-
-  const validateAndStoreKey = async () => {
-    if (!apiKeyInput.trim()) return
-
-    setSaving(true)
-    const res = await fetch('/api/settings/models/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: selectedProvider,
-        api_key: apiKeyInput
-      })
-    })
-
-    const result = await res.json()
-    if (result.valid) {
-      setKeys(prev => ({ ...prev, [selectedProvider]: true }))
-      setApiKeyInput('')
-    } else {
-      alert('API key validation failed')
-    }
-    setSaving(false)
   }
 
   const saveAssignment = async (role: string, provider: string, preset: string) => {
     const model = MODEL_MAP[provider]?.[preset]
+    if (!model) return
 
     const res = await fetch('/api/settings/models', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        role,
-        model_name: model,
-        provider,
-        preset_config: preset
-      })
+      body: JSON.stringify({ role, model_name: model, provider, preset_config: preset }),
     })
 
     if (res.ok) {
       setAssignments(prev => ({
         ...prev,
-        [role]: { role, model_name: model, provider, preset_config: preset }
+        [role]: { role, model_name: model, provider, preset_config: preset },
       }))
     }
   }
 
-  if (loading) return <div>Loading...</div>
+  if (loading) return <div style={{ fontSize: 13, color: 'var(--text-3)', padding: 16 }}>Loading...</div>
 
   return (
     <div className="space-y-8 p-6">
-      <div className="border-b pb-6">
-        <h2 className="text-lg font-semibold mb-4">Add API Keys</h2>
-        <div className="flex gap-2">
-          <select
-            value={selectedProvider}
-            onChange={e => setSelectedProvider(e.target.value)}
-            className="border rounded px-3 py-2"
-          >
-            {PROVIDERS.map(p => (
-              <option key={p} value={p}>
-                {p.charAt(0).toUpperCase() + p.slice(1)}
-              </option>
-            ))}
-          </select>
-          <input
-            type="password"
-            placeholder="Paste API key"
-            value={apiKeyInput}
-            onChange={e => setApiKeyInput(e.target.value)}
-            className="border rounded px-3 py-2 flex-1"
-          />
-          <button
-            onClick={validateAndStoreKey}
-            disabled={saving}
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-          >
-            {saving ? 'Validating...' : 'Add'}
-          </button>
-        </div>
-        <div className="mt-2 text-sm">
-          {Object.entries(keys).map(([provider, valid]) => (
-            <div key={provider} className={valid ? 'text-green-600' : 'text-gray-400'}>
-              {provider.charAt(0).toUpperCase() + provider.slice(1)}: {valid ? '✓ Valid' : '○ Not added'}
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div>
-        <h2 className="text-lg font-semibold mb-4">Model Assignments by Role</h2>
+        <h2 className="text-lg font-semibold mb-1">Model Assignments by Role</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Choose which provider and quality tier handles each system role.
+          Add API keys in the <strong>Cloud Model API Keys</strong> section above.
+        </p>
         <div className="space-y-4">
           {ROLES.map(role => {
             const current = assignments[role]
-            const availableProviders = PROVIDERS.filter(p => keys[p])
 
             return (
               <div key={role} className="border rounded p-4">
                 <h3 className="font-medium mb-2 capitalize">{role}</h3>
-                {availableProviders.length === 0 ? (
-                  <p className="text-gray-500 text-sm">Add API keys first</p>
-                ) : (
-                  <div className="flex gap-2">
-                    {availableProviders.map(provider =>
-                      PRESETS.map(preset => (
-                        <button
-                          key={`${provider}-${preset}`}
-                          onClick={() => saveAssignment(role, provider, preset)}
-                          className={`px-3 py-1 rounded text-sm ${
-                            current?.provider === provider && current?.preset_config === preset
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-gray-300'
-                          }`}
-                        >
-                          {provider.slice(0, 1)}-{preset}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {PROVIDERS.map(provider =>
+                    PRESETS.map(preset => (
+                      <button
+                        key={`${provider}-${preset}`}
+                        onClick={() => saveAssignment(role, provider, preset)}
+                        className={`px-3 py-1 rounded text-sm ${
+                          current?.provider === provider && current?.preset_config === preset
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300'
+                        }`}
+                      >
+                        {PROVIDER_LABELS[provider]}-{preset}
+                      </button>
+                    ))
+                  )}
+                </div>
                 {current && (
                   <p className="text-xs text-gray-600 mt-2">
-                    Current: {current.provider} / {current.preset_config}
+                    Current: {PROVIDER_LABELS[current.provider] ?? current.provider} / {current.preset_config} — <span className="font-mono">{current.model_name}</span>
                   </p>
                 )}
               </div>

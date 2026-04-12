@@ -4,8 +4,9 @@
 // Server-side ONLY — never import from a client component.
 
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { decryptApiKey } from './crypto'
 import { getModelForTask } from './model-routing'
+import { resolveApiKey } from './key-resolver'
+import { logUsage } from './usage-logger'
 import type {
   Department,
   OrchestratorPlan,
@@ -372,46 +373,35 @@ async function saveContextMemo(goalId: string, content: string, userId: string |
 // ─── LiteLLM Integration ─────────────────────────────────────────────────────
 
 async function callLiteLLM(
-  model: string, 
-  prompt: string, 
+  model: string,
+  prompt: string,
   systemNote?: string,
   userId?: string | null,
-  providerOverride?: string
+  providerOverride?: string,
+  isBootstrap?: boolean
 ): Promise<{ content: string; tokensUsed: number }> {
-  // Map internal slugs to LiteLLM config names if needed
-  let modelName = model
-  let apiKey: string | null = null
+  const modelName = model
 
-  if (userId) {
-    const supabase = createServerSupabaseClient()
-    
-    // Determine provider if not explicitly passed
-    let provider = providerOverride
-    if (!provider) {
-       const { data: assignment } = await supabase
-        .from('user_model_assignments')
-        .select('provider')
-        .eq('created_by', userId)
-        .eq('model_name', model)
-        .maybeSingle()
-       provider = assignment?.provider
-    }
+  // Derive provider from model name prefix (e.g. 'groq/llama-3.3-70b-versatile' → 'groq')
+  // providerOverride takes precedence when explicitly supplied by the caller
+  const provider = providerOverride ?? modelName.split('/')[0]
 
-    if (provider) {
-      const { data: keyRow } = await supabase
-        .from('user_api_keys')
-        .select('encrypted_key')
-        .eq('created_by', userId)
-        .eq('provider', provider)
-        .maybeSingle()
-      
-      if (keyRow) {
-        try {
-          apiKey = decryptApiKey(keyRow.encrypted_key)
-        } catch (e) {
-          console.error(`[callLiteLLM] Decryption failed for user ${userId} / ${provider}`, e)
-        }
-      }
+  // ── Key resolution: exactly ONE key per request ───────────────────────────
+  // User BYOK if valid, else system key. Never both simultaneously.
+  const { apiKey, keyType } = await resolveApiKey({ userId, provider, isBootstrap })
+
+  // ── Token budget check (system-key calls from authenticated users only) ───
+  // Bootstrap calls are exempt. User-key calls are always exempt.
+  if (keyType === 'system' && !isBootstrap && userId) {
+    const budget = await checkTokenBudget(userId)
+    if (!budget.allowed) {
+      throw new Error(JSON.stringify({
+        code: 'SYSTEM_LIMIT_EXCEEDED',
+        tokensUsed: budget.tokensUsed,
+        limit: budget.limit,
+        resetAt: budget.resetAt,
+        message: 'Free usage limit reached. Please add your API key to continue or wait till your limit resets.',
+      }))
     }
   }
 
@@ -427,7 +417,8 @@ async function callLiteLLM(
     temperature: 0.3,
   }
 
-  // Pass user's own API key to LiteLLM if we have it
+  // Pass user's own API key to LiteLLM for key-passthrough mode.
+  // RULE: body.api_key ONLY — never extra_body.api_key.
   if (apiKey) {
     body.api_key = apiKey
   }
@@ -447,9 +438,26 @@ async function callLiteLLM(
   }
 
   const data = await res.json()
+  const promptTokens     = data.usage?.prompt_tokens     ?? 0
+  const completionTokens = data.usage?.completion_tokens ?? 0
+  const totalTokens      = data.usage?.total_tokens      ?? 0
+
+  // Fire-and-forget usage log — skipped silently when userId is null
+  if (userId) {
+    logUsage({
+      userId,
+      model: modelName,
+      provider,
+      keyType,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+    }).catch(() => {}) // logUsage never rethrows, but be safe
+  }
+
   return {
     content: data.choices?.[0]?.message?.content ?? '',
-    tokensUsed: data.usage?.total_tokens ?? 0
+    tokensUsed: totalTokens,
   }
 }
 
@@ -458,32 +466,56 @@ export async function callLLM(
   prompt: string,
   systemNote?: string,
   userId?: string | null,
-  providerOverride?: string
+  providerOverride?: string,
+  isBootstrap?: boolean
 ): Promise<{ content: string; tokensUsed: number }> {
-  return callLiteLLM(model, prompt, systemNote, userId, providerOverride)
+  return callLiteLLM(model, prompt, systemNote, userId, providerOverride, isBootstrap)
 }
 
-// ─── Token budget check ─────────────────────────────────────────────────────
+// ─── Token budget check (per-user, per-day) ──────────────────────────────────
 
-export async function checkTokenBudget(): Promise<
-  { allowed: true } | { allowed: false; tokensUsed: number; limit: number }
+export async function checkTokenBudget(userId: string): Promise<
+  | { allowed: true }
+  | { allowed: false; tokensUsed: number; limit: number; resetAt: string }
 > {
   try {
     const supabase = createServerSupabaseClient()
-    const [{ data: limitRow }, { data: usage }] = await Promise.all([
-      supabase.from('system_config').select('value').eq('key', 'token_hard_limit_per_session').single(),
-      supabase.from('event_log').select('tokens_used').gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()).gt('tokens_used', 0),
-    ])
+    const limit = Number(process.env.FREE_SYSTEM_DAILY_TOKENS ?? '50000')
 
-    const limit = Number(limitRow?.value ?? 1000000)
-    const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.tokens_used ?? 0), 0)
+    // First-goal exemption: if the user has never used a system key, allow unrestricted
+    const { count: lifetimeCount } = await supabase
+      .from('api_usage_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('key_type', 'system')
+
+    if ((lifetimeCount ?? 0) === 0) {
+      return { allowed: true } // First goal — exempt from daily limit
+    }
+
+    // Per-user per-day system token usage (resets at midnight UTC)
+    const todayMidnightUTC = new Date()
+    todayMidnightUTC.setUTCHours(0, 0, 0, 0)
+
+    const { data: usage } = await supabase
+      .from('api_usage_logs')
+      .select('total_tokens')
+      .eq('user_id', userId)
+      .eq('key_type', 'system')
+      .gte('created_at', todayMidnightUTC.toISOString())
+
+    const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.total_tokens ?? 0), 0)
 
     if (tokensUsed >= limit) {
-      return { allowed: false, tokensUsed, limit }
+      // Reset time: next midnight UTC
+      const resetAt = new Date(todayMidnightUTC)
+      resetAt.setUTCDate(resetAt.getUTCDate() + 1)
+      return { allowed: false, tokensUsed, limit, resetAt: resetAt.toISOString() }
     }
+
     return { allowed: true }
   } catch {
-    return { allowed: true }
+    return { allowed: true } // Fail open — never block on budget check errors
   }
 }
 
@@ -625,9 +657,6 @@ export async function runOrchestratorTask(
     orcDept?.slug,
     goalId
   )
-
-  const budget = await checkTokenBudget()
-  if (!budget.allowed) throw new Error('TOKEN_BUDGET_EXCEEDED')
 
   const { model: planModel, provider: planProvider } = await getModel('planning', userId)
   const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
