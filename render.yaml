@@ -6,8 +6,6 @@ services:
     buildCommand: npm ci --include=dev && rm -rf .next && npm run build
     startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_SUPABASE_URL
@@ -50,8 +48,6 @@ services:
     buildCommand: npm ci
     startCommand: npm run worker
     envVars:
-      - key: NODE_VERSION
-        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_SUPABASE_URL
@@ -71,8 +67,6 @@ services:
     buildCommand: npm ci
     startCommand: node scripts/expire-approvals.js
     envVars:
-      - key: NODE_VERSION
-        value: 20.18.0
       - key: CROST_APP_URL
         value: https://crost-frontend.onrender.com
       - key: CRON_SECRET
