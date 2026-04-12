@@ -45,7 +45,7 @@ services:
     name: crost-worker
     runtime: node
     rootDir: .
-    buildCommand: npm ci
+    buildCommand: npm ci && npm ci --prefix frontend
     startCommand: npm run worker
     envVars:
       - key: NODE_ENV
