@@ -1,4 +1,4 @@
-CROST SPEC — (v1.0)
+CROST SPEC — (v1.2)
 
 > This is the source of truth for Crost architecture.
 > Do not modify without founder approval.
@@ -171,15 +171,78 @@ function selectModel(task) {
 }
 BYOK (Bring Your Own Key)
 
-Users can provide:
+Users can provide keys for the following canonical providers:
 
-Gemini
-Claude
-Groq
-Behavior
-Default model selected by user
-Routing happens automatically
-🔐 10. Human-in-the-Loop (HITL)
+| Provider  | Slug        | LiteLLM Prefix  |
+|-----------|-------------|-----------------|
+| Google    | `gemini`    | `gemini/`       |
+| Anthropic | `anthropic` | `anthropic/`    |
+| Groq      | `groq`      | `groq/`         |
+| OpenAI    | `openai`    | `openai/`       |
+
+**Rules:**
+- Provider slugs `'claude'` and `'google'` are deprecated. Use `'anthropic'` and `'gemini'`.
+- OpenAI excluded from MVP implementation; included in canonical list for future readiness.
+
+Key Resolver Behavior
+
+Exactly ONE key per LLM request — never merge keys:
+
+```
+if (isBootstrap)           → system key (always)
+if (no userId)             → system key
+if (user has valid BYOK)   → user key
+else                       → system key fallback
+```
+
+- User keys passed via `body.api_key` to LiteLLM (key-passthrough mode). Never `extra_body.api_key`.
+- System key: `LITELLM_MASTER_KEY` in Authorization header.
+- LiteLLM virtual key management: NOT used. Key passthrough mode only.
+
+Bootstrap Calls
+
+Bootstrap = onboarding inference ONLY. Includes:
+- Company profiling
+- Competitor inference
+- Initial strategy suggestion
+
+Does NOT include: first goal execution, background tasks.
+
+Bootstrap calls always use the system key and are exempt from usage limits.
+🔑 10. Free Tier & Usage Limits
+
+**System Key Quota**
+- Per user, per day: `FREE_SYSTEM_DAILY_TOKENS` tokens (default: 50,000)
+- Resets at midnight UTC daily
+- Applies only to system-key calls; BYOK calls have no quota
+
+**First-Goal Exemption**
+- A user with zero prior system-key usage bypasses the daily limit
+- Exemption is one-time; subsequent goals apply the standard quota
+
+**Hard Fail on Limit Exceeded**
+- Return error: `"Free usage limit reached. Please add your API key to continue or wait till your limit resets."`
+- Include: `resetAt` (ISO timestamp of next midnight UTC)
+- Do NOT queue requests or retry silently
+
+**Usage Logging**
+- Every LLM call writes one row to `api_usage_logs` (billing table)
+- `api_usage_logs` is separate from `event_log` (system events)
+- New function `logUsage()` — do NOT overload `logEvent()`
+- Skip logging entirely when `userId` is null
+- Cost estimated from static pricing table (no LiteLLM dependency for cost)
+
+**UI Behaviour**
+- Settings page shows real progress bar (green < 75%, amber 75–90%, red > 90%)
+- Displays "Resets at [local time]"
+- If user has any valid BYOK key: show "Using your API key — no system limit applies"
+
+**Concern Separation**
+- `ApiKeysSettings` → stores and validates API keys → writes to `user_api_keys`
+- `ModelAssignmentForm` → assigns models to roles → writes to `user_model_assignments`
+- These are separate pathways. `ModelAssignmentForm` MUST NOT store or manage API keys.
+
+🔐 11. Human-in-the-Loop (HITL)
 Absolute Rule
 
 NOTHING executes without founder approval
@@ -190,7 +253,7 @@ Risk Mode
 Configurable setting:
 Conservative (strict approval)
 Aggressive (auto-execution allowed)
-🌐 11. Onboarding Intelligence
+🌐 12. Onboarding Intelligence
 Flow
 User inputs:
 Name
@@ -205,7 +268,7 @@ Prefills:
 Memo
 First strategy draft
 User edits/approves
-💬 12. Interaction Modes
+💬 13. Interaction Modes
 Mode 1 — Orc Chat
 Strategy
 Planning
@@ -213,7 +276,7 @@ Coordination
 Mode 2 — Department Chat
 Direct execution tasks
 Writes to Memo
-👁 13. Visibility
+👁 14. Visibility
 Users See
 Strategy (friendly)
 Task list (status only)
@@ -223,27 +286,30 @@ Users Do NOT See
 Internal logs
 Raw model routing
 Low-level execution noise
-🔮 14. FUTURE FEATURES (DO NOT BUILD NOW)
+🔮 15. FUTURE FEATURES (DO NOT BUILD NOW)
 
 ⚠️ These are strictly not MVP features, but system must be designed to support them.
 
-14.1 Marketplace
+15.1 Marketplace
 Custom departments
 Prompt packs
 Tool integrations
-14.2 Autonomous Mode
+15.2 Autonomous Mode
 Full execution without approval
 Scheduled operations
-14.3 Advanced Tooling (Onyx-like)
+15.3 Advanced Tooling (Onyx-like)
 Connectors (Slack, GitHub, Gmail)
 Sandbox execution
-14.4 Local Mode
+15.4 Local Mode
 Ollama integration
 Private data processing
-14.5 Advanced Model Assignment UI
+15.5 Advanced Model Assignment UI
 Per-department models
 Per-task overrides
-🚫 15. Explicit Non-Goals (MVP)
+15.6 OpenAI Provider
+GPT-4o and GPT-4o-mini via openai/ prefix
+Full parity with existing BYOK providers
+🚫 16. Explicit Non-Goals (MVP)
 
 Do NOT build:
 

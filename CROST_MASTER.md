@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.1  
-**Last Updated:** April 12, 2026  
-**Deployment Status:** 🚀 Live — Operational stability complete; all 4 safety features implemented
+**Current Version:** 6.2  
+**Last Updated:** April 13, 2026  
+**Deployment Status:** 🚀 Live — Key Resolver System shipped; BYOK routing, per-user quota, usage logging active
 
 ---
 
@@ -34,9 +34,23 @@
 
 **Security & Data**
 - ✅ **No Direct API Calls to Providers** — Frontend credential-agnostic (all requests via LiteLLM)
-- ✅ **API Key Management** — User keys stored in `user_api_keys` table (RLS-secured)
+- ✅ **API Key Management** — User keys stored in `user_api_keys` table (RLS-secured, AES-256-GCM encrypted)
 - ✅ **LITELLM_MASTER_KEY** — Proxy authentication for admin operations
 - ✅ **Artifact Storage** — Large outputs offloaded to Supabase Storage
+
+**Key Resolver & Usage System (v6.2)**
+- ✅ **Unified Key Resolver** — `lib/key-resolver.ts`: 4-case routing tree, exactly ONE key per request
+- ✅ **BYOK Key Passthrough** — User key in `body.api_key`; never `extra_body`; master key always in Auth header
+- ✅ **Per-User Daily Quota** — 50K system tokens/day per user; hard fail with `SYSTEM_LIMIT_EXCEEDED` + reset time
+- ✅ **First-Goal Exemption** — Users with zero prior system usage bypass daily limit (one-time grace)
+- ✅ **Bootstrap Routing** — `interpret-business` onboarding route always uses system key, exempt from limits
+- ✅ **Usage Logger** — `lib/usage-logger.ts`: `logUsage()` writes to `api_usage_logs` after every LLM call
+- ✅ **Static Cost Table** — `lib/cost-table.ts`: USD cost estimates by model (no LiteLLM dependency)
+- ✅ **api_usage_logs Table** — Billing-only table (separate from `event_log`); RLS, indexes, per-user per-day queries
+- ✅ **Real Usage Meter** — Settings page shows live token bar (green/amber/red), reset time, BYOK bypass indicator
+- ✅ **Provider Normalisation** — Canonical slugs: `anthropic | gemini | groq`; DB migrated from `claude`/`google`
+- ✅ **Validate Route Fixed** — `extra_body.api_key` removed; `TEST_MODELS` now fully-qualified LiteLLM names
+- ✅ **Separated UI Concerns** — `ApiKeysSettings` = key storage only; `ModelAssignmentForm` = routing only (key section removed)
 
 ### What Works (Tested) ✅
 
@@ -52,10 +66,15 @@
 - ✅ Goal lifecycle: draft → executing → completed (with post-mortem synthesis)
 - ✅ Render deployments: all three services deploy, no build timeout errors
 - ✅ Orc cancellation: "Cancel Goal" button in clarification dialogue allows users to escape conversation
+- ✅ Key resolver: user BYOK preferred; system fallback; hard quota cap at 50K tokens/day
+- ✅ Usage logging: every LLM call writes to `api_usage_logs` with model, tokens, cost estimate, key type
+- ✅ Settings usage meter: live bar with actual per-user daily consumption (not hardcoded)
 
 ### What is Broken / Incomplete ⚠️
 
-- ⚠️ **Render Env Vars Stale** — `CLOUD_MODEL` and `CLOUD_MODEL_WORKER` in Render dashboard still set to `cloud/groq-llama` (code now handles this defensively, but should be updated to `groq/llama-3.3-70b-versatile` for clarity)
+- ⚠️ **Render Env Vars Stale** — `CLOUD_MODEL` and `CLOUD_MODEL_WORKER` in Render dashboard still set to `cloud/groq-llama` (code handles this defensively, but should be updated to `groq/llama-3.3-70b-versatile` for clarity)
+- ⚠️ **Worker Realtime TIMED_OUT** — Supabase Realtime subscription times out on Render; worker degrades to watchdog-only mode; root cause under investigation (Realtime may need enabling in Supabase project settings)
+- ⚠️ **FREE_SYSTEM_DAILY_TOKENS not in Render** — Env var must be set to `50000` in crost-frontend Render service (defaults to 50000 in code if missing, but should be explicit)
 - ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
 - ✅ **Finance/All Dept Model Names** — DB migration fixed all `cloud/*` and `local/*` model aliases to valid LiteLLM names (v6.0)
 - ✅ **Orchestrator Fallback** — `cloud/groq-llama` legacy aliases now normalized defensively in llm-client.ts (v6.0)
@@ -78,16 +97,33 @@
 
 ## 2. In Progress
 
-- 🔄 **Frontend Build Deployment** — Latest build (231b3f9) adds Orc cancellation; triggering auto-redeploy on Render
-- 🔄 **Manual Render Config (Cleanup)** — `CLOUD_MODEL` env vars defensively handled, but should be manually updated for clarity
+- 🔄 **Frontend Redeploy** — Latest build (51e26ba) ships Key Resolver System; auto-redeploy triggered on Render
+- 🔄 **Render Env Cleanup** — `CLOUD_MODEL`, `CLOUD_MODEL_WORKER`, `FREE_SYSTEM_DAILY_TOKENS` need manual update in Render dashboard
+- 🔄 **Worker Realtime Investigation** — Subscription times out; may need Supabase Realtime toggle + network check
 
 ---
 
 ## 3. Next Tasks
 
 **CRITICAL PATH (Blocking)**
-- [ ] **Update Render Env Vars (Cleanup)** — In crost-frontend service: set `CLOUD_MODEL=groq/llama-3.3-70b-versatile` and `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile` (code handles this defensively, but dashboard should be updated for clarity)
-- [ ] **Verify E2E Flow** — Create test goal → Orchestrator should plan successfully → Worker executes Finance task → Synthesis report generated
+- [ ] **Set Render Env Vars** — crost-frontend: `CLOUD_MODEL=groq/llama-3.3-70b-versatile`, `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile`, `FREE_SYSTEM_DAILY_TOKENS=50000`
+- [ ] **Fix Worker Realtime** — Enable Realtime in Supabase project settings; verify WebSocket reachability from Render
+- [ ] **Verify E2E Flow** — Goal → Orc plan → Worker executes → Usage logged → Synthesis report generated
+
+**COMPLETED FIXES (v6.2)**
+- [x] **Key Resolver** — `lib/key-resolver.ts`: 4-case routing (bootstrap / no-user / BYOK / system fallback)
+- [x] **Per-User Quota** — `checkTokenBudget(userId)` per-user per-day from `api_usage_logs` (was global bug)
+- [x] **First-Goal Exemption** — Users with 0 system usage bypass limit on first goal
+- [x] **Usage Logger** — `lib/usage-logger.ts`: `logUsage()` writes billing rows post-LLM-call
+- [x] **Cost Table** — `lib/cost-table.ts`: static pricing, no LiteLLM dependency
+- [x] **api_usage_logs** — New table live in Supabase; RLS + indexes applied
+- [x] **user_api_keys + user_model_assignments** — Applied to live DB (were missing)
+- [x] **Provider Normalisation** — DB migrated: `claude→anthropic`, `google→gemini`; UI fixed to canonical slugs
+- [x] **validate/route.ts** — `extra_body.api_key` removed; fully-qualified TEST_MODELS
+- [x] **ApiKeysSettings** — Now saves via `/validate`; real usage meter with progress bar
+- [x] **ModelAssignmentForm** — Key section removed; routing-only as per spec
+- [x] **Settings Page** — Hardcoded 35% bar replaced with live `UsageSummary` via `/api/usage/today`
+- [x] **Worker Debugging** — Added URL/key logging + graceful Realtime timeout handling
 
 **COMPLETED FIXES (v6.1)**
 - [x] **Approval Expiry Cron** — Already in render.yaml; hourly scheduler calling `/api/approvals/expire`
@@ -117,7 +153,8 @@
 **POST-LAUNCH (Nice to have)**
 - [ ] **WebSocket Realtime** — Replace polling with true event delegation for worker tasks
 - [ ] **Artifact Preview UI** — Render markdown/JSON artifacts inline in dashboard
-- [ ] **Rate Limiting Enforcement** — Per-user token budget hard-blocking (checked but not enforced)
+- [ ] **OpenAI Provider** — Add `openai` to canonical provider set; update UI, TEST_MODELS, cost table
+- [ ] **War Room Limit Banner** — Surface `SYSTEM_LIMIT_EXCEEDED` error inline in War Room (currently shows as generic goal failure)
 
 ---
 
@@ -137,6 +174,11 @@
 | **Local Font Files** | Zero external network requests during build/runtime; full 14 weights (Syne, DM Mono, DM Sans) | `53c1d84` |
 | **Lazy Singleton Browser Client** | `lib/supabase-browser.ts` instantiated only at runtime (never at module load); prevents build-time Supabase initialization error | `lib/supabase-browser.ts` |
 | **Health Check via /health/liveliness** | Groq/Gemini direct checks removed (v5.6); only verify LiteLLM gateway (delegating provider health to proxy) | `7d42cdc`, `20dbb4e` |
+| **Key Passthrough via body.api_key** | User BYOK passed to LiteLLM in request body (not header, not extra_body); master key always in Authorization header simultaneously | `51e26ba` |
+| **Per-User Per-Day Token Quota** | System key usage capped at 50K tokens/user/day from `api_usage_logs`; resets midnight UTC; first goal exempt | `51e26ba` |
+| **api_usage_logs ≠ event_log** | Billing and quota data in dedicated table; system events remain in event_log; logUsage() never overlaps logEvent() | `51e26ba` |
+| **Provider Canonical Names** | `anthropic / gemini / groq` match LiteLLM prefix convention; `claude` and `google` are deprecated | `51e26ba` |
+| **ModelAssignmentForm = routing only** | API keys stored exclusively in ApiKeysSettings → user_api_keys; ModelAssignmentForm touches only model routing preferences | `51e26ba` |
 
 ---
 
@@ -144,7 +186,7 @@
 
 ### Security
 - ✅ API keys encrypted at rest (AES-256-GCM via `lib/crypto.ts`) — requires `USER_API_ENCRYPTION_KEY` in Render
-- No rate limiting enforced per user (token budget checked but not hard-blocked)
+- ✅ Per-user token quota hard-blocked — `SYSTEM_LIMIT_EXCEEDED` throws; goal set to `failed`
 - No audit log for API key access/rotation
 
 ### Performance
@@ -187,7 +229,8 @@
 - [ ] Set `LITELLM_MASTER_KEY` (any random string, e.g., `sk-litellm-xxxxx`)
 - [ ] Set provider API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`
 - [ ] Set Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] Run all migrations in order (orc_upgrade → rls_policies → multitenant fixes → current_context → user_model_config)
+- [ ] Set `FREE_SYSTEM_DAILY_TOKENS=50000` in crost-frontend Render env
+- [ ] Run all migrations in order (orc_upgrade → rls_policies → multitenant fixes → current_context → user_model_config → create_api_usage_logs)
 - [ ] Verify `/api/health` returns all services as `ok`
 - [ ] Test onboarding flow (company profile → goal creation)
 - [ ] Monitor worker logs for stall detection + escalation
@@ -209,6 +252,10 @@
 ### Common Pitfalls
 - ❌ Adding new departments without updating Orchestrator's available list
 - ❌ Using `cloud/*` or `local/*` model aliases — these are legacy naming from v1; use the exact `model_name` from `litellm/config.yaml` (e.g. `groq/llama-3.3-70b-versatile`, `gemini/gemini-2.5-flash`)
+- ❌ Using `extra_body.api_key` — user keys MUST be passed as `body.api_key` (top-level) for LiteLLM passthrough
+- ❌ Using provider names `'claude'` or `'google'` — canonical names are `'anthropic'` and `'gemini'`
+- ❌ Storing API keys in `ModelAssignmentForm` — key management belongs in `ApiKeysSettings` → `user_api_keys` only
+- ❌ Calling `logEvent()` for billing data — use `logUsage()` from `lib/usage-logger.ts` instead
 - ❌ Modifying task model without checking LiteLLM config has that model
 - ❌ Storing large artifacts in memos (use `uploadArtifact()` to offload to Supabase Storage)
 - ❌ Calling LLM functions from client components (all LLM logic is server-side in `lib/llm-client.ts`)
@@ -218,6 +265,7 @@
 ### Version History
 | Version | Date | Change |
 |---------|------|--------|
+| v6.2 | Apr 13 2026 | Key Resolver System: unified BYOK routing (key-resolver.ts), per-user daily quota (50K tokens), first-goal exemption, usage logging (usage-logger.ts + api_usage_logs table), static cost table, real settings usage meter, provider name normalisation, extra_body removal, ModelAssignmentForm key section removed |
 | v6.1 | Apr 12 2026 | Operational stability complete: "Cancel Goal" button added to OrcDialogue clarification phase; all 4 safety features now active (approval expiry cron, goal cancel, retry/skip, orc cancellation) |
 | v6.0 | Apr 11 2026 | LiteLLM model routing overhaul: Claude 4.6 + Gemini 2.5 Flash in config.yaml; defensive model alias normalisation in llm-client.ts; DB migration fixing all dept model_names; seed.sql + wizard updated to current model IDs |
 | v5.9 | Apr 11 2026 | 8-bug fix sprint: health check HTML rejection, constitution fallback, memos/artifacts filtering, settings identity persistence, onboarding dept cloning, Gemini 2.5 Flash updates, ESLint fix (explicit field copying) |
