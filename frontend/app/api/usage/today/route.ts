@@ -3,18 +3,19 @@
 // Used by the settings page to display the real usage meter and reset time.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(_req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabase = createServerSupabaseClient()
 
     const limit = Number(process.env.FREE_SYSTEM_DAILY_TOKENS ?? '50000')
 

@@ -14,7 +14,7 @@
 // "request_approval": true, we parse it and create an approval_queue entry.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { buildFinalPrompt, callLLM } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
@@ -52,6 +52,12 @@ function extractApprovalRequest(text: string): ApprovalRequest | null {
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  }
+
   const supabase = createServerSupabaseClient()
 
   let body: z.infer<typeof TaskSchema>
@@ -69,6 +75,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .from('departments')
     .select('*')
     .eq('slug', params.slug)
+    .eq('created_by', user.id)
     .single()
 
   if (deptErr || !dept) {
@@ -100,7 +107,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     event_type: 'task_started',
     description: `Task started: "${body.task.slice(0, 80)}${body.task.length > 80 ? '…' : ''}"`,
     metadata: { task_preview: body.task.slice(0, 200) },
-    created_by: dept.created_by
+    created_by: user.id
   })
 
   let answer = ''
@@ -112,7 +119,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug)
 
     // Cloud-only path
-    const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt, undefined, dept.created_by)
+    const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt, undefined, user.id)
     answer = content
     tokensUsed = used
 
@@ -132,6 +139,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           payload: approvalReq.payload,
           context: approvalReq.context ?? body.task.slice(0, 300),
           risk_level: approvalReq.risk_level ?? 'medium',
+          created_by: user.id,
         })
         .select()
         .single()
@@ -150,6 +158,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         metadata: { approval_id: approval?.id, action_type: approvalReq.action_type },
         tokens_used: Math.round(tokensUsed),
         model_used: modelUsed,
+        created_by: user.id,
       })
 
       return NextResponse.json({
@@ -165,6 +174,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       .update({ status: 'idle', current_task: null })
       .eq('id', dept.id)
 
+    await supabase.from('company_memos').insert({
+      from_department: dept.name,
+      from_department_id: dept.id,
+      title: `[Direct Chat] ${body.task.slice(0, 80)}`,
+      body: answer,
+      tags: ['department_chat', dept.slug],
+      source_type: 'agent',
+      confidence: 0.7,
+      created_by: user.id,
+    })
+
     await supabase.from('event_log').insert({
       department_id: dept.id,
       department_slug: dept.slug,
@@ -173,6 +193,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       metadata: {},
       tokens_used: Math.round(tokensUsed),
       model_used: modelUsed,
+      created_by: user.id,
     })
 
     return NextResponse.json({ answer, approval_requested: false })
@@ -189,6 +210,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       event_type: 'task_failed',
       description: `Task failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
       metadata: { error: String(err) },
+      created_by: user.id,
     })
 
     console.error('[POST /api/departments/:slug/task]', err)
