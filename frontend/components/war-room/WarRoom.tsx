@@ -806,7 +806,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
 
 // ─── OrcDialogue (Phase 5) ────────────────────────────────────────────────────
 
-function OrcDialogue({ goal, onResponse }: { goal: Goal, onResponse: (text?: string, skip?: boolean) => void }) {
+function OrcDialogue({ goal, onResponse, onCancel }: { goal: Goal, onResponse: (text?: string, skip?: boolean) => void, onCancel?: () => void }) {
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messages = goal.orc_conversation || []
@@ -910,8 +910,8 @@ function OrcDialogue({ goal, onResponse }: { goal: Goal, onResponse: (text?: str
         </button>
       </div>
 
-      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-        <button 
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 16 }}>
+        <button
           onClick={() => onResponse(undefined, true)}
           style={{
             background: 'transparent',
@@ -924,6 +924,21 @@ function OrcDialogue({ goal, onResponse }: { goal: Goal, onResponse: (text?: str
         >
           Skip & Draft Plan Anyway
         </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#f87171',
+              fontSize: 11,
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel Goal
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1154,9 +1169,10 @@ export function WarRoom() {
       {isPlanning && <PlanningIndicator />}
 
       {isClarifying && (
-        <OrcDialogue 
-          goal={activeGoal} 
-          onResponse={handleDialogueResponse} 
+        <OrcDialogue
+          goal={activeGoal}
+          onResponse={handleDialogueResponse}
+          onCancel={handleCancelGoal}
         />
       )}
 
