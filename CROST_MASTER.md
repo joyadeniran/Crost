@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.0  
-**Last Updated:** April 11, 2026  
-**Deployment Status:** 🚀 Live — LiteLLM routing fixed, all departments healthy
+**Current Version:** 6.1  
+**Last Updated:** April 12, 2026  
+**Deployment Status:** 🚀 Live — Operational stability complete; all 4 safety features implemented
 
 ---
 
@@ -51,6 +51,7 @@
 - ✅ Multi-tenant isolation: RLS blocks cross-user data access
 - ✅ Goal lifecycle: draft → executing → completed (with post-mortem synthesis)
 - ✅ Render deployments: all three services deploy, no build timeout errors
+- ✅ Orc cancellation: "Cancel Goal" button in clarification dialogue allows users to escape conversation
 
 ### What is Broken / Incomplete ⚠️
 
@@ -77,18 +78,23 @@
 
 ## 2. In Progress
 
-- 🔄 **Frontend Redeploy** — Latest build (6f70a62) fixes ESLint issues in onboarding/complete/route.ts; build pending verification on Render
-- 🔄 **Manual Render Config** — Awaiting LITELLM_BASE_URL update in Render dashboard (remove `/v1` suffix)
-- 🔄 **End-to-End Testing** — Onboarding → Goal creation → Orchestrator planning → Worker execution → Synthesis report (all 8 bug fixes verified)
+- 🔄 **Frontend Build Deployment** — Latest build (231b3f9) adds Orc cancellation; triggering auto-redeploy on Render
+- 🔄 **Manual Render Config (Cleanup)** — `CLOUD_MODEL` env vars defensively handled, but should be manually updated for clarity
 
 ---
 
 ## 3. Next Tasks
 
 **CRITICAL PATH (Blocking)**
-- [ ] **Update Render Env Vars** — In crost-frontend service: set `CLOUD_MODEL=groq/llama-3.3-70b-versatile` and `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile` (currently `cloud/groq-llama` — code handles this defensively but should be cleaned up)
-- [ ] **Redeploy crost-litellm** — Must redeploy to pick up new `litellm/config.yaml` (Claude 4.6 + Gemini 2.5 Flash models)
+- [ ] **Update Render Env Vars (Cleanup)** — In crost-frontend service: set `CLOUD_MODEL=groq/llama-3.3-70b-versatile` and `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile` (code handles this defensively, but dashboard should be updated for clarity)
 - [ ] **Verify E2E Flow** — Create test goal → Orchestrator should plan successfully → Worker executes Finance task → Synthesis report generated
+
+**COMPLETED FIXES (v6.1)**
+- [x] **Approval Expiry Cron** — Already in render.yaml; hourly scheduler calling `/api/approvals/expire`
+- [x] **Goal Cancel Endpoint** — Already in `/api/goals/[id]` PATCH handler; sets status='cancelled'
+- [x] **Cancel Button in War Room (PlanCard)** — Already implemented; visible in plan header when executing/awaiting_approval
+- [x] **Retry + Skip Buttons** — Already implemented; appear in TaskApprovalItem for failed tasks
+- [x] **Orchestrator Cancellation** — "Cancel Goal" button now in OrcDialogue during clarification phase (v6.1)
 
 **COMPLETED FIXES (v5.9)**
 - [x] **Health Check** — HTML response rejection added
@@ -212,6 +218,7 @@
 ### Version History
 | Version | Date | Change |
 |---------|------|--------|
+| v6.1 | Apr 12 2026 | Operational stability complete: "Cancel Goal" button added to OrcDialogue clarification phase; all 4 safety features now active (approval expiry cron, goal cancel, retry/skip, orc cancellation) |
 | v6.0 | Apr 11 2026 | LiteLLM model routing overhaul: Claude 4.6 + Gemini 2.5 Flash in config.yaml; defensive model alias normalisation in llm-client.ts; DB migration fixing all dept model_names; seed.sql + wizard updated to current model IDs |
 | v5.9 | Apr 11 2026 | 8-bug fix sprint: health check HTML rejection, constitution fallback, memos/artifacts filtering, settings identity persistence, onboarding dept cloning, Gemini 2.5 Flash updates, ESLint fix (explicit field copying) |
 | v5.8 | Apr 11 2026 | Baseline for bug fix testing, all core features working |
