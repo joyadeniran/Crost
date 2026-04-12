@@ -30,6 +30,11 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   process.exit(1)
 }
 
+// Log Supabase connection details (URL masked for security)
+const urlHost = new URL(SUPABASE_URL).hostname
+console.log(`[worker] Connecting to Supabase: https://${urlHost}/`)
+console.log(`[worker] Using Service Role Key: ${SUPABASE_SERVICE_KEY.slice(0, 20)}...`)
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
   realtime: {
@@ -276,6 +281,8 @@ async function main() {
   // 2. Realtime Subscriptions
   const channel = supabase.channel('worker_supervision')
 
+  let realtimeConnected = false
+
   channel
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goal_tasks' }, async (payload) => {
       const { task_id, goal_id, status } = payload.new
@@ -304,9 +311,19 @@ async function main() {
     })
     .subscribe((status) => {
       log(`Realtime subscription status: ${status}`)
+      if (status === 'SUBSCRIBED' || status === 'TIMED_OUT') {
+        if (status === 'SUBSCRIBED') {
+          realtimeConnected = true
+          log('✓ Realtime connection established')
+        } else if (status === 'TIMED_OUT') {
+          log('⚠ Realtime connection TIMED_OUT — Supabase Realtime may be disabled or unreachable')
+          log('⚠ Worker will continue with watchdog timers, but event-driven supervision is degraded')
+          realtimeConnected = false
+        }
+      }
     })
 
-  log('Supervisor is now event-driven. [Idling... 0 egress consumption]')
+  log(`Supervisor is now event-driven. [Idling... 0 egress consumption] [Realtime: ${realtimeConnected ? 'connected' : 'connecting...'}]`)
 }
 
 process.on('unhandledRejection', (reason, promise) => {
