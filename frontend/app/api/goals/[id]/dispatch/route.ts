@@ -49,11 +49,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     const supabase = createServerSupabaseClient()
 
     // Load the goal and its plan
-    const { data: goal, error: goalError } = await supabase
+    let goalQuery = supabase
       .from('goals')
       .select('*')
       .eq('id', params.id)
-      .single()
+
+    if (!isInternal && user) {
+      goalQuery = goalQuery.eq('created_by', user.id)
+    }
+
+    const { data: goal, error: goalError } = await goalQuery.single()
 
     if (goalError || !goal) {
       return NextResponse.json(

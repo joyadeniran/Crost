@@ -188,7 +188,7 @@ async function unblockDependentTasks(goalId: string) {
     .from('goal_tasks')
     .select('task_id, dept_slug, label, depends_on')
     .eq('goal_id', goalId)
-    .eq('status', 'pending_dependency')
+    .eq('status', 'planned')
 
   for (const blocked of blockedTasks ?? []) {
     const dependencies = blocked.depends_on as string[] || []
@@ -216,9 +216,23 @@ async function unblockDependentTasks(goalId: string) {
     const allMemosExist = dependencies.every(depId => postedMemos.has(depId))
 
     if (allMemosExist) {
-      await supabase.from('goal_tasks').update({ status: 'approved' }).eq('task_id', blocked.task_id).eq('goal_id', goalId)
-      log(`Dependencies resolved & Memos verified — task "${blocked.task_id}" unblocked`, { goalId })
-      await writeEvent('orc_rebalance', `Task "${blocked.label}" is now ready (Data Verified)`, goalId)
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL
+      if (!appUrl) {
+        log(`NEXT_PUBLIC_APP_URL missing; cannot auto-dispatch task "${blocked.task_id}"`, { goalId })
+        continue
+      }
+
+      fetch(`${appUrl}/api/goals/${goalId}/dispatch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        },
+        body: JSON.stringify({ task_id: blocked.task_id })
+      }).catch((e) => log(`Auto-dispatch failed for task "${blocked.task_id}"`, e))
+
+      log(`Dependencies resolved & memos verified — auto-dispatching task "${blocked.task_id}"`, { goalId })
+      await writeEvent('orc_rebalance', `Task "${blocked.label}" auto-dispatched after dependency verification`, goalId)
     } else {
       const missing = dependencies.filter(id => !postedMemos.has(id))
       log(`Task "${blocked.task_id}" still waiting for memos from: ${missing.join(', ')}`, { goalId })
@@ -262,7 +276,7 @@ async function main() {
   const { data: runningTasks } = await supabase
     .from('goal_tasks')
     .select('task_id, goal_id, assigned_at')
-    .eq('status', 'dispatched')
+    .eq('status', 'running')
 
   const TEN_MINUTES = 10 * 60_000
   const now = Date.now()
@@ -288,7 +302,7 @@ async function main() {
       const { task_id, goal_id, status } = payload.new
       log(`Event received: goal_tasks UPDATE [${task_id}] -> ${status}`)
 
-      if (status === 'dispatched') {
+      if (status === 'running') {
         startWatchdog(task_id, goal_id)
       } else if (['completed', 'failed', 'rejected', 'expired'].includes(status)) {
         clearWatchdog(task_id)
@@ -299,7 +313,7 @@ async function main() {
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'goal_tasks' }, async (payload) => {
       const { task_id, goal_id, status } = payload.new
-      if (status === 'dispatched') {
+      if (status === 'running') {
         startWatchdog(task_id, goal_id)
       }
     })

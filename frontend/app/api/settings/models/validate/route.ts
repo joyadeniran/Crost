@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { encryptApiKey } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
@@ -16,12 +16,13 @@ const TEST_MODELS: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabase = createServerSupabaseClient()
 
     const { provider, api_key } = await req.json()
 

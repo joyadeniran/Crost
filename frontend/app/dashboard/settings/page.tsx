@@ -1,18 +1,19 @@
 export const dynamic = 'force-dynamic'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ModeToggle } from '@/components/ui/ModeToggle'
 import { HealthWidget } from '@/components/settings/HealthWidget'
 import { IdentityEditor } from '@/components/settings/IdentityEditor'
 import { ExpireApprovalsButton } from '@/components/settings/ExpireApprovalsButton'
 import { ApiKeysSettings } from '@/components/settings/ApiKeysSettings'
+import { ModelAssignmentForm } from '@/components/settings/ModelAssignmentForm'
 import { McpSettings } from '@/components/settings/McpSettings'
 
 export default async function SettingsPage() {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
   const supabase = createServerSupabaseClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  
+
   const [configsRes, toolsRes, profileRes] = await Promise.all([
     supabase.from('system_config').select('*').eq('created_by', user?.id).order('key'),
     supabase.from('available_tools')
@@ -57,6 +58,18 @@ export default async function SettingsPage() {
             CORE CREDENTIALS
           </div>
           <ApiKeysSettings />
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            MODEL ROUTING
+          </div>
+          <section style={{
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+          }}>
+            <ModelAssignmentForm />
+          </section>
           
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
             IDENTITY & CONTEXT
@@ -97,7 +110,7 @@ export default async function SettingsPage() {
                   Private Delegation
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5, margin: 0 }}>
-                  Switch between <b>LOCAL</b> (Ollama) and <b>CLOUD</b> (Gemini).
+                  Switch between <b>LOCAL</b> execution and <b>CLOUD</b> execution through your configured LiteLLM providers.
                 </p>
               </div>
               <ModeToggle />

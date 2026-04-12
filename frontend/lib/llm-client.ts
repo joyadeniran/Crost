@@ -799,8 +799,9 @@ export async function runWorkerTask(
         department_id: deptRow.id,
         artifact_type: 'document',
         title: `Output: ${task.label}`,
-        file_url: artifactUrl,
-        metadata: { task_id: task.id, action: task.action }
+        body: content.slice(0, 3000),
+        preview_url: artifactUrl,
+        metadata: { task_id: task.id, action: task.action, file_url: artifactUrl }
       })
     }
   }

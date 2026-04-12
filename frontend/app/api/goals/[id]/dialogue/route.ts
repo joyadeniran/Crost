@@ -3,7 +3,7 @@
 // Also supports 'force_plan' to skip clarification.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/llm-client'
 import { z } from 'zod'
 
@@ -18,6 +18,10 @@ type Params = { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const body = await req.json()
     const { message, force_plan } = DialogueSchema.parse(body)
     const supabase = createServerSupabaseClient()
@@ -28,6 +32,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       .from('goals')
       .select('founder_input, orc_conversation, status')
       .eq('id', goalId)
+      .eq('created_by', user.id)
       .single()
 
     if (fetchErr || !goal) throw new Error('Goal not found')
