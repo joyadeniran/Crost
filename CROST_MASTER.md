@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.3  
+**Current Version:** 6.4  
 **Last Updated:** April 13, 2026  
-**Deployment Status:** 🚀 Live — Auth boundary hardening, settings routing cleanup, Orc clarification grounding, and department template safety shipped
+**Deployment Status:** 🚀 Live — Auth boundary hardening, settings routing cleanup, Orc clarification grounding, department template safety, and split identity context shipped
 
 ---
 
@@ -60,6 +60,13 @@
 - ✅ **Department Settings Safety** — Founder-editable department settings now support explicit reset to base template instead of silent fallback
 - ✅ **Settings Page Routing Visibility** — Settings page now shows model routing controls alongside API key management
 
+**Identity Architecture (v6.4)**
+- ✅ **Split Identity Context** — `local_identity` prompt overload replaced by separate `founder_identity`, `company_identity`, and `assistant_identity` config keys
+- ✅ **Assistant Self-Reference Safety** — Orc now uses assistant identity as its self-model while founder/company identity remain contextual inputs
+- ✅ **Settings Identity Editor Expanded** — Founder can now edit founder, company, and assistant identity fields independently from Settings
+- ✅ **Onboarding Identity Seeding** — Onboarding now seeds distinct identity fields into `system_config` for each user
+- ✅ **Dashboard Identity Labels Scoped** — Sidebar/dashboard labels now derive from company identity/name instead of merged founder/company text
+
 ### What Works (Tested) ✅
 
 - ✅ Build pipeline: `npm run build` completes with 0 errors
@@ -79,6 +86,7 @@
 - ✅ Settings usage meter: live bar with actual per-user daily consumption (not hardcoded)
 - ✅ Orc clarification: latest founder response now included in the prompt context before re-planning
 - ✅ Department settings: founder can edit prompt/tools/constraints/model and explicitly restore base template
+- ✅ Identity split: founder/company/assistant identity now stored separately and injected separately into prompts
 
 ### What is Broken / Incomplete ⚠️
 
@@ -86,6 +94,7 @@
 - ⚠️ **Worker Realtime TIMED_OUT** — Supabase Realtime subscription times out on Render; worker degrades to watchdog-only mode; root cause under investigation (Realtime may need enabling in Supabase project settings)
 - ⚠️ **FREE_SYSTEM_DAILY_TOKENS not in Render** — Env var must be set to `50000` in crost-frontend Render service (defaults to 50000 in code if missing, but should be explicit)
 - ⚠️ **Orc Prompt Quality Still Needs Tuning** — Repetition risk reduced, but founder-facing copy and clarification heuristics still need deeper product tuning
+- ⚠️ **Legacy local_identity Compatibility** — Some scripts and older seed helpers still reference `local_identity`; runtime is backward-compatible, but maintenance cleanup remains
 - ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
 - ✅ **Finance/All Dept Model Names** — DB migration fixed all `cloud/*` and `local/*` model aliases to valid LiteLLM names (v6.0)
 - ✅ **Orchestrator Fallback** — `cloud/groq-llama` legacy aliases now normalized defensively in llm-client.ts (v6.0)
@@ -108,7 +117,7 @@
 
 ## 2. In Progress
 
-- 🔄 **Frontend Redeploy** — Latest build (51e26ba) ships Key Resolver System; auto-redeploy triggered on Render
+- 🔄 **Frontend Redeploy** — Latest v6.4 identity-split build is ready for Render redeploy/verification
 - 🔄 **Render Env Cleanup** — `CLOUD_MODEL`, `CLOUD_MODEL_WORKER`, `FREE_SYSTEM_DAILY_TOKENS` need manual update in Render dashboard
 - 🔄 **Worker Realtime Investigation** — Subscription times out; may need Supabase Realtime toggle + network check
 - 🔄 **Orc Prompt Polish** — Founder-facing language still needs refinement so clarification feels sharper and less generic
@@ -188,6 +197,7 @@
 | **LiteLLM as Unified Gateway** | Single OpenAI-compatible interface for all providers (Groq, Gemini, Claude) eliminates provider-specific SDK bloat | Ongoing |
 | **Strict Waterfall Execution** | Tasks block on incomplete dependencies AND memo verification — data-driven sequencing prevents hallucination | Core design |
 | **Memo System as Working Memory** | Foundational context (company profile) + current context (recent clarifications) injected into every Orc/worker call | `143b3f8` |
+| **Split Identity Layers** | Founder, company, and assistant identity are separate runtime inputs so Orc has a stable self-concept and founder context stays contextual | v6.4 |
 | **Removed Onyx (LLM-Agnostic Tool Router)** | Replaced with direct Orchestrator planning + LiteLLM model selection (simpler, no extra abstraction) | Early |
 | **Multi-Tenant RLS from Day 1** | Security hardened: all tables gated by `created_by`; permissive MVP policies deleted | `20260410040000_fix_rls_and_schema` |
 | **Event-Driven Worker (Zero Poll)** | Realtime subscriptions + in-memory watchdog timers replace periodic heartbeats (lower egress, faster response) | `scripts/worker.ts` |
@@ -237,6 +247,7 @@
 3. **Frontend has NO model provider API keys** — Users' keys stay in LiteLLM environment only
 4. **Health checks verify LiteLLM, not providers** — Delegate provider health to the proxy
 5. **Memo System is the working memory** — Orc decisions depend on foundational + current context; always keep memos up-to-date
+6. **Assistant identity must stay separate from founder identity** — Never merge Orc self-description with founder/company context again
 
 ### Build Gotchas
 - `NODE_ENV=production` in Render: set `npm ci --include=dev` to force devDependencies

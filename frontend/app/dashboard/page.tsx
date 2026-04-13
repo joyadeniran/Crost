@@ -1,36 +1,48 @@
 export const dynamic = 'force-dynamic'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider'
 import { LiveDepartmentGrid } from '@/components/departments/LiveDepartmentGrid'
 import { DashboardActions } from '@/components/departments/DashboardActions'
 import { WarRoom } from '@/components/war-room/WarRoom'
 import { Department } from '@/types'
+import { redirect } from 'next/navigation'
 
 export default async function DashboardPage() {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
   const supabase = createServerSupabaseClient()
 
   const [deptResult, approvalResult, identityResult] = await Promise.all([
     supabase
       .from('departments')
       .select('*')
+      .eq('created_by', user.id)
       .neq('activation_stage', 'deprecated')
       .neq('slug', 'orchestrator')
       .order('created_at'),
-    supabase.from('approval_queue').select('id').eq('status', 'pending'),
+    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
     supabase
       .from('system_config')
-      .select('value')
-      .eq('key', 'local_identity')
-      .single(),
+      .select('key, value')
+      .in('key', ['company_name', 'company_identity'])
+      .eq('created_by', user.id),
   ])
 
   const departments = (deptResult.data ?? []) as Department[]
   const pendingCount = approvalResult.data?.length ?? 0
-  const localIdentity = identityResult.data?.value
-  const identityLabel = localIdentity && localIdentity !== 'null'
-    ? String(localIdentity).replace(/"/g, '')
-    : null
+  const companyName = identityResult.data?.find((row) => row.key === 'company_name')?.value
+  const companyIdentity = identityResult.data?.find((row) => row.key === 'company_identity')?.value
+  const identityLabel = companyName
+    ? String(companyName).replace(/"/g, '')
+    : companyIdentity
+      ? String(companyIdentity).replace(/"/g, '').split('.')[0]
+      : null
 
   const activeCount  = departments.filter((d) => d.activation_stage === 'active').length
   const runningCount = departments.filter((d) => d.status === 'running').length

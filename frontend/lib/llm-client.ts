@@ -56,9 +56,15 @@ export async function getModel(
   return { model, provider: model.split('/')[0] }
 }
 
-// Default fallback tone when local_identity not yet set
-const DEFAULT_LOCAL_IDENTITY = `Write professionally and clearly. Be direct, warm, and human.
+const DEFAULT_ASSISTANT_IDENTITY = `You are part of Crost's AI operating system.
+Write professionally and clearly. Be direct, warm, and human.
 Avoid corporate buzzwords. Adapt tone to context: technical when needed, conversational when appropriate.`
+
+function cleanConfigValue(value: unknown): string {
+  if (value == null) return ''
+  const cleaned = String(value).replace(/^"|"$/g, '').trim()
+  return cleaned === 'null' ? '' : cleaned
+}
 
 // ─── Approval signal regex ────────────────────────────────────────────────────
 
@@ -119,18 +125,26 @@ export async function buildFinalPrompt(
     ? String(constitutionRow.value).replace(/^"|"$/g, '')
     : ''
 
-  let localIdentity = DEFAULT_LOCAL_IDENTITY
+  let founderIdentity = ''
+  let companyIdentity = ''
+  let assistantIdentity = DEFAULT_ASSISTANT_IDENTITY
+  let legacyIdentity = ''
   if (userId) {
-    const { data: identityRow } = await supabase
+    const { data: identityRows } = await supabase
       .from('system_config')
-      .select('value')
-      .eq('key', 'local_identity')
+      .select('key, value')
+      .in('key', ['founder_name', 'company_name', 'founder_identity', 'company_identity', 'assistant_identity', 'local_identity'])
       .eq('created_by', userId)
-      .maybeSingle()
+      .order('key')
 
-    if (identityRow?.value && identityRow.value !== 'null') {
-      localIdentity = String(identityRow.value).replace(/^"|"$/g, '')
-    }
+    const identityMap = new Map((identityRows ?? []).map((row) => [row.key, cleanConfigValue(row.value)]))
+    const founderName = identityMap.get('founder_name') ?? ''
+    const companyName = identityMap.get('company_name') ?? ''
+
+    founderIdentity = identityMap.get('founder_identity') || (founderName ? `Founder: ${founderName}` : '')
+    companyIdentity = identityMap.get('company_identity') || (companyName ? `Company: ${companyName}` : '')
+    assistantIdentity = identityMap.get('assistant_identity') || DEFAULT_ASSISTANT_IDENTITY
+    legacyIdentity = identityMap.get('local_identity') || ''
   }
 
   let memoBrief = departmentSlug ? await getMemoBrief(departmentSlug) : ''
@@ -169,23 +183,31 @@ export async function buildFinalPrompt(
     ...(tools ?? []).map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
   ].join('\n')
 
-  const identitySection = departmentSlug === 'orchestrator'
+  const identityHandling = departmentSlug === 'orchestrator'
     ? [
         'You are Orc, the Chief of Staff for the founder.',
-        'The LOCAL IDENTITY below describes the founder/company context, not your personal identity.',
+        'The IDENTITY CONTEXT below describes the founder, company, and assistant configuration, not a single merged biography.',
         'Never introduce yourself as the founder, never use the founder\'s name as your own, and never describe the founder\'s mission as your own biography.',
-        'If asked who you are, answer as Orc / Chief of Staff.'
+        'If asked who you are, answer as Orc / Chief of Staff.',
+        'Respect the ASSISTANT IDENTITY section as your operating voice, while treating founder and company identity as context you serve.'
       ].join('\n')
     : [
-        'The LOCAL IDENTITY below describes the founder/company context you are serving.',
+        'The IDENTITY CONTEXT below describes the founder and company context you are serving.',
         'Do not claim to be the founder. Speak as the department lead serving the founder.'
       ].join('\n')
+
+  const identityContext = [
+    founderIdentity ? `### FOUNDER IDENTITY\n${founderIdentity}` : '',
+    companyIdentity ? `### COMPANY IDENTITY\n${companyIdentity}` : '',
+    assistantIdentity ? `### ASSISTANT IDENTITY\n${assistantIdentity}` : '',
+    !founderIdentity && !companyIdentity && legacyIdentity ? `### LEGACY IDENTITY\n${legacyIdentity}` : '',
+  ].filter(Boolean).join('\n\n')
 
   return [
     `## CROST CONSTITUTION (Non-negotiable)\n${constitution}`,
     `## YOUR ROLE\n${departmentPrompt}`,
-    `## IDENTITY HANDLING\n${identitySection}`,
-    `## LOCAL IDENTITY\n${localIdentity}`,
+    `## IDENTITY HANDLING\n${identityHandling}`,
+    `## IDENTITY CONTEXT\n${identityContext || `### ASSISTANT IDENTITY\n${DEFAULT_ASSISTANT_IDENTITY}`}`,
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
     memoBrief ? `## COMPANY MEMOS (recent, high priority)\n<trusted_internal_memos>\n${memoBrief}\n</trusted_internal_memos>` : '',

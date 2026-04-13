@@ -4,7 +4,7 @@
 // Flow:
 //   1. Validate department is active + Onyx synced
 //   2. Set status = 'running', log task_started
-//   3. Build final prompt (constitution + persona + local_identity + task)
+//   3. Build final prompt (constitution + identity context + persona + task)
 //   4. Send to Onyx via onyxClient.sendMessage()
 //   5. Scan response for structured approval requests
 //   6. Set status = 'idle' (or 'awaiting_approval'), log task_completed
