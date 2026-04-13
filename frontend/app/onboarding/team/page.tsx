@@ -21,12 +21,9 @@ export default function TeamPage() {
   useEffect(() => {
     async function fetchDepts() {
       try {
-        const res = await fetch('/api/departments')
+        const res = await fetch('/api/departments?scope=templates&active_only=true')
         const json = await res.json()
         if (json.data) {
-          // Filter out Orchestrator and only show active-able departments
-          // Spec says: activation_stage = 'active' and is_orchestrator = false
-          // But actually we want ALL departments that are NOT orchestrator so user can pick them
           const filtered = json.data
             .filter((d: any) => !d.is_orchestrator)
             .slice(0, 6) // Max 6 as per spec

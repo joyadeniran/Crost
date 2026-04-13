@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.5  
+**Current Version:** 6.7  
 **Last Updated:** April 13, 2026  
-**Deployment Status:** 🚀 Live — Polling-primary worker supervision, Supabase Realtime publication fix, and critical depends_on ID remapping bug fixed
+**Deployment Status:** 🚀 Live — Tenant-safe dashboard reads restored, template-first department creation shipped, constitution recovery and memo/artifact separation tightened.
 
 ---
 
@@ -24,6 +24,7 @@
 - ✅ **Multi-Tenant Security (RLS)** — Hardened Supabase policies, users only access own goals/memos/tasks
 - ✅ **Polling-Primary Worker Supervision** — 15s poll loop is primary engine; Realtime is opportunistic bonus when available
 - ✅ **Supabase Realtime Publication** — `goal_tasks`, `goals`, `company_memos`, `event_log`, `departments`, `approval_queue` all enabled in `supabase_realtime` publication
+- ✅ **Goal Cleanup & Diagnostic Toolkit** — Automated detection/cancellation of stuck goals (`scripts/clear_stuck_goals.ts`) + 10+ diagnostic scripts for system health.
 
 **Frontend & Deployment**
 - ✅ **Next.js Frontend** — Dynamic rendering, all 35 API routes with force-dynamic export
@@ -68,6 +69,15 @@
 - ✅ **Onboarding Identity Seeding** — Onboarding now seeds distinct identity fields into `system_config` for each user
 - ✅ **Dashboard Identity Labels Scoped** — Sidebar/dashboard labels now derive from company identity/name instead of merged founder/company text
 
+**Tenant Safety + Template Flow (v6.7)**
+- ✅ **Dashboard Tenant Scoping Restored** — Server-rendered Inbox, Approvals, Event Log, Memos, Artifacts, Constitution, and department detail pages now require auth and filter by `created_by`, preventing cross-user reads when using the service-role client
+- ✅ **Template-Aware Department API** — `/api/departments` now supports scoped reads (`user`, `templates`, `all`) and cloning a department directly from a global template via `template_slug`
+- ✅ **Onboarding Team Source Corrected** — Team selection now explicitly loads active global templates instead of mixed user/template data, keeping onboarding aligned with the spec
+- ✅ **New Department Uses Templates First** — `/dashboard/departments/new` now presents available department templates first, with custom-from-scratch kept as a secondary path
+- ✅ **Constitution Recovery** — Onboarding now seeds a user-scoped `agent_constitution` from the global template and the Constitution page falls back safely to the global clause set if the user row is absent
+- ✅ **Tool Output Artifact Separation** — Large tool outputs now write a readable artifact row in addition to a memo reference, improving spec compliance between memos and artifacts
+- ✅ **Onboarding Build Safety** — Removed live Google Fonts dependency from onboarding layout; build now uses the existing local font system and succeeds in restricted environments
+
 ### What Works (Tested) ✅
 
 - ✅ Build pipeline: `npm run build` completes with 0 errors
@@ -80,6 +90,7 @@
 - ✅ Model validation: user API keys tested through LiteLLM before storing
 - ✅ Multi-tenant isolation: RLS blocks cross-user data access
 - ✅ Goal lifecycle: draft → executing → completed (with post-mortem synthesis)
+- ✅ Goal Cleanup: Stuck goals with legacy dependency IDs (pre-v6.5) can now be programmatically cleared.
 - ✅ Render deployments: all three services deploy, no build timeout errors
 - ✅ Orc cancellation: "Cancel Goal" button in clarification dialogue allows users to escape conversation
 - ✅ Key resolver: user BYOK preferred; system fallback; hard quota cap at 50K tokens/day
@@ -88,6 +99,9 @@
 - ✅ Orc clarification: latest founder response now included in the prompt context before re-planning
 - ✅ Department settings: founder can edit prompt/tools/constraints/model and explicitly restore base template
 - ✅ Identity split: founder/company/assistant identity now stored separately and injected separately into prompts
+- ✅ Tenant-safe dashboard pages: inbox, memos, artifacts, constitution, event log, approvals, and department detail now stay scoped to the signed-in founder
+- ✅ Template-first department creation: founders can add a department from existing global templates and customize later
+- ✅ Production verification: `npm run type-check` and `npm run build` both pass after onboarding font localization
 
 ### What is Broken / Incomplete ⚠️
 
@@ -95,7 +109,7 @@
 - ✅ **Worker Realtime Fixed** — `goal_tasks`, `goals`, and others now enabled in `supabase_realtime` publication; worker upgraded to polling-primary (15s) + Realtime bonus architecture
 - ⚠️ **FREE_SYSTEM_DAILY_TOKENS not in Render** — Env var must be set to `50000` in crost-frontend Render service (defaults to 50000 in code if missing, but should be explicit)
 - ⚠️ **Orc Prompt Quality Still Needs Tuning** — Repetition risk reduced, but founder-facing copy and clarification heuristics still need deeper product tuning
-- ⚠️ **Stuck Goals in DB** — Goals created before v6.5 have tasks with unmapped placeholder dependency IDs (e.g. `a1b2c3d4-1111-...`); these will never unblock and should be cancelled via the War Room UI
+- ✅ **Stuck Goals Resolved** — Legacy placeholder dependency IDs (pre-v6.5) are now identified and cleared via `scripts/clear_stuck_goals.ts`
 - ⚠️ **Supabase Egress Over Quota** — ProjectX org at ~10.15 GB egress vs 5 GB free limit; grace period until May 8 2026; consider upgrading to Pro ($25/mo) or reducing query payload sizes
 - ⚠️ **Legacy local_identity Compatibility** — Some scripts and older seed helpers still reference `local_identity`; runtime is backward-compatible, but maintenance cleanup remains
 - ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
@@ -110,11 +124,12 @@
 - ✅ **API Keys Encrypted** — AES-256-GCM at rest (`lib/crypto.ts`), requires `USER_API_ENCRYPTION_KEY` in Render env
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
-- ⚠️ **Artifact Pipeline Partially Repaired** — Worker now stores preview-compatible artifact metadata, but richer inline artifact rendering still needs follow-through
+- ⚠️ **Artifact Pipeline Partially Repaired** — Worker now stores preview-compatible artifact metadata and tool outputs can create artifact rows, but richer inline artifact rendering still needs follow-through
 - ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
 - ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
 - ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
 - ✅ **UI Model Presets Updated** — All model references updated to current versions across UI, seed.sql, and wizard (v6.0)
+- ⚠️ **Render Env Drift Still Possible** — Local and Render env values may differ; verify `NEXT_PUBLIC_APP_URL`, `LITELLM_BASE_URL`, worker hostname, and system key settings against live services before debugging production-only behavior
 
 ---
 
@@ -123,7 +138,6 @@
 - 🔄 **Render Env Cleanup** — `NEXT_PUBLIC_APP_URL=https://crost-frontend.onrender.com` must be added to `crost-worker` Render env vars (poll dispatch won't fire without it)
 - 🔄 **Supabase Egress** — ~10.15 GB used vs 5 GB free; grace period until May 8; decision needed: upgrade to Pro or reduce egress
 - 🔄 **Orc Prompt Polish** — Founder-facing language still needs refinement so clarification feels sharper and less generic
-- 🔄 **Stuck Goals** — Old goals with placeholder dependency IDs need manual cancellation via War Room UI
 
 ---
 
@@ -132,8 +146,21 @@
 **CRITICAL PATH (Blocking)**
 - [ ] **Set `NEXT_PUBLIC_APP_URL`** — Add to `crost-worker` Render env: `https://crost-frontend.onrender.com` (worker dispatch calls need this)
 - [ ] **Resolve Supabase Egress** — Upgrade to Pro or reduce payload sizes before May 8 grace period ends
-- [ ] **Cancel Stuck Goals** — Use War Room UI to cancel old goals with placeholder dep IDs (pre-v6.5)
-- [ ] **Verify E2E Flow** — Create a new goal post-v6.5 and confirm: Orc plan → tasks dispatched → memos written → goal closed
+- [x] **Cancel Stuck Goals** — Automated via `scripts/clear_stuck_goals.ts` (legacy pre-v6.5 tasks unblocked)
+- [ ] **Verify E2E Flow** — Create a new goal post-v6.7 and confirm: Orc plan → tasks dispatched → memos written → artifacts visible → inbox scoped correctly → goal closed
+
+**COMPLETED FIXES (v6.7)**
+- [x] **Dashboard Tenant Scoping** — Protected server-rendered dashboard pages now require auth and filter by `created_by` so service-role reads cannot leak another founder's inbox items, memos, constitution, artifacts, or event history
+- [x] **Department Template API** — Added scoped department listing plus direct clone-from-template creation in `/api/departments`
+- [x] **Onboarding Template Alignment** — Team selection now loads active global templates only, matching the onboarding spec
+- [x] **Template-First New Department UX** — “New Department” now offers existing department templates before the blank custom wizard
+- [x] **Constitution Seeding + Fallback** — User constitution rows are seeded at onboarding and the constitution page falls back to the global template safely
+- [x] **Memo/Artifact Separation for Tool Outputs** — Large tool outputs now create artifacts while memos keep concise readable references
+- [x] **Onboarding Build Font Fix** — Replaced `next/font/google` in onboarding with the local font system so production builds succeed in restricted environments
+
+**COMPLETED FIXES (v6.6)**
+- [x] **Goal Cleanup Utility** — `scripts/clear_stuck_goals.ts` implements automated detection and cancellation of goals stuck in `executing` state due to placeholder dependency IDs.
+- [x] **Diagnostic Foundation** — Added suite of diagnostic scripts (`check_approvals.ts`, `check_events.ts`, `check_failed_goals.ts`, `check_goal_tasks.ts`, `check_orphaned_tasks.ts`) to maintain system stability.
 
 **COMPLETED FIXES (v6.5)**
 - [x] **depends_on ID Remapping** — `parseOrchestratorResponse` now builds old→new UUID map in pass 1 and remaps all `depends_on` arrays in pass 2; fixes permanent task blocking on every goal
@@ -230,6 +257,7 @@
 ### Security
 - ✅ API keys encrypted at rest (AES-256-GCM via `lib/crypto.ts`) — requires `USER_API_ENCRYPTION_KEY` in Render
 - ✅ Per-user token quota hard-blocked — `SYSTEM_LIMIT_EXCEEDED` throws; goal set to `failed`
+- ✅ Server-rendered dashboard reads now scoped by tenant even when using the service-role client
 - No audit log for API key access/rotation
 
 ### Performance
@@ -291,6 +319,7 @@
 - Unit test: Waterfall gating (verify tasks block on missing dependencies/memos)
 - Integration test: Orchestrator → LiteLLM round-trip (mocked LiteLLM response)
 - End-to-end: Founder input → Goal → Plan → Worker tasks → Synthesis (live Render)
+- End-to-end: Second founder account must not see first founder's inbox, memos, artifacts, constitution, or department detail pages
 - Security: Verify RLS blocks cross-user access (test queries from different user contexts)
 
 ### Common Pitfalls
@@ -309,8 +338,7 @@
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
-| Version | Date | Change |
-|---------|------|--------|
+| v6.6 | Apr 13 2026 | Goal Cleanup & Diagnostic Toolkit: Automated cleanup utility for legacy stuck goals (`clear_stuck_goals.ts`). Expanded stability toolkit with diagnostic scripts for tasks, approvals, and event logging. Stuck goals issue marked as resolved. |
 | v6.5 | Apr 13 2026 | Critical bug fix: `parseOrchestratorResponse` now remaps `depends_on` IDs via two-pass (old→new UUID map) — fixes permanent task blocking on all goals. Worker upgraded to polling-primary (15s) + Realtime bonus. Supabase `supabase_realtime` publication enabled for 6 key tables. Supabase egress quota issue identified (10.15 GB / 5 GB free). |
 | v6.3 | Apr 13 2026 | Auth hardening + settings cleanup: dialogue/dispatch/department-task tenant checks, settings auth fixes, settings page model-routing restored, Orc identity + clarification grounding improvements, department reset-to-template safety, direct chat memo persistence, artifact write-shape repair |
 | v6.2 | Apr 13 2026 | Key Resolver System: unified BYOK routing (key-resolver.ts), per-user daily quota (50K tokens), first-goal exemption, usage logging (usage-logger.ts + api_usage_logs table), static cost table, real settings usage meter, provider name normalisation, extra_body removal, ModelAssignmentForm key section removed |

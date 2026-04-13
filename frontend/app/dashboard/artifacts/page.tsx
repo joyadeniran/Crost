@@ -1,25 +1,27 @@
 export const dynamic = 'force-dynamic'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { redirect } from 'next/navigation'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ArtifactCard } from '@/components/artifacts/ArtifactCard'
 import { Artifact } from '@/types'
 
 export default async function ArtifactsPage() {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) redirect('/login')
+
   const supabase = createServerSupabaseClient()
   const { data } = await supabase
     .from('artifacts')
     .select('*')
+    .eq('created_by', user.id)
     .order('created_at', { ascending: false })
     .limit(50)
 
-  // Filter out failed tool execution errors that were accidentally stored as artifacts
   const artifacts = (data ?? []).filter((a: any) =>
     !a.body?.startsWith('[TOOL EXECUTION FAILED') &&
     !a.title?.startsWith('[TOOL EXECUTION FAILED')
   ) as Artifact[]
-  const images = artifacts.filter(a => a.artifact_type === 'image')
-  const docs = artifacts.filter(a => a.artifact_type === 'document')
-  const dataResults = artifacts.filter(a => a.artifact_type !== 'image' && a.artifact_type !== 'document')
 
   return (
     <div>
@@ -43,7 +45,7 @@ export default async function ArtifactsPage() {
           borderRadius: 12,
           border: '1px dashed rgba(255,255,255,0.1)'
         }}>
-          <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>🏗️</div>
+          <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.5 }}>Archive</div>
           <div>No artifacts generated yet.</div>
           <div style={{ fontSize: 11, marginTop: 8, opacity: 0.7 }}>
             Approve tasks to see your departments create work files.

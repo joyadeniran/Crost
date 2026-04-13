@@ -1,19 +1,25 @@
 export const dynamic = 'force-dynamic'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { redirect } from 'next/navigation'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ApprovalFeedItem } from '@/components/approvals/ApprovalFeedItem'
 import { ApprovalQueueItem } from '@/types'
 
 export default async function ApprovalsPage() {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) redirect('/login')
+
   const supabase = createServerSupabaseClient()
   const { data } = await supabase
     .from('approval_queue')
     .select('*')
+    .eq('created_by', user.id)
     .order('requested_at', { ascending: false })
     .limit(50)
 
   const approvals = (data ?? []) as ApprovalQueueItem[]
-  const pending  = approvals.filter(a => a.status === 'pending')
+  const pending = approvals.filter(a => a.status === 'pending')
   const resolved = approvals.filter(a => a.status !== 'pending')
 
   return (
@@ -65,8 +71,8 @@ export default async function ApprovalsPage() {
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 12,
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
-          All caught up — no pending approvals
+          <div style={{ fontSize: 32, marginBottom: 12 }}>OK</div>
+          All caught up - no pending approvals
         </div>
       )}
     </div>

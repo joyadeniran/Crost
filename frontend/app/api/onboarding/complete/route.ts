@@ -122,6 +122,31 @@ Never claim the founder's personal identity as your own.`
       }
     }
 
+    const { data: existingConstitution } = await supabase
+      .from('system_config')
+      .select('key')
+      .eq('key', 'agent_constitution')
+      .eq('created_by', user.id)
+      .maybeSingle()
+
+    if (!existingConstitution) {
+      const { data: globalConstitution } = await supabase
+        .from('system_config')
+        .select('value, is_founder_editable')
+        .eq('key', 'agent_constitution')
+        .is('created_by', null)
+        .maybeSingle()
+
+      if (globalConstitution?.value) {
+        await supabase.from('system_config').upsert({
+          key: 'agent_constitution',
+          value: globalConstitution.value,
+          created_by: user.id,
+          is_founder_editable: globalConstitution.is_founder_editable ?? true,
+        })
+      }
+    }
+
     // 4. Activate selected departments (attributed to user)
     // For new users, departments only exist as global templates (created_by = NULL from seed).
     // Clone the templates to this user's account so RLS and multi-tenant isolation work correctly.

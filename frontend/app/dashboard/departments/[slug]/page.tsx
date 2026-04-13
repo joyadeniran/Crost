@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ActivationBadge } from '@/components/ui/ActivationBadge'
 import { PulseIndicator } from '@/components/ui/PulseIndicator'
 import { SyncFailedBadge } from '@/components/ui/SyncFailedBadge'
@@ -22,11 +22,15 @@ const resolveIcon = (icon: string) => ICON_MAP[icon] ?? icon
 interface Props { params: { slug: string } }
 
 export default async function DepartmentDetailPage({ params }: Props) {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return notFound()
+
   const supabase = createServerSupabaseClient()
 
   const [deptResult, eventsResult] = await Promise.all([
-    supabase.from('departments').select('*').eq('slug', params.slug).single(),
-    supabase.from('event_log').select('*').eq('department_slug', params.slug)
+    supabase.from('departments').select('*').eq('slug', params.slug).eq('created_by', user.id).single(),
+    supabase.from('event_log').select('*').eq('department_slug', params.slug).eq('created_by', user.id)
       .order('created_at', { ascending: false }).limit(20),
   ])
 
