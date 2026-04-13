@@ -19,10 +19,14 @@ export async function POST(req: NextRequest) {
 
     const { goal } = await req.json()
 
+    // Derive a short title (same pattern as /api/goals)
+    const title = goal.length > 60 ? goal.slice(0, 57) + '…' : goal
+
     // 1. Create a Goal Row first to get an ID
     const { data: goalRow, error: goalErr } = await supabase
       .from('goals')
       .insert({
+        title,
         founder_input: goal,
         status: 'planning',
         created_by: user.id
@@ -32,11 +36,23 @@ export async function POST(req: NextRequest) {
 
     if (goalErr || !goalRow) throw goalErr
 
-    // 2. Priming Orc for Onboarding
+    // 2. Always mark onboarding complete once a goal row is created.
+    //    Do this BEFORE calling the orchestrator so the user can reach the
+    //    dashboard even if the LLM call fails or times out.
+    await supabase.auth.admin.updateUserById(user.id, {
+      user_metadata: { onboarding_step: 'complete' }
+    })
+    await supabase.from('system_config').upsert({
+      key: 'onboarding_complete',
+      value: true,
+      created_by: user.id
+    })
+
+    // 3. Priming Orc for Onboarding
     // We'll append the onboarding context to the user input for this specific call.
     const onboardingGoal = `
     ${goal}
-    
+
     ONBOARDING CONTEXT:
     This is the founder's first goal. No external tools are connected yet.
     Produce a plan that consists entirely of:
@@ -45,25 +61,11 @@ export async function POST(req: NextRequest) {
     Do not assign any tasks that require Gmail, GitHub, or external APIs.
     The founder will connect tools as they need them.
     `
-    
+
     const res = await runOrchestratorTask(onboardingGoal, goalRow.id)
-
-    if (res.plan) {
-      // Tasks are already in goal_tasks (inserted by runOrchestratorTask).
-      // Goal is in status 'awaiting_approval' with orchestrator_plan set.
-      // The War Room will pick this up via the pending goal ID stored in localStorage.
-
-      // Mark onboarding complete
-      await supabase.from('system_config').upsert({
-        key: 'onboarding_complete', 
-        value: true,
-        created_by: user.id
-      })
-
-      await supabase.auth.admin.updateUserById(user.id, {
-        user_metadata: { onboarding_step: 'complete' }
-      })
-    }
+    // Tasks are already in goal_tasks (inserted by runOrchestratorTask).
+    // Goal is in status 'awaiting_approval' with orchestrator_plan set.
+    // The War Room will pick this up via the pending goal ID stored in localStorage.
 
     return NextResponse.json({ goal_id: goalRow.id, plan: res.plan })
   } catch (err: any) {
