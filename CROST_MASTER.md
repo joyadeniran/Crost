@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.4  
+**Current Version:** 6.5  
 **Last Updated:** April 13, 2026  
-**Deployment Status:** 🚀 Live — Auth boundary hardening, settings routing cleanup, Orc clarification grounding, department template safety, and split identity context shipped
+**Deployment Status:** 🚀 Live — Polling-primary worker supervision, Supabase Realtime publication fix, and critical depends_on ID remapping bug fixed
 
 ---
 
@@ -22,7 +22,8 @@
 - ✅ **Strict Waterfall Execution** — Dependency gating verified by both task status AND physical memo existence
 - ✅ **BYOK Model Assignment** — Users provide API keys, select models per role (reasoning/execution/utility)
 - ✅ **Multi-Tenant Security (RLS)** — Hardened Supabase policies, users only access own goals/memos/tasks
-- ✅ **Event-Driven Worker Supervision** — Zero-poll architecture with Realtime subscriptions + watchdog timers
+- ✅ **Polling-Primary Worker Supervision** — 15s poll loop is primary engine; Realtime is opportunistic bonus when available
+- ✅ **Supabase Realtime Publication** — `goal_tasks`, `goals`, `company_memos`, `event_log`, `departments`, `approval_queue` all enabled in `supabase_realtime` publication
 
 **Frontend & Deployment**
 - ✅ **Next.js Frontend** — Dynamic rendering, all 35 API routes with force-dynamic export
@@ -91,9 +92,11 @@
 ### What is Broken / Incomplete ⚠️
 
 - ⚠️ **Render Env Vars Stale** — `CLOUD_MODEL` and `CLOUD_MODEL_WORKER` in Render dashboard still set to `cloud/groq-llama` (code handles this defensively, but should be updated to `groq/llama-3.3-70b-versatile` for clarity)
-- ⚠️ **Worker Realtime TIMED_OUT** — Supabase Realtime subscription times out on Render; worker degrades to watchdog-only mode; root cause under investigation (Realtime may need enabling in Supabase project settings)
+- ✅ **Worker Realtime Fixed** — `goal_tasks`, `goals`, and others now enabled in `supabase_realtime` publication; worker upgraded to polling-primary (15s) + Realtime bonus architecture
 - ⚠️ **FREE_SYSTEM_DAILY_TOKENS not in Render** — Env var must be set to `50000` in crost-frontend Render service (defaults to 50000 in code if missing, but should be explicit)
 - ⚠️ **Orc Prompt Quality Still Needs Tuning** — Repetition risk reduced, but founder-facing copy and clarification heuristics still need deeper product tuning
+- ⚠️ **Stuck Goals in DB** — Goals created before v6.5 have tasks with unmapped placeholder dependency IDs (e.g. `a1b2c3d4-1111-...`); these will never unblock and should be cancelled via the War Room UI
+- ⚠️ **Supabase Egress Over Quota** — ProjectX org at ~10.15 GB egress vs 5 GB free limit; grace period until May 8 2026; consider upgrading to Pro ($25/mo) or reducing query payload sizes
 - ⚠️ **Legacy local_identity Compatibility** — Some scripts and older seed helpers still reference `local_identity`; runtime is backward-compatible, but maintenance cleanup remains
 - ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
 - ✅ **Finance/All Dept Model Names** — DB migration fixed all `cloud/*` and `local/*` model aliases to valid LiteLLM names (v6.0)
@@ -117,19 +120,27 @@
 
 ## 2. In Progress
 
-- 🔄 **Frontend Redeploy** — Latest v6.4 identity-split build is ready for Render redeploy/verification
-- 🔄 **Render Env Cleanup** — `CLOUD_MODEL`, `CLOUD_MODEL_WORKER`, `FREE_SYSTEM_DAILY_TOKENS` need manual update in Render dashboard
-- 🔄 **Worker Realtime Investigation** — Subscription times out; may need Supabase Realtime toggle + network check
+- 🔄 **Render Env Cleanup** — `NEXT_PUBLIC_APP_URL=https://crost-frontend.onrender.com` must be added to `crost-worker` Render env vars (poll dispatch won't fire without it)
+- 🔄 **Supabase Egress** — ~10.15 GB used vs 5 GB free; grace period until May 8; decision needed: upgrade to Pro or reduce egress
 - 🔄 **Orc Prompt Polish** — Founder-facing language still needs refinement so clarification feels sharper and less generic
+- 🔄 **Stuck Goals** — Old goals with placeholder dependency IDs need manual cancellation via War Room UI
 
 ---
 
 ## 3. Next Tasks
 
 **CRITICAL PATH (Blocking)**
-- [ ] **Set Render Env Vars** — crost-frontend: `CLOUD_MODEL=groq/llama-3.3-70b-versatile`, `CLOUD_MODEL_WORKER=groq/llama-3.3-70b-versatile`, `FREE_SYSTEM_DAILY_TOKENS=50000`
-- [ ] **Fix Worker Realtime** — Enable Realtime in Supabase project settings; verify WebSocket reachability from Render
-- [ ] **Verify E2E Flow** — Goal → Orc plan → Worker executes → Usage logged → Synthesis report generated
+- [ ] **Set `NEXT_PUBLIC_APP_URL`** — Add to `crost-worker` Render env: `https://crost-frontend.onrender.com` (worker dispatch calls need this)
+- [ ] **Resolve Supabase Egress** — Upgrade to Pro or reduce payload sizes before May 8 grace period ends
+- [ ] **Cancel Stuck Goals** — Use War Room UI to cancel old goals with placeholder dep IDs (pre-v6.5)
+- [ ] **Verify E2E Flow** — Create a new goal post-v6.5 and confirm: Orc plan → tasks dispatched → memos written → goal closed
+
+**COMPLETED FIXES (v6.5)**
+- [x] **depends_on ID Remapping** — `parseOrchestratorResponse` now builds old→new UUID map in pass 1 and remaps all `depends_on` arrays in pass 2; fixes permanent task blocking on every goal
+- [x] **Polling-Primary Worker** — `pollSupervisor()` runs every 15s as primary engine; `recentlyDispatched` set prevents double-dispatch; `dispatchTask()` extracted as single entrypoint
+- [x] **Supabase Realtime Publication** — Enabled `goal_tasks`, `goals`, `company_memos`, `event_log`, `departments`, `approval_queue` in `supabase_realtime` publication via Supabase Dashboard
+- [x] **`FREE_SYSTEM_DAILY_TOKENS` documented** — Defaults to 50000 in code; should be set explicitly in Render
+- [x] **CROST_MASTER updated** — Env var values, worker architecture, quota issue, and bug fix all documented
 
 **COMPLETED FIXES (v6.3)**
 - [x] **Auth Boundary Hardening** — `/api/goals/[id]/dialogue`, `/api/goals/[id]/dispatch`, and `/api/departments/[slug]/task` now require user auth and tenant scoping
@@ -257,7 +268,8 @@
 - TypeScript must be available at build time (not just devDependencies)
 
 ### Deployment Checklist
-- [ ] Set `LITELLM_BASE_URL` (base only, no /v1)
+- [ ] **Set `LITELLM_BASE_URL`** (base only, no /v1)
+- [ ] **Set `NEXT_PUBLIC_APP_URL`** in crost-worker Render env (required for poll dispatch)
 - [ ] Set `LITELLM_MASTER_KEY` (any random string, e.g., `sk-litellm-xxxxx`)
 - [ ] Set provider API keys: `GROQ_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`
 - [ ] Set Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -293,10 +305,13 @@
 - ❌ Calling LLM functions from client components (all LLM logic is server-side in `lib/llm-client.ts`)
 - ❌ Hardcoding API keys or URLs (always use environment variables)
 - ❌ Forgetting `force-dynamic` export on new API routes (causes static pre-rendering)
+- ❌ Relying on Supabase Realtime alone — always pair with polling fallback; free tier `postgres_changes` requires tables enabled in `supabase_realtime` publication
+- ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
 | Version | Date | Change |
 |---------|------|--------|
+| v6.5 | Apr 13 2026 | Critical bug fix: `parseOrchestratorResponse` now remaps `depends_on` IDs via two-pass (old→new UUID map) — fixes permanent task blocking on all goals. Worker upgraded to polling-primary (15s) + Realtime bonus. Supabase `supabase_realtime` publication enabled for 6 key tables. Supabase egress quota issue identified (10.15 GB / 5 GB free). |
 | v6.3 | Apr 13 2026 | Auth hardening + settings cleanup: dialogue/dispatch/department-task tenant checks, settings auth fixes, settings page model-routing restored, Orc identity + clarification grounding improvements, department reset-to-template safety, direct chat memo persistence, artifact write-shape repair |
 | v6.2 | Apr 13 2026 | Key Resolver System: unified BYOK routing (key-resolver.ts), per-user daily quota (50K tokens), first-goal exemption, usage logging (usage-logger.ts + api_usage_logs table), static cost table, real settings usage meter, provider name normalisation, extra_body removal, ModelAssignmentForm key section removed |
 | v6.1 | Apr 12 2026 | Operational stability complete: "Cancel Goal" button added to OrcDialogue clarification phase; all 4 safety features now active (approval expiry cron, goal cancel, retry/skip, orc cancellation) |
