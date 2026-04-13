@@ -35,7 +35,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 const UpdateSchema = z.object({
-  name: z.string().min(1).optional(),
   persona_prompt: z.string().min(50).optional(),
   tone_override: z.string().nullable().optional(),
   capabilities: z.array(z.string()).optional(),
@@ -45,6 +44,7 @@ const UpdateSchema = z.object({
   tools: z.array(z.string()).optional(),
   icon: z.string().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  reset_to_template: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -70,11 +70,65 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .single()
     if (!dept) return NextResponse.json({ error: 'Department not found' }, { status: 404 })
 
+    if (dept.is_orchestrator) {
+      return NextResponse.json({ error: 'Orchestrator settings are not editable from this route yet.' }, { status: 403 })
+    }
+
+    const { reset_to_template, ...editableFields } = parsed
+
+    if (reset_to_template) {
+      const { data: template } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('slug', params.slug)
+        .is('created_by', null)
+        .single()
+
+      if (!template) {
+        return NextResponse.json({ error: 'Base template not found for this department' }, { status: 404 })
+      }
+
+      const resetPayload = {
+        persona_prompt: template.persona_prompt,
+        tone_override: template.tone_override,
+        capabilities: template.capabilities,
+        restrictions: template.restrictions,
+        tools: template.tools,
+        model_provider: template.model_provider,
+        model_name: template.model_name,
+        icon: template.icon,
+        color: template.color,
+        activation_stage: 'review',
+        status: 'idle',
+      }
+
+      const { data: resetDept, error: resetErr } = await supabase
+        .from('departments')
+        .update(resetPayload)
+        .eq('slug', params.slug)
+        .eq('created_by', user.id)
+        .select()
+        .single()
+
+      if (resetErr) throw resetErr
+
+      await supabase.from('event_log').insert({
+        department_id: dept.id,
+        department_slug: dept.slug,
+        event_type: 'department_updated',
+        description: `Department "${dept.name}" reset to base template`,
+        metadata: { reset_to_template: true },
+        created_by: user.id
+      })
+
+      return NextResponse.json({ data: resetDept })
+    }
+
     // Persona prompt or tools change → reset to review
-    const requiresReview = (parsed.persona_prompt !== undefined || parsed.tools !== undefined)
+    const requiresReview = (editableFields.persona_prompt !== undefined || editableFields.tools !== undefined)
       && dept.activation_stage === 'active'
 
-    const updates: Record<string, unknown> = { ...parsed }
+    const updates: Record<string, unknown> = { ...editableFields }
     if (requiresReview) updates.activation_stage = 'review'
 
     const { data: updated, error: updateErr } = await supabase
@@ -93,7 +147,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       department_slug: dept.slug,
       event_type: 'department_updated',
       description: `Department "${dept.name}" updated`,
-      metadata: { fields: Object.keys(parsed), reset_to_review: requiresReview },
+      metadata: { fields: Object.keys(editableFields), reset_to_review: requiresReview },
       created_by: user.id
     })
 

@@ -37,6 +37,7 @@ export function DeptSettingsForm({ dept }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [hasDraft, setHasDraft] = useState(false)
+  const [resettingTemplate, setResettingTemplate] = useState(false)
 
   // Load draft
   useEffect(() => {
@@ -147,6 +148,33 @@ export function DeptSettingsForm({ dept }: Props) {
     }
   }
 
+  const handleResetTemplate = async () => {
+    if (!confirm('Reset this department to its base template? This will discard your custom prompt, tools, constraints, and model settings.')) {
+      return
+    }
+
+    setResettingTemplate(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      const res = await fetch(`/api/departments/${dept.slug}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset_to_template: true }),
+      })
+      const json = await res.json() as { error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Reset failed')
+
+      localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
+      setHasDraft(false)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reset failed')
+    } finally {
+      setResettingTemplate(false)
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     width: '100%',
     background: 'var(--bg-3)',
@@ -189,6 +217,9 @@ export function DeptSettingsForm({ dept }: Props) {
         <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginBottom: 2 }}>
           Agent Persona
         </div>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 4px', lineHeight: 1.5 }}>
+          Founder-editable fields only: prompt, tools, constraints, and model. Identity, name, and internal routing fields stay locked for MVP safety.
+        </p>
         {dept.activation_stage === 'active' && (
           <div style={{
             fontSize: 11, color: 'var(--amber)',
@@ -334,6 +365,34 @@ export function DeptSettingsForm({ dept }: Props) {
           <span style={{ fontSize: 12, color: 'var(--red)' }}>{error}</span>
         )}
       </div>
+
+      <section style={sectionStyle}>
+        <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
+          Template Safety
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6, margin: 0 }}>
+          If a customization degrades the department, restore the known-good base template and continue from a safe configuration.
+        </p>
+        <div>
+          <button
+            onClick={handleResetTemplate}
+            disabled={resettingTemplate}
+            style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 11,
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: 'var(--text-2)',
+              cursor: resettingTemplate ? 'wait' : 'pointer',
+              opacity: resettingTemplate ? 0.6 : 1,
+            }}
+          >
+            {resettingTemplate ? 'Resetting…' : 'Reset To Base Template'}
+          </button>
+        </div>
+      </section>
 
       {/* Danger Zone */}
       {dept.activation_stage !== 'deprecated' && (
