@@ -5,6 +5,28 @@ import { useRouter } from 'next/navigation'
 import { CreateDepartmentWizard } from '@/components/departments/CreateDepartmentWizard'
 import type { Department } from '@/types'
 
+const ICON_MAP: Record<string, string> = {
+  briefcase: '💼',
+  code: '💻',
+  'code-2': '💻',
+  megaphone: '📣',
+  handshake: '🤝',
+  'bar-chart-2': '📊',
+  chart: '📊',
+  'settings-2': '⚙️',
+  ops: '⚙️',
+  shield: '🛡️',
+  flask: '🧪',
+  globe: '🌐',
+  users: '👥',
+  zap: '⚡',
+  'dollar-sign': '💰',
+}
+
+function resolveIcon(icon: string): string {
+  return ICON_MAP[icon] ?? icon
+}
+
 export default function NewDepartmentPage() {
   const router = useRouter()
   const [mode, setMode] = useState<'templates' | 'custom'>('templates')
@@ -172,7 +194,7 @@ export default function NewDepartmentPage() {
                     border: `1px solid ${template.color}30`,
                   }}
                 >
-                  {template.icon}
+                  {resolveIcon(template.icon)}
                 </div>
                 <div>
                   <div style={{ fontFamily: 'var(--font-syne, Syne)', fontSize: 17, color: 'var(--text)' }}>

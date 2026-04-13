@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.7  
+**Current Version:** 6.8  
 **Last Updated:** April 13, 2026  
-**Deployment Status:** 🚀 Live — Tenant-safe dashboard reads restored, template-first department creation shipped, constitution recovery and memo/artifact separation tightened.
+**Deployment Status:** 🚀 Live — Tenant-safe dashboard reads restored, template-first department creation shipped, and the multitenant department schema recovery is now codified for production rollout.
 
 ---
 
@@ -78,6 +78,13 @@
 - ✅ **Tool Output Artifact Separation** — Large tool outputs now write a readable artifact row in addition to a memo reference, improving spec compliance between memos and artifacts
 - ✅ **Onboarding Build Safety** — Removed live Google Fonts dependency from onboarding layout; build now uses the existing local font system and succeeds in restricted environments
 
+**Department Schema Recovery (v6.8)**
+- ✅ **Template Icon Rendering Repaired** — Department template cards now map stored icon slugs like `code-2` and `settings-2` back to display icons instead of leaking raw IDs into the UI
+- ✅ **Production Clone Failure Diagnosed** — The live `POST /api/departments` 500 was traced to legacy global uniqueness on `departments.slug`, `departments.name`, and the single global orchestrator index, which blocked copying global templates into user-owned rows
+- ✅ **Multitenant Department Migration Added** — New Supabase migration replaces global uniqueness with split template-vs-user uniqueness so templates and per-user department copies can coexist cleanly
+- ✅ **Legacy User Recovery Path Added** — Dashboard now attempts to provision user-owned department copies from global templates when an older account has zero owned departments, restoring the spec-compliant per-user model once the migration is applied
+- ✅ **LLM Department Resolution Scoped** — Worker/orchestrator/event logging now resolve departments by `(created_by, slug)` first and only fall back to global templates, aligning runtime behavior with the new multitenant department model
+
 ### What Works (Tested) ✅
 
 - ✅ Build pipeline: `npm run build` completes with 0 errors
@@ -102,6 +109,7 @@
 - ✅ Tenant-safe dashboard pages: inbox, memos, artifacts, constitution, event log, approvals, and department detail now stay scoped to the signed-in founder
 - ✅ Template-first department creation: founders can add a department from existing global templates and customize later
 - ✅ Production verification: `npm run type-check` and `npm run build` both pass after onboarding font localization
+- ✅ Department template UI: template chooser once again renders visible icons instead of internal icon keys
 
 ### What is Broken / Incomplete ⚠️
 
@@ -112,6 +120,7 @@
 - ✅ **Stuck Goals Resolved** — Legacy placeholder dependency IDs (pre-v6.5) are now identified and cleared via `scripts/clear_stuck_goals.ts`
 - ⚠️ **Supabase Egress Over Quota** — ProjectX org at ~10.15 GB egress vs 5 GB free limit; grace period until May 8 2026; consider upgrading to Pro ($25/mo) or reducing query payload sizes
 - ⚠️ **Legacy local_identity Compatibility** — Some scripts and older seed helpers still reference `local_identity`; runtime is backward-compatible, but maintenance cleanup remains
+- ⚠️ **v6.8 Requires Supabase Migration Apply** — Live template cloning and automatic recovery for legacy users will not work until `supabase/migrations/20260413020000_department_templates_multitenant.sql` is applied to production
 - ✅ **LiteLLM Model Routing** — Config updated to current Claude 4.6 + Gemini 2.5 Flash models; removed deprecated 1.5 Pro (v6.0)
 - ✅ **Finance/All Dept Model Names** — DB migration fixed all `cloud/*` and `local/*` model aliases to valid LiteLLM names (v6.0)
 - ✅ **Orchestrator Fallback** — `cloud/groq-llama` legacy aliases now normalized defensively in llm-client.ts (v6.0)

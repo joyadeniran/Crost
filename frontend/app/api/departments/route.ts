@@ -144,7 +144,12 @@ export async function POST(req: NextRequest) {
         })
         .select()
         .single()
-      if (cloneError) throw cloneError
+      if (cloneError) {
+        const message = cloneError.message?.includes('unique')
+          ? 'Department templates cannot be copied until the latest departments migration is applied in Supabase.'
+          : cloneError.message
+        return NextResponse.json({ success: false, error: message }, { status: 500 })
+      }
 
       await supabase.from('event_log').insert({
         department_id: clonedDept.id,
