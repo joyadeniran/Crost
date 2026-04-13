@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ReflectionBlock } from '@/components/onboarding/ReflectionBlock'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 
 export default function IdentityPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const email = searchParams.get('email')
+
   const { 
     founderName, companyName, city, country, businessDescription, businessCategory, stage,
     setIdentity 
@@ -19,6 +22,7 @@ export default function IdentityPage() {
   const [inputCompany, setInputCompany] = useState(companyName)
   const [inputLocation, setInputLocation] = useState(city && country ? `${city}, ${country}` : '')
   const [inputDesc, setInputDesc] = useState(businessDescription)
+  const [inputEmail, setInputEmail] = useState(email || '')
 
   // Reflection states
   const [nameReflection, setNameReflection] = useState('')
@@ -49,6 +53,7 @@ export default function IdentityPage() {
       companyName: inputCompany,
       city: cityName, 
       country: countryName 
+      // Note: If you want to store email here, add it to your OnboardingStore interface
     })
     setNameReflection(`Hey ${inputName} from ${inputCompany}. Building in ${cityName} — got it.`)
     setStep(2)
