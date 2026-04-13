@@ -145,7 +145,8 @@ export default function LoginPage() {
               </div>
 
               <div className="bottom-links">
-                <button 
+                <button
+                  type="button"
                   onClick={() => setMode(mode === 'magic-link' ? 'password' : 'magic-link')}
                   className="secondary-button"
                 >

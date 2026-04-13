@@ -980,17 +980,21 @@ export function WarRoom() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Poll for plan when goal is in 'planning' or 'executing' or 'awaiting_approval' status
+  // Poll for plan when goal is in 'planning' or 'executing' or 'awaiting_approval' status.
+  // Depend only on goal ID + status (not the full object) so the interval is not reset
+  // on every poll response — prevents the ~700ms polling storm.
+  const activeGoalId = activeGoal?.id
+  const activeGoalStatus = activeGoal?.status
   useEffect(() => {
-    if (!activeGoal || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoal.status)) return
+    if (!activeGoalId || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/goals/${activeGoal.id}`)
+        const res = await fetch(`/api/goals/${activeGoalId}`)
         const json = await res.json()
         if (json.success && json.data) {
           updateActiveGoal(json.data)
-          // Stop polling if goal reaches terminal state
-          if (['completed', 'failed'].includes(json.data.status)) {
+          // Stop polling if goal reaches a terminal state
+          if (['completed', 'failed', 'cancelled', 'synthesis_done'].includes(json.data.status)) {
             clearInterval(interval)
             setIsSubmittingGoal(false)
           }
@@ -1000,7 +1004,7 @@ export function WarRoom() {
       }
     }, 2000)
     return () => clearInterval(interval)
-  }, [activeGoal, setIsSubmittingGoal, updateActiveGoal])
+  }, [activeGoalId, activeGoalStatus, setIsSubmittingGoal, updateActiveGoal])
 
   const handleGoalSubmit = useCallback(async (founderInput: string) => {
     setIsSubmittingGoal(true)

@@ -8,8 +8,22 @@ interface Props {
   artifact: Artifact
 }
 
+/** Strip markdown code-fence wrappers (```json ... ```) stored by the worker */
+function cleanArtifactBody(raw: string): string {
+  // Remove leading/trailing code fences with optional language tag
+  const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+  // Try to parse as JSON and pretty-print for readability
+  try {
+    const parsed = JSON.parse(stripped)
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return stripped
+  }
+}
+
 export function ArtifactCard({ artifact }: Props) {
   const createdAt = new Date(artifact.created_at)
+  const cleanBody = artifact.body ? cleanArtifactBody(artifact.body) : null
 
   const IconType = () => {
     switch (artifact.artifact_type) {
@@ -49,7 +63,7 @@ export function ArtifactCard({ artifact }: Props) {
 
   const downloadArtifact = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
+    const content = cleanBody || JSON.stringify(artifact.metadata, null, 2)
     const blob = new Blob([content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -83,18 +97,18 @@ export function ArtifactCard({ artifact }: Props) {
           </span>
         </div>
 
-        {artifact.body && (
-          <div style={{ 
-            fontSize: 12, 
-            color: 'var(--text-2)', 
-            lineHeight: 1.6, 
+        {cleanBody && (
+          <div style={{
+            fontSize: 12,
+            color: 'var(--text-2)',
+            lineHeight: 1.6,
             marginBottom: 12,
             display: '-webkit-box',
             WebkitLineClamp: 3,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden'
           }}>
-            {artifact.body}
+            {cleanBody}
           </div>
         )}
 
@@ -229,7 +243,7 @@ export function ArtifactCard({ artifact }: Props) {
                   lineHeight: 1.8, 
                   color: 'var(--text-2)' 
                 }}>
-                  {artifact.body || "No text content available for this artifact."}
+                  {cleanBody || "No text content available for this artifact."}
                   
                   {artifact.metadata && (
                     <div style={{ marginTop: 32, paddingTop: 32, borderTop: '1px solid var(--border)' }}>
