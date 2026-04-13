@@ -15,23 +15,99 @@ export default async function DashboardPage() {
   if (!user) {
     redirect('/login')
   }
+  const currentUser = user
 
   const supabase = createServerSupabaseClient()
-
-  const [deptResult, approvalResult, identityResult] = await Promise.all([
-    supabase
+  async function cloneTemplatesForLegacyUser() {
+    const { data: templates } = await supabase
       .from('departments')
       .select('*')
-      .eq('created_by', user.id)
+      .is('created_by', null)
       .neq('activation_stage', 'deprecated')
-      .neq('slug', 'orchestrator')
-      .order('created_at'),
-    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
+      .order('created_at')
+
+    const nonOrchestratorTemplates = (templates ?? []).filter((dept: any) => !dept.is_orchestrator)
+    const orchestratorTemplate = (templates ?? []).find((dept: any) => dept.is_orchestrator)
+
+    for (const template of nonOrchestratorTemplates) {
+      const { error } = await supabase.from('departments').insert({
+        name: template.name,
+        slug: template.slug,
+        persona_prompt: template.persona_prompt,
+        tone_override: template.tone_override,
+        capabilities: template.capabilities,
+        restrictions: template.restrictions,
+        tools: template.tools,
+        model_provider: template.model_provider,
+        model_name: template.model_name,
+        icon: template.icon,
+        color: template.color,
+        is_orchestrator: false,
+        created_by: currentUser.id,
+        activation_stage: template.activation_stage === 'active' ? 'active' : 'draft',
+        status: 'idle',
+      })
+      if (error) {
+        console.warn('[dashboard] Legacy department provisioning failed:', error.message)
+        return false
+      }
+    }
+
+    if (orchestratorTemplate) {
+      const { error } = await supabase.from('departments').insert({
+        name: orchestratorTemplate.name,
+        slug: orchestratorTemplate.slug,
+        persona_prompt: orchestratorTemplate.persona_prompt,
+        tone_override: orchestratorTemplate.tone_override,
+        capabilities: orchestratorTemplate.capabilities,
+        restrictions: orchestratorTemplate.restrictions,
+        tools: orchestratorTemplate.tools,
+        model_provider: orchestratorTemplate.model_provider,
+        model_name: orchestratorTemplate.model_name,
+        icon: orchestratorTemplate.icon,
+        color: orchestratorTemplate.color,
+        is_orchestrator: true,
+        created_by: currentUser.id,
+        activation_stage: 'active',
+        status: 'idle',
+      })
+      if (error) {
+        console.warn('[dashboard] Legacy orchestrator provisioning failed:', error.message)
+        return false
+      }
+    }
+
+    return true
+  }
+
+  let deptResult = await supabase
+    .from('departments')
+    .select('*')
+    .eq('created_by', currentUser.id)
+    .neq('activation_stage', 'deprecated')
+    .neq('slug', 'orchestrator')
+    .order('created_at')
+
+  if ((deptResult.data?.length ?? 0) === 0) {
+    const provisioned = await cloneTemplatesForLegacyUser()
+    if (provisioned) {
+      deptResult = await supabase
+        .from('departments')
+        .select('*')
+        .eq('created_by', currentUser.id)
+        .neq('activation_stage', 'deprecated')
+        .neq('slug', 'orchestrator')
+        .order('created_at')
+    }
+  }
+
+  const [approvalResult, identityResult] = await Promise.all([
+    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', currentUser.id),
     supabase
       .from('system_config')
       .select('key, value')
       .in('key', ['company_name', 'company_identity'])
-      .eq('created_by', user.id),
+      .eq('created_by', currentUser.id),
   ])
 
   const departments = (deptResult.data ?? []) as Department[]

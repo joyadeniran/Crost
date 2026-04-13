@@ -66,6 +66,57 @@ function cleanConfigValue(value: unknown): string {
   return cleaned === 'null' ? '' : cleaned
 }
 
+async function resolveDepartmentBySlug(
+  slug: string,
+  userId?: string | null
+): Promise<Department | null> {
+  const supabase = createServerSupabaseClient()
+
+  if (userId) {
+    const { data: userDepartment } = await supabase
+      .from('departments')
+      .select('*')
+      .eq('slug', slug)
+      .eq('created_by', userId)
+      .maybeSingle()
+
+    if (userDepartment) return userDepartment as Department
+  }
+
+  const { data: globalDepartment } = await supabase
+    .from('departments')
+    .select('*')
+    .eq('slug', slug)
+    .is('created_by', null)
+    .maybeSingle()
+
+  return (globalDepartment as Department | null) ?? null
+}
+
+async function resolveOrchestratorDepartment(userId?: string | null): Promise<Department | null> {
+  const supabase = createServerSupabaseClient()
+
+  if (userId) {
+    const { data: userOrchestrator } = await supabase
+      .from('departments')
+      .select('*')
+      .eq('is_orchestrator', true)
+      .eq('created_by', userId)
+      .maybeSingle()
+
+    if (userOrchestrator) return userOrchestrator as Department
+  }
+
+  const { data: globalOrchestrator } = await supabase
+    .from('departments')
+    .select('*')
+    .eq('is_orchestrator', true)
+    .is('created_by', null)
+    .maybeSingle()
+
+  return (globalOrchestrator as Department | null) ?? null
+}
+
 // ─── Approval signal regex ────────────────────────────────────────────────────
 
 const APPROVAL_SIGNAL_MARKER = 'REQUEST_APPROVAL'
@@ -572,8 +623,8 @@ export async function logEvent(input: LogEventInput): Promise<void> {
     const supabase = createServerSupabaseClient()
     let departmentId: string | null = null
     if (input.department_slug && input.department_slug !== 'orchestrator') {
-      const { data } = await supabase.from('departments').select('id').eq('slug', input.department_slug).single()
-      departmentId = data?.id ?? null
+      const dept = await resolveDepartmentBySlug(input.department_slug, input.created_by)
+      departmentId = dept?.id ?? null
     }
 
     await supabase.from('event_log').insert({
@@ -695,12 +746,9 @@ export async function runOrchestratorTask(
   forcePlan: boolean = false
 ): Promise<any> {
   const supabase = createServerSupabaseClient()
-  const [{ data: orcDept }, { data: goalRow }] = await Promise.all([
-    supabase.from('departments').select('*').eq('is_orchestrator', true).single(),
-    supabase.from('goals').select('created_by').eq('id', goalId).single()
-  ])
-
+  const { data: goalRow } = await supabase.from('goals').select('created_by').eq('id', goalId).single()
   const userId = goalRow?.created_by
+  const orcDept = await resolveOrchestratorDepartment(userId)
   const lastMsg = conversationHistory[conversationHistory.length - 1]
   if (lastMsg && lastMsg.role === 'user') {
     await saveContextMemo(goalId, lastMsg.content, userId)
@@ -711,6 +759,7 @@ export async function runOrchestratorTask(
     .select('id, name, slug, status, current_task')
     .eq('activation_stage', 'active')
     .neq('is_orchestrator', true)
+    .eq('created_by', userId)
 
   const activeDeptsList = allActiveDepts ?? []
   const systemMemory = await buildOrcContext(userId)
@@ -813,10 +862,10 @@ export async function runWorkerTask(
   envModeOverride?: 'local' | 'cloud'
 ): Promise<WorkerResult> {
   const supabase = createServerSupabaseClient()
-  const [{ data: deptRow }, { data: goalRow }] = await Promise.all([
-    supabase.from('departments').select('*').eq('slug', dept).single(),
-    goalId ? supabase.from('goals').select('created_by').eq('id', goalId).single() : Promise.resolve({ data: null })
-  ])
+  const { data: goalRow } = goalId
+    ? await supabase.from('goals').select('created_by').eq('id', goalId).single()
+    : { data: null }
+  const deptRow = await resolveDepartmentBySlug(dept, goalRow?.created_by)
 
   if (!deptRow) throw new Error(`Department "${dept}" not found`)
   const userId = goalRow?.created_by || deptRow.created_by
