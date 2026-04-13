@@ -658,14 +658,28 @@ function parseOrchestratorResponse(raw: string): any {
     if (parsed.is_valid_goal === undefined && parsed.plan) parsed.is_valid_goal = true
     
     if (parsed.is_valid_goal && parsed.plan?.tasks) {
+      // Pass 1: build old-LLM-id → new-uuid map and replace task IDs
+      // IMPORTANT: depends_on arrays reference the LLM's placeholder IDs.
+      // We must remap them AFTER replacing all task IDs, not during.
+      const idMap = new Map<string, string>()
       for (const t of parsed.plan.tasks) {
-        t.id = crypto.randomUUID()
+        const newId = crypto.randomUUID()
+        idMap.set(t.id, newId)
+        t.id = newId
         // Normalize legacy/invalid model aliases to 'cloud' sentinel so
         // runWorkerTask resolves them via user_model_assignments at runtime
         const isLegacyAlias = !t.model
           || t.model.startsWith('cloud/')
           || t.model.startsWith('local/')
         if (isLegacyAlias) t.model = 'cloud'
+      }
+      // Pass 2: remap depends_on to the new UUIDs
+      // Without this, dependency IDs remain as LLM placeholders and
+      // the waterfall gate in the worker never resolves — tasks block forever.
+      for (const t of parsed.plan.tasks) {
+        t.depends_on = (t.depends_on ?? []).map(
+          (depId: string) => idMap.get(depId) ?? depId
+        )
       }
     }
     return { ok: true, ...parsed }
