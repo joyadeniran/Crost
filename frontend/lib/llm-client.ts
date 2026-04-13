@@ -169,9 +169,22 @@ export async function buildFinalPrompt(
     ...(tools ?? []).map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
   ].join('\n')
 
+  const identitySection = departmentSlug === 'orchestrator'
+    ? [
+        'You are Orc, the Chief of Staff for the founder.',
+        'The LOCAL IDENTITY below describes the founder/company context, not your personal identity.',
+        'Never introduce yourself as the founder, never use the founder\'s name as your own, and never describe the founder\'s mission as your own biography.',
+        'If asked who you are, answer as Orc / Chief of Staff.'
+      ].join('\n')
+    : [
+        'The LOCAL IDENTITY below describes the founder/company context you are serving.',
+        'Do not claim to be the founder. Speak as the department lead serving the founder.'
+      ].join('\n')
+
   return [
     `## CROST CONSTITUTION (Non-negotiable)\n${constitution}`,
     `## YOUR ROLE\n${departmentPrompt}`,
+    `## IDENTITY HANDLING\n${identitySection}`,
     `## LOCAL IDENTITY\n${localIdentity}`,
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
@@ -559,7 +572,7 @@ export async function logEvent(input: LogEventInput): Promise<void> {
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-const ORCHESTRATOR_SYSTEM_NOTE = `You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
+const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
 
 {
   "is_valid_goal": boolean,
@@ -589,7 +602,26 @@ Rules:
 1. if is_valid_goal is true, plan must be fully populated. If is_valid_goal is false, clarification_question must be non-empty. reasoning on every task is mandatory.
 2. You MUST ONLY assign tasks to the PROVIDED list of departments.
 3. CENTRALIZED RESEARCH: Insert a "Master Research Task" at the start for any market/external data needs.
-4. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.`
+4. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.
+5. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
+6. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
+7. Never refer to yourself as the founder or use the founder's personal identity as your own.`
+
+function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
+  if (!history.length) return 'None'
+  return history
+    .slice(-8)
+    .map((entry) => `${entry.role.toUpperCase()}: ${entry.content}`)
+    .join('\n')
+}
+
+function normalizeClarification(text: string | null | undefined): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .trim()
+}
 
 function parseOrchestratorResponse(raw: string): any {
   let jsonStr = raw.trim()
@@ -646,8 +678,14 @@ export async function runOrchestratorTask(
 
   const activeDeptsList = allActiveDepts ?? []
   const systemMemory = await buildOrcContext(userId)
-
-  const prompt = `GOAL: ${founderInput}\n\nAvailable Departments: ${activeDeptsList.map(d => d.slug).join(', ')}\n\nSystem Memory:\n${systemMemory}`
+  const conversationContext = formatConversationHistory(conversationHistory)
+  const prompt = [
+    `GOAL: ${founderInput}`,
+    forcePlan ? 'PLANNING MODE: The founder explicitly asked you to stop clarifying and draft the best possible plan with reasonable assumptions.' : '',
+    `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
+    `Conversation History:\n${conversationContext}`,
+    `System Memory:\n${systemMemory}`,
+  ].filter(Boolean).join('\n\n')
 
   const finalPrompt = await buildFinalPrompt(
     orcDept?.persona_prompt ?? 'You are the Orchestrator.',
@@ -660,7 +698,28 @@ export async function runOrchestratorTask(
 
   const { model: planModel, provider: planProvider } = await getModel('planning', userId)
   const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
-  const result = parseOrchestratorResponse(content)
+  let result = parseOrchestratorResponse(content)
+
+  const previousAssistantMessage = [...conversationHistory].reverse().find((m) => m.role === 'assistant')?.content
+  const latestUserMessage = [...conversationHistory].reverse().find((m) => m.role === 'user')?.content
+  const repeatedClarification = result.is_valid_goal === false
+    && !!previousAssistantMessage
+    && normalizeClarification(result.clarification_question) !== ''
+    && normalizeClarification(result.clarification_question) === normalizeClarification(previousAssistantMessage)
+    && !!latestUserMessage
+
+  if (repeatedClarification && !forcePlan) {
+    const retryPrompt = `${prompt}\n\nIMPORTANT: The founder already answered your prior clarification. You repeated yourself. Draft the best possible plan now using the founder's latest reply and reasonable assumptions.`
+    const retryResponse = await callLLM(planModel, await buildFinalPrompt(
+      orcDept?.persona_prompt ?? 'You are the Orchestrator.',
+      retryPrompt,
+      orcDept?.capabilities ?? [],
+      orcDept?.restrictions ?? [],
+      orcDept?.slug,
+      goalId
+    ), ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
+    result = parseOrchestratorResponse(retryResponse.content)
+  }
   
   if (!result.ok) throw new Error(result.reason)
 

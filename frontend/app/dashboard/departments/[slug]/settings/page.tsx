@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { DeptSettingsForm } from '@/components/departments/DeptSettingsForm'
 import { ActivationBadge } from '@/components/ui/ActivationBadge'
 import type { Department } from '@/types'
@@ -10,11 +10,16 @@ import type { Department } from '@/types'
 interface Props { params: { slug: string } }
 
 export default async function DepartmentSettingsPage({ params }: Props) {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return notFound()
+
   const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from('departments')
     .select('*')
     .eq('slug', params.slug)
+    .eq('created_by', user.id)
     .single()
 
   if (error || !data) return notFound()
