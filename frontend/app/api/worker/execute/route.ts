@@ -122,16 +122,34 @@ export async function POST(req: Request) {
 
     // 4. PERSIST: Save result to company_memos for Orchestrator synthesis
     let bodyText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    const fullBodyText = bodyText;
     // Prune for egress safety
     if (bodyText.length > 3000) {
       bodyText = bodyText.substring(0, 3000) + '\n\n... [Output truncated for egress efficiency]';
+    }
+
+    let artifactReference: string | null = null;
+    if (fullBodyText.length > 1200) {
+      const { data: artifact } = await supabase.from('artifacts').insert({
+        goal_id: task.goal_id,
+        department_slug: task.dept_slug,
+        artifact_type: 'document',
+        title: `Tool Output: ${toolName}`,
+        body: fullBodyText,
+        metadata: { toolName, taskId, source: 'tool_execution' },
+        created_by: userId
+      }).select('id').single();
+
+      artifactReference = artifact?.id ?? null;
     }
 
     await supabase.from('company_memos').insert({
       from_department: task.dept_slug,
       goal_id: task.goal_id,
       title: `Tool Output: ${toolName}`,
-      body: bodyText,
+      body: artifactReference
+        ? `${bodyText}\n\nReadable artifact saved in Artifacts with ID: ${artifactReference}`
+        : bodyText,
       tags: ['tool_output', `task_${taskId}`],
       priority: 'normal',
       source_type: 'agent',

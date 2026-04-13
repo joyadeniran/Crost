@@ -1,15 +1,21 @@
 export const dynamic = 'force-dynamic'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { redirect } from 'next/navigation'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { MemoCard } from '@/components/memos/MemoCard'
 import { CompanyMemo } from '@/types'
 
 export default async function MemosPage() {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) redirect('/login')
+
   const supabase = createServerSupabaseClient()
   const { data } = await supabase
     .from('company_memos')
     .select('*')
-    .neq('from_department', 'founder') // Exclude raw clarification dialogue responses — not real memos
+    .eq('created_by', user.id)
+    .neq('from_department', 'founder')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -48,7 +54,7 @@ export default async function MemosPage() {
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 12,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>📭</div>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>Memo</div>
           No memos yet
         </div>
       )}

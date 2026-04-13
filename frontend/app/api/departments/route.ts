@@ -8,28 +8,45 @@ import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const authClient = await createSupabaseServerComponentClient()
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     const supabase = createServerSupabaseClient()
+    const { searchParams } = new URL(req.url)
+    const scope = searchParams.get('scope') ?? 'default'
+    const activeOnly = searchParams.get('active_only') === 'true'
+    const includeOrchestrator = searchParams.get('include_orchestrator') === 'true'
     // Return user's own departments OR global templates (created_by IS NULL from seed)
     // This ensures the onboarding team page shows departments for new users who haven't created any yet
-    const { data, error } = await supabase
+    let query = supabase
       .from('departments')
       .select('*')
       .or(`created_by.eq.${user.id},created_by.is.null`)
       .neq('activation_stage', 'deprecated')
       .order('created_at')
+    if (activeOnly) query = query.eq('activation_stage', 'active')
+    if (!includeOrchestrator) query = query.eq('is_orchestrator', false)
+    const { data, error } = await query
     if (error) throw error
 
-    // If user has their own departments, prefer those over templates to avoid duplicates
     const userDepts = (data ?? []).filter((d: any) => d.created_by === user.id)
     const templateDepts = (data ?? []).filter((d: any) => d.created_by === null)
-    // Use user depts if they exist; fall back to templates (onboarding case)
-    const result = userDepts.length > 0 ? userDepts : templateDepts
+    const userSlugs = new Set(userDepts.map((dept: any) => dept.slug))
+
+    let result = userDepts.length > 0 ? userDepts : templateDepts
+    if (scope === 'user') {
+      result = userDepts
+    } else if (scope === 'templates') {
+      result = templateDepts
+    } else if (scope === 'all') {
+      result = [
+        ...userDepts,
+        ...templateDepts.filter((dept: any) => !userSlugs.has(dept.slug)),
+      ]
+    }
 
     return NextResponse.json({ data: result })
   } catch (err) {
@@ -62,15 +79,92 @@ const CreateSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color must be a valid hex code').default('#6366f1'),
 })
 
+const CloneTemplateSchema = z.object({
+  template_slug: z.string().min(2).max(50),
+})
+
 export async function POST(req: NextRequest) {
   try {
     const authClient = await createSupabaseServerComponentClient()
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-    const body = await req.json()
-    const parsed = CreateSchema.parse(body)
     const supabase = createServerSupabaseClient()
+    const body = await req.json()
+
+    if (body?.template_slug) {
+      const parsedTemplate = CloneTemplateSchema.parse(body)
+
+      const { data: existingUserDept } = await supabase
+        .from('departments')
+        .select('id')
+        .eq('slug', parsedTemplate.template_slug)
+        .eq('created_by', user.id)
+        .maybeSingle()
+      if (existingUserDept) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `You already have the "${parsedTemplate.template_slug}" department.`,
+            code: 'DEPARTMENT_ALREADY_EXISTS',
+          },
+          { status: 409 }
+        )
+      }
+
+      const { data: template, error: templateError } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('slug', parsedTemplate.template_slug)
+        .is('created_by', null)
+        .eq('is_orchestrator', false)
+        .single()
+      if (templateError || !template) {
+        return NextResponse.json({ success: false, error: 'Department template not found' }, { status: 404 })
+      }
+
+      const { data: clonedDept, error: cloneError } = await supabase
+        .from('departments')
+        .insert({
+          name: template.name,
+          slug: template.slug,
+          persona_prompt: template.persona_prompt,
+          tone_override: template.tone_override,
+          capabilities: template.capabilities,
+          restrictions: template.restrictions,
+          tools: template.tools,
+          model_provider: template.model_provider,
+          model_name: template.model_name,
+          icon: template.icon,
+          color: template.color,
+          is_orchestrator: template.is_orchestrator,
+          created_by: user.id,
+          activation_stage: 'active',
+          status: 'idle',
+        })
+        .select()
+        .single()
+      if (cloneError) throw cloneError
+
+      await supabase.from('event_log').insert({
+        department_id: clonedDept.id,
+        department_slug: clonedDept.slug,
+        event_type: 'department_created',
+        description: `Department "${clonedDept.name}" created from template`,
+        metadata: { template_slug: parsedTemplate.template_slug, source: 'template' },
+        created_by: user.id
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: clonedDept
+        },
+        { status: 201 }
+      )
+    }
+
+    const parsed = CreateSchema.parse(body)
 
     // Step 1a: Slug uniqueness
     const { data: existing } = await supabase
