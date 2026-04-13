@@ -26,9 +26,17 @@ export async function PATCH(req: NextRequest) {
     const { key, value } = UpdateConfigSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
-    // 1. Verify if the key is allowed to be edited or if it's a new identity key
-    // We allow upserting these specific keys for identity
-    const allowedKeys = ['founder_name', 'company_name', 'local_identity', 'risk_tolerance', 'token_hard_limit_per_session'];
+    // 1. Verify if the key is allowed to be edited or if it's a founder-controlled identity/config key
+    const allowedKeys = [
+      'founder_name',
+      'company_name',
+      'founder_identity',
+      'company_identity',
+      'assistant_identity',
+      'local_identity',
+      'risk_tolerance',
+      'token_hard_limit_per_session',
+    ];
     
     if (!allowedKeys.includes(key)) {
       // Check if it's a protected key in global config

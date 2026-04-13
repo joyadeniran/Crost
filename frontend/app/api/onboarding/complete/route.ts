@@ -24,6 +24,17 @@ export async function POST(req: NextRequest) {
       termsVersion = '1.0',
       privacyVersion = '1.0'
     } = body
+    const founderIdentity = identity.founderIdentity?.trim()
+      || (identity.founderName ? `Founder: ${identity.founderName}` : '')
+    const companyIdentity = identity.companyIdentity?.trim()
+      || [
+        identity.companyName ? `${identity.companyName} is the business being operated in Crost.` : '',
+        identity.businessCategory || identity.businessDescription || '',
+      ].filter(Boolean).join(' ')
+    const assistantIdentity = identity.assistantIdentity?.trim()
+      || `You are Orc, Crost's Chief of Staff for ${identity.companyName || 'the founder'}.
+Support the founder with clear plans, grounded execution, and crisp updates.
+Never claim the founder's personal identity as your own.`
 
     // Handle X-Forwarded-For to get IP if available in the headers
     const ip_address = req.headers.get('x-forwarded-for') || req.ip || null;
@@ -91,6 +102,11 @@ export async function POST(req: NextRequest) {
 
     // 3. Upsert system_config values (multi-tenant safe with created_by)
     const configItems = [
+      { key: 'founder_name', value: identity.founderName || '', created_by: user.id },
+      { key: 'company_name', value: identity.companyName || '', created_by: user.id },
+      { key: 'founder_identity', value: founderIdentity, created_by: user.id },
+      { key: 'company_identity', value: companyIdentity, created_by: user.id },
+      { key: 'assistant_identity', value: assistantIdentity, created_by: user.id },
       { key: 'risk_tolerance', value: riskTolerance, created_by: user.id },
       { key: 'onboarding_step', value: 'activated', created_by: user.id },
       { key: 'onboarding_complete', value: false, created_by: user.id }
@@ -196,8 +212,11 @@ export async function POST(req: NextRequest) {
     // 5. Update User metadata (robust secondary storage)
     await supabase.auth.admin.updateUserById(user.id, {
       user_metadata: { 
-        display_name: identity.founder_name,
+        display_name: identity.founderName,
         onboarding_step: 'activated',
+        founder_identity: founderIdentity,
+        company_identity: companyIdentity,
+        assistant_identity: assistantIdentity,
         local_identity: identity
       }
     })

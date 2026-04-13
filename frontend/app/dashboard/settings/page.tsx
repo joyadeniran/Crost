@@ -31,9 +31,21 @@ export default async function SettingsPage() {
   // Prefer system_config value (set via identity editor), fall back to company_profile from onboarding
   const founderName  = configs.find(c => c.key === 'founder_name')?.value ?? profileRes.data?.founder_name
   const companyName  = configs.find(c => c.key === 'company_name')?.value ?? profileRes.data?.company_name
+  const founderIdentity = configs.find(c => c.key === 'founder_identity')?.value
+  const companyIdentity = configs.find(c => c.key === 'company_identity')?.value
+  const assistantIdentity = configs.find(c => c.key === 'assistant_identity')?.value
 
   const founderStr = founderName ? String(founderName).replace(/"/g, '') : ''
   const companyStr = companyName ? String(companyName).replace(/"/g, '') : ''
+  const founderIdentityStr = founderIdentity
+    ? String(founderIdentity).replace(/"/g, '')
+    : (founderStr ? `Founder: ${founderStr}` : '')
+  const companyIdentityStr = companyIdentity
+    ? String(companyIdentity).replace(/"/g, '')
+    : (companyStr ? `Company: ${companyStr}` : '')
+  const assistantIdentityStr = assistantIdentity
+    ? String(assistantIdentity).replace(/"/g, '')
+    : 'You are Orc, Crost\'s Chief of Staff. Support the founder, speak clearly, and never claim the founder\'s identity as your own.'
 
   return (
     <div style={{ width: '100%' }}>
@@ -77,6 +89,9 @@ export default async function SettingsPage() {
           <IdentityEditor 
             initialFounder={founderStr} 
             initialCompany={companyStr} 
+            initialFounderIdentity={founderIdentityStr}
+            initialCompanyIdentity={companyIdentityStr}
+            initialAssistantIdentity={assistantIdentityStr}
           />
         </div>
 

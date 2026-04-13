@@ -31,7 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const [pendingResult, eventsResult, configResult, modeResult] = await Promise.all([
     supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
     supabase.from('event_log').select('*').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
-    supabase.from('system_config').select('key, value').eq('key', 'local_identity').eq('created_by', user.id).single(),
+    supabase.from('system_config').select('key, value').in('key', ['company_name', 'company_identity']).eq('created_by', user.id),
     // Only hit DB for mode if no cookie yet
     cookieMode
       ? Promise.resolve({ data: null, error: null })
@@ -40,9 +40,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const pendingCount = pendingResult.data?.length ?? 0
   const events = (eventsResult.data ?? []) as EventLogEntry[]
-  const identity = configResult.data?.value
-    ? String(configResult.data.value).replace(/"/g, '')
-    : 'Crost'
+  const companyName = configResult.data?.find((row) => row.key === 'company_name')?.value
+  const companyIdentity = configResult.data?.find((row) => row.key === 'company_identity')?.value
+  const identity = companyName
+    ? String(companyName).replace(/"/g, '')
+    : companyIdentity
+      ? String(companyIdentity).replace(/"/g, '').split('.')[0]
+      : 'Crost'
 
   // Cookie wins over DB — once the user toggles, the cookie is always authoritative
   const dbMode = String(modeResult.data?.value ?? '').replace(/"/g, '')

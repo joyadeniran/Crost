@@ -6,11 +6,23 @@ import { useRouter } from 'next/navigation'
 interface Props {
   initialFounder: string
   initialCompany: string
+  initialFounderIdentity: string
+  initialCompanyIdentity: string
+  initialAssistantIdentity: string
 }
 
-export function IdentityEditor({ initialFounder, initialCompany }: Props) {
+export function IdentityEditor({
+  initialFounder,
+  initialCompany,
+  initialFounderIdentity,
+  initialCompanyIdentity,
+  initialAssistantIdentity,
+}: Props) {
   const [founder, setFounder] = useState(initialFounder)
   const [company, setCompany] = useState(initialCompany)
+  const [founderIdentity, setFounderIdentity] = useState(initialFounderIdentity)
+  const [companyIdentity, setCompanyIdentity] = useState(initialCompanyIdentity)
+  const [assistantIdentity, setAssistantIdentity] = useState(initialAssistantIdentity)
   const [isEditing, setIsEditing] = useState(!initialFounder && !initialCompany)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,11 +34,12 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
     setError(null)
     setSuccess(false)
     try {
-      // We save three keys: founder_name, company_name, and the composite local_identity for the AI
       const ops = [
         { key: 'founder_name', value: founder.trim() },
         { key: 'company_name', value: company.trim() },
-        { key: 'local_identity', value: `${founder.trim()} (${company.trim()})` }
+        { key: 'founder_identity', value: founderIdentity.trim() },
+        { key: 'company_identity', value: companyIdentity.trim() },
+        { key: 'assistant_identity', value: assistantIdentity.trim() },
       ]
 
       for (const op of ops) {
@@ -61,22 +74,23 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
       marginBottom: 16,
     }}>
       <div style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginBottom: 4 }}>
-        Founder Identity
+        Identity Layers
       </div>
       <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 14 }}>
-        Your name and your company name. This provides context for your AI departments.
+        Keep founder context, company context, and Orc&apos;s own identity separate so the system stays grounded.
       </p>
 
       {isEditing ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <input
               type="text"
               value={founder}
-              onChange={e => setFounder(e.target.value)}
-              placeholder="Your Name (e.g. John Doe)"
+              onChange={(e) => setFounder(e.target.value)}
+              placeholder="Founder Name (e.g. Joy A.)"
               style={{
                 flex: 1,
+                minWidth: 220,
                 background: 'var(--bg-3)',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
@@ -89,10 +103,11 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
             <input
               type="text"
               value={company}
-              onChange={e => setCompany(e.target.value)}
-              placeholder="Company Name (e.g. Acme Corp)"
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Company Name (e.g. Supplya)"
               style={{
                 flex: 1,
+                minWidth: 220,
                 background: 'var(--bg-3)',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
@@ -103,11 +118,72 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
               }}
             />
           </div>
+
+          <textarea
+            value={founderIdentity}
+            onChange={(e) => setFounderIdentity(e.target.value)}
+            placeholder="Founder identity context for the AI"
+            rows={3}
+            style={{
+              width: '100%',
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text)',
+              fontSize: 13,
+              padding: '10px 12px',
+              outline: 'none',
+              resize: 'vertical',
+              lineHeight: 1.5,
+            }}
+          />
+
+          <textarea
+            value={companyIdentity}
+            onChange={(e) => setCompanyIdentity(e.target.value)}
+            placeholder="Company identity context for the AI"
+            rows={3}
+            style={{
+              width: '100%',
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text)',
+              fontSize: 13,
+              padding: '10px 12px',
+              outline: 'none',
+              resize: 'vertical',
+              lineHeight: 1.5,
+            }}
+          />
+
+          <textarea
+            value={assistantIdentity}
+            onChange={(e) => setAssistantIdentity(e.target.value)}
+            placeholder="Assistant identity for Orc and the operating system"
+            rows={3}
+            style={{
+              width: '100%',
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text)',
+              fontSize: 13,
+              padding: '10px 12px',
+              outline: 'none',
+              resize: 'vertical',
+              lineHeight: 1.5,
+            }}
+          />
+
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button
               onClick={() => {
                 setFounder(initialFounder)
                 setCompany(initialCompany)
+                setFounderIdentity(initialFounderIdentity)
+                setCompanyIdentity(initialCompanyIdentity)
+                setAssistantIdentity(initialAssistantIdentity)
                 setIsEditing(false)
               }}
               style={{
@@ -124,7 +200,7 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || !founder.trim() || !company.trim()}
+              disabled={saving || !founder.trim() || !company.trim() || !assistantIdentity.trim()}
               className="btn-primary-crost"
               style={{ opacity: saving ? 0.6 : 1, padding: '6px 16px', fontSize: 12 }}
             >
@@ -133,11 +209,18 @@ export function IdentityEditor({ initialFounder, initialCompany }: Props) {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--bg-3)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-          <div style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>
-            <span style={{ fontWeight: 600 }}>{founder}</span>
-            <span style={{ color: 'var(--text-3)', margin: '0 8px' }}>@</span>
-            <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{company}</span>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: 'var(--bg-3)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>
+              <span style={{ fontWeight: 600 }}>{founder}</span>
+              <span style={{ color: 'var(--text-3)', margin: '0 8px' }}>@</span>
+              <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{company}</span>
+            </div>
+            <div style={{ display: 'grid', gap: 8, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
+              <div><span style={{ color: 'var(--text-4)', fontSize: 10, letterSpacing: '0.08em' }}>FOUNDER</span><br />{founderIdentity}</div>
+              <div><span style={{ color: 'var(--text-4)', fontSize: 10, letterSpacing: '0.08em' }}>COMPANY</span><br />{companyIdentity}</div>
+              <div><span style={{ color: 'var(--text-4)', fontSize: 10, letterSpacing: '0.08em' }}>ASSISTANT</span><br />{assistantIdentity}</div>
+            </div>
           </div>
           <button
             onClick={() => setIsEditing(true)}
