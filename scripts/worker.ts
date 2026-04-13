@@ -1,15 +1,20 @@
 #!/usr/bin/env tsx
 // scripts/worker.ts
-// Orc's ZERO-POLL supervision worker.
-// Uses Supabase Realtime (Websockets) to eliminate periodic DB heartbeats.
+// Orc's supervision worker.
+//
+// Architecture: Polling-primary + Realtime bonus
+//   - A 15-second poll loop is the PRIMARY supervision engine (reliable on all Supabase tiers)
+//   - Supabase Realtime subscriptions (postgres_changes) are an OPPORTUNISTIC bonus:
+//     when available they provide instant event delivery; when unavailable the poll covers everything.
+//   - All operations are idempotent — safe to run from both poll and Realtime simultaneously.
 //
 // Responsibilities:
-//   1. Event-driven supervision via Realtime subscriptions.
+//   1. Polling supervisor — watchdog sync, dependency unblocking, goal closure, pending dispatch.
 //   2. In-memory stall detection (Watchdog Timers).
 //   3. Goal closure and post-mortem generation.
 //   4. Multi-tenant context preservation.
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -24,6 +29,7 @@ if (fs.existsSync(localEnvPath)) {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const STALL_THRESHOLD_MS = 5 * 60_000   // 5 minutes = stalled
+const POLL_INTERVAL_MS   = 15_000       // 15 seconds between supervisor cycles
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('[worker] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
@@ -49,6 +55,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 // taskId -> NodeJS.Timeout
 // Tracks tasks currently in flight to detect stalls without polling.
 const activeWatchdogs = new Map<string, NodeJS.Timeout>()
+
+// Tracks tasks already dispatched in this poll cycle to avoid double-dispatch
+const recentlyDispatched = new Set<string>()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -181,7 +190,7 @@ function startWatchdog(taskId: string, goalId: string) {
   activeWatchdogs.set(taskId, timeout)
 }
 
-// ─── Goal Management (Zero Poll) ──────────────────────────────────────────────
+// ─── Goal Management ──────────────────────────────────────────────────────────
 
 async function unblockDependentTasks(goalId: string) {
   const { data: blockedTasks } = await supabase
@@ -216,21 +225,7 @@ async function unblockDependentTasks(goalId: string) {
     const allMemosExist = dependencies.every(depId => postedMemos.has(depId))
 
     if (allMemosExist) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL
-      if (!appUrl) {
-        log(`NEXT_PUBLIC_APP_URL missing; cannot auto-dispatch task "${blocked.task_id}"`, { goalId })
-        continue
-      }
-
-      fetch(`${appUrl}/api/goals/${goalId}/dispatch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-        },
-        body: JSON.stringify({ task_id: blocked.task_id })
-      }).catch((e) => log(`Auto-dispatch failed for task "${blocked.task_id}"`, e))
-
+      await dispatchTask(blocked.task_id, goalId)
       log(`Dependencies resolved & memos verified — auto-dispatching task "${blocked.task_id}"`, { goalId })
       await writeEvent('orc_rebalance', `Task "${blocked.label}" auto-dispatched after dependency verification`, goalId)
     } else {
@@ -257,22 +252,107 @@ async function tryCloseGoal(goalId: string) {
     : `${tasks.filter(t => t.status === 'failed').length} failed, ${tasks.filter(t => t.status === 'completed').length} completed.`
 
   await writePostMortemMemo(goalId, goal.founder_input, tasks)
-
-// Synthesis report is now handled by llm-client.ts on goal completion.
-  // The worker can just signal goal closure and the synthesis will trigger if all tasks are terminal.
-  // ... rest of logic remains but removed fetch to /api/goals/[id]/report as it is now redundant with runOrcReport being called in runWorkerTask
-  
   await supabase.from('goals').update({ status: 'completed', outcome }).eq('id', goalId)
-
   log(`Goal closed: ${goalId}`)
+}
+
+// ─── Dispatch helper ──────────────────────────────────────────────────────────
+
+async function dispatchTask(taskId: string, goalId: string) {
+  if (recentlyDispatched.has(taskId)) {
+    log(`[Dispatch] Skipping already-dispatched task: ${taskId}`)
+    return
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl) {
+    log('[Dispatch] NEXT_PUBLIC_APP_URL missing — cannot auto-dispatch tasks')
+    return
+  }
+
+  recentlyDispatched.add(taskId)
+  // Remove from recently dispatched after 60s (prevents memory leak, allows re-dispatch if truly needed)
+  setTimeout(() => recentlyDispatched.delete(taskId), 60_000)
+
+  fetch(`${appUrl}/api/goals/${goalId}/dispatch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-crost-internal-secret': SUPABASE_SERVICE_KEY
+    },
+    body: JSON.stringify({ task_id: taskId })
+  }).catch((e) => log(`[Dispatch] fetch failed for task ${taskId}`, e))
+}
+
+// ─── Polling Supervisor (Primary Engine) ──────────────────────────────────────
+
+async function pollSupervisor() {
+  try {
+    log('[Poll] Supervisor cycle starting...')
+
+    // 1. Sync watchdogs with actual DB state
+    const { data: runningTasks } = await supabase
+      .from('goal_tasks')
+      .select('task_id, goal_id')
+      .eq('status', 'running')
+
+    const runningIds = new Set((runningTasks ?? []).map(t => t.task_id))
+
+    // Arm watchdogs for running tasks that don't have one
+    for (const task of runningTasks ?? []) {
+      if (!activeWatchdogs.has(task.task_id)) {
+        log(`[Poll] Re-arming watchdog for running task: ${task.task_id}`)
+        startWatchdog(task.task_id, task.goal_id)
+      }
+    }
+
+    // Clear stale watchdogs for tasks no longer running
+    for (const [taskId] of activeWatchdogs) {
+      if (!runningIds.has(taskId)) {
+        log(`[Poll] Clearing stale watchdog for completed/failed task: ${taskId}`)
+        clearWatchdog(taskId)
+      }
+    }
+
+    // 2. Supervise all executing goals
+    const { data: executingGoals } = await supabase
+      .from('goals')
+      .select('id')
+      .eq('status', 'executing')
+
+    for (const goal of executingGoals ?? []) {
+      await unblockDependentTasks(goal.id)
+      await tryCloseGoal(goal.id)
+    }
+
+    // 3. Dispatch pending tasks with no blocking dependencies
+    //    (covers tasks that weren't dispatched when the plan was approved)
+    const { data: pendingTasks } = await supabase
+      .from('goal_tasks')
+      .select('task_id, goal_id, depends_on, label, status')
+      .eq('status', 'pending')
+
+    for (const task of pendingTasks ?? []) {
+      const deps = (task.depends_on as string[]) ?? []
+      if (deps.length === 0) {
+        log(`[Poll] Dispatching no-dependency pending task: ${task.task_id} (${task.label})`)
+        await dispatchTask(task.task_id, task.goal_id)
+      }
+      // Tasks with deps are handled by unblockDependentTasks above
+    }
+
+    log(`[Poll] Cycle complete. Active watchdogs: ${activeWatchdogs.size}, Executing goals: ${executingGoals?.length ?? 0}`)
+  } catch (err: any) {
+    log(`[Poll] Supervisor cycle error: ${err.message}`)
+  }
 }
 
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 async function main() {
-  log('Orc ZERO-POLL supervisor starting...')
+  log('Orc supervisor starting... [mode: polling-primary + realtime-bonus]')
 
-  // 1. Initial State Recovery (Hit DB once to re-sync map in case of crash)
+  // 1. Initial State Recovery — re-sync on boot in case of crash/restart
   const { data: runningTasks } = await supabase
     .from('goal_tasks')
     .select('task_id, goal_id, assigned_at')
@@ -292,52 +372,63 @@ async function main() {
     }
   }
 
-  // 2. Realtime Subscriptions
+  // 2. Realtime Subscriptions (opportunistic bonus — instant delivery when available)
+  //    On Supabase free tier, postgres_changes requires tables to be in the supabase_realtime
+  //    publication. If not enabled, the subscription times out and the poll covers everything.
   const channel = supabase.channel('worker_supervision')
-
   let realtimeConnected = false
 
   channel
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goal_tasks' }, async (payload) => {
       const { task_id, goal_id, status } = payload.new
-      log(`Event received: goal_tasks UPDATE [${task_id}] -> ${status}`)
+      log(`[Realtime] goal_tasks UPDATE [${task_id}] -> ${status}`)
 
       if (status === 'running') {
         startWatchdog(task_id, goal_id)
       } else if (['completed', 'failed', 'rejected', 'expired'].includes(status)) {
         clearWatchdog(task_id)
-        // Reactive logic: check for deps and closure
         await unblockDependentTasks(goal_id)
         await tryCloseGoal(goal_id)
       }
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'goal_tasks' }, async (payload) => {
       const { task_id, goal_id, status } = payload.new
+      log(`[Realtime] goal_tasks INSERT [${task_id}] status=${status}`)
       if (status === 'running') {
         startWatchdog(task_id, goal_id)
-      }
-    })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goals' }, async (payload) => {
-       if (payload.new.status === 'executing' && payload.old.status !== 'executing') {
-         log(`Goal ${payload.new.id} switched to executing. Running supervision...`)
-         await tryCloseGoal(payload.new.id)
-       }
-    })
-    .subscribe((status) => {
-      log(`Realtime subscription status: ${status}`)
-      if (status === 'SUBSCRIBED' || status === 'TIMED_OUT') {
-        if (status === 'SUBSCRIBED') {
-          realtimeConnected = true
-          log('✓ Realtime connection established')
-        } else if (status === 'TIMED_OUT') {
-          log('⚠ Realtime connection TIMED_OUT — Supabase Realtime may be disabled or unreachable')
-          log('⚠ Worker will continue with watchdog timers, but event-driven supervision is degraded')
-          realtimeConnected = false
+      } else if (status === 'pending') {
+        // Instant dispatch for no-dependency tasks — don't wait for next poll
+        const deps = (payload.new.depends_on as string[]) ?? []
+        if (deps.length === 0) {
+          log(`[Realtime] Instantly dispatching no-dep task: ${task_id}`)
+          await dispatchTask(task_id, goal_id)
         }
       }
     })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goals' }, async (payload) => {
+      if (payload.new.status === 'executing' && payload.old.status !== 'executing') {
+        log(`[Realtime] Goal ${payload.new.id} switched to executing — running supervision...`)
+        await unblockDependentTasks(payload.new.id)
+        await tryCloseGoal(payload.new.id)
+      }
+    })
+    .subscribe((status) => {
+      log(`Realtime subscription status: ${status}`)
+      if (status === 'SUBSCRIBED') {
+        realtimeConnected = true
+        log('✓ Realtime bonus active — instant event delivery enabled alongside polling')
+      } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+        realtimeConnected = false
+        log(`⚠ Realtime unavailable (${status}) — polling loop is sole supervisor (this is fine)`)
+      }
+    })
 
-  log(`Supervisor is now event-driven. [Idling... 0 egress consumption] [Realtime: ${realtimeConnected ? 'connected' : 'connecting...'}]`)
+  // 3. Start the polling loop — always runs, regardless of Realtime status
+  log(`Starting polling supervisor (every ${POLL_INTERVAL_MS / 1000}s)...`)
+  await pollSupervisor() // Run immediately on boot
+  setInterval(pollSupervisor, POLL_INTERVAL_MS)
+
+  log(`Supervisor ready. [Poll: every ${POLL_INTERVAL_MS / 1000}s] [Realtime: ${realtimeConnected ? 'bonus-active' : 'connecting...'}]`)
 }
 
 process.on('unhandledRejection', (reason, promise) => {
