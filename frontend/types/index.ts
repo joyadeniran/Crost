@@ -140,6 +140,7 @@ export interface Artifact {
   body: string | null
   metadata: Record<string, unknown>
   preview_url: string | null
+  file_url?: string | null
   created_at: string
 }
 

@@ -145,6 +145,7 @@
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
 - ✅ **Artifact Pipeline Repaired (v7.0)** — Worker and department task endpoints now store real `file_url` links to Supabase Storage; `body` field deprecated in favor of downloadable files.
+- ✅ **Artifact UI Fixed (v7.1)** — Repaired Render build failure by explicitly tracking `file_url` in the TS `Artifact` type and upgrading `ArtifactCard` to map native document downloads successfully.
 - ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
 - ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
 - ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
