@@ -73,17 +73,24 @@ export async function DELETE(
 
     if (deleteErr) throw deleteErr
 
-    // 5. Log deletion (non-blocking, don't fail if logging fails)
-    supabase.from('event_log').insert({
-      department_slug: artifact.department_slug,
-      event_type: 'artifact_created', // Reuse artifact event type
-      description: `Artifact deleted: "${artifact.title}"`,
-      metadata: {
-        artifact_id: id,
-        action: 'delete'
-      },
-      created_by: user.id,
-    }).catch((err: any) => console.warn('Failed to log artifact deletion:', err))
+    // 5. Log deletion (fire-and-forget, non-blocking)
+    // We don't await this intentionally - logging failures should not block deletion
+    ;(async () => {
+      try {
+        await supabase.from('event_log').insert({
+          department_slug: artifact.department_slug,
+          event_type: 'artifact_created',
+          description: `Artifact deleted: "${artifact.title}"`,
+          metadata: {
+            artifact_id: id,
+            action: 'delete'
+          },
+          created_by: user.id,
+        })
+      } catch (err) {
+        console.warn('Failed to log artifact deletion:', err)
+      }
+    })()
 
     return NextResponse.json({
       success: true,
