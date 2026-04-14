@@ -26,11 +26,25 @@ export function detectOutputType(content: string, isJson: boolean): OutputDetect
     return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'txt' };
   }
 
+  // Check for Excel outputs (action contains "excel" or has content_for_excel)
+  if (parsed && (
+    (parsed.action && parsed.action.includes('excel')) ||
+    ('deliverable_content' in parsed && parsed.deliverable_content && 'content_for_excel' in parsed.deliverable_content) ||
+    ('content_for_excel' in parsed)
+  )) {
+    return {
+      sourceFormat: 'json',
+      contentType: 'generic',
+      targetFormat: 'xlsx',
+      transformer: transformToExcel
+    };
+  }
+
   if (Array.isArray(parsed) || (parsed && 'data' in parsed && Array.isArray(parsed.data))) {
     return {
       sourceFormat: 'array',
       contentType: 'research',
-      targetFormat: 'xlsx', 
+      targetFormat: 'xlsx',
       transformer: transformToExcel
     };
   }
