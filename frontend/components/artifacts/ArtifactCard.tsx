@@ -188,27 +188,39 @@ export function ArtifactCard({ artifact }: Props) {
 
   const downloadArtifact = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    
+
     // UI Feedback or loading state could go here if files get very large
     try {
       let downloadUrl = ''
-      let fileName = artifact.title.replace(/\s+/g, '_')
-      
+      let fileName = artifact.title.replace(/\s+/g, '_').replace(/[^\w_-]/g, '')
+
+      // Helper: infer extension from content when no file is available
+      const inferExtension = (content: string): { ext: string; mime: string } => {
+        const trimmed = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+        const isJson = (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))
+        if (isJson) return { ext: 'json', mime: 'application/json' }
+        if (trimmed.startsWith('#')) return { ext: 'md', mime: 'text/markdown' }
+        return { ext: 'txt', mime: 'text/plain' }
+      }
+
       if (artifact.file_url) {
         const res = await fetch(artifact.file_url)
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
-        fileName = artifact.file_url.split('/').pop() || fileName
+        // Use the filename from the URL (includes correct extension)
+        fileName = artifact.file_url.split('/').pop() || `${fileName}`
       } else if (artifact.preview_url) {
         const res = await fetch(artifact.preview_url)
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
-        fileName = `${fileName}.${artifact.artifact_type === 'image' ? 'png' : 'txt'}`
+        const ext = artifact.artifact_type === 'image' ? 'png' : 'md'
+        fileName = `${fileName}.${ext}`
       } else {
         const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
-        const blob = new Blob([content], { type: 'text/plain' })
+        const { ext, mime } = inferExtension(content)
+        const blob = new Blob([content], { type: mime })
         downloadUrl = URL.createObjectURL(blob)
-        fileName = `${fileName}.txt`
+        fileName = `${fileName}.${ext}`
       }
       
       const link = document.createElement('a')

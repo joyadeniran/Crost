@@ -57,10 +57,11 @@ function extractApprovalRequest(text: string): ApprovalRequest | null {
 // Helper: Detect if content is structured data (JSON-like) vs narrative text
 function isStructuredContent(content: string): boolean {
   const trimmed = content.trim()
+  // Strip markdown code fences if present
+  const stripped = trimmed.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
   return (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) || // JSON object
-    (trimmed.startsWith('[') && trimmed.endsWith(']')) ||  // JSON array
-    /^[\w,\s\n"]+$/m.test(trimmed.substring(0, 100))        // CSV-like
+    (stripped.startsWith('{') && stripped.endsWith('}')) || // JSON object
+    (stripped.startsWith('[') && stripped.endsWith(']'))    // JSON array
   )
 }
 
@@ -288,12 +289,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // No approval needed — task complete
-    // SEPARATION LOGIC: Check if output should be artifact or memo
-    const isLargeOutput = answer.length > 1200
+    // SEPARATION LOGIC:
+    //   - Structured JSON (any size) → Artifact file (docx / xlsx / md based on content)
+    //   - Narrative text              → Memo
     const isStructured = isStructuredContent(answer)
 
-    if (isLargeOutput && isStructured) {
-      // Large structured data → Create artifact file
+    if (isStructured) {
+      // Any structured output → Create artifact file
       const artifact = await createArtifactFromContent(
         answer,
         dept.id,
@@ -306,7 +308,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (artifact) {
         artifactId = artifact.id
 
-        // Store memo with artifact reference
+        // Also store a brief memo referencing the artifact
         await supabase.from('company_memos').insert({
           from_department: dept.name,
           from_department_id: dept.id,
@@ -318,7 +320,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           created_by: user.id,
         })
       } else {
-        // Fallback if artifact creation fails: store as memo
+        // Fallback if artifact creation fails: store full answer as memo
         await supabase.from('company_memos').insert({
           from_department: dept.name,
           from_department_id: dept.id,
@@ -331,7 +333,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         })
       }
     } else {
-      // Small or narrative output → Store as memo
+      // Narrative / plain-text output → Store as memo only
       await supabase.from('company_memos').insert({
         from_department: dept.name,
         from_department_id: dept.id,
