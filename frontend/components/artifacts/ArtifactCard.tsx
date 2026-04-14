@@ -63,12 +63,23 @@ export function ArtifactCard({ artifact }: Props) {
 
   const downloadArtifact = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const content = cleanBody || JSON.stringify(artifact.metadata, null, 2)
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = artifact.preview_url || url
-    link.download = `${artifact.title.replace(/\s+/g, '_')}_${artifact.artifact_type}.${artifact.artifact_type === 'image' ? 'png' : 'txt'}`
+    
+    if (artifact.file_url) {
+      link.href = artifact.file_url
+      link.target = "_blank"
+      // Let the browser handle the explicit extension from storage if possible
+      link.download = artifact.file_url.split('/').pop() || `${artifact.title.replace(/\s+/g, '_')}`
+    } else if (artifact.preview_url) {
+      link.href = artifact.preview_url
+      link.download = `${artifact.title.replace(/\s+/g, '_')}_${artifact.artifact_type}.${artifact.artifact_type === 'image' ? 'png' : 'txt'}`
+    } else {
+      const content = cleanBody || JSON.stringify(artifact.metadata, null, 2)
+      const blob = new Blob([content], { type: 'text/plain' })
+      link.href = URL.createObjectURL(blob)
+      link.download = `${artifact.title.replace(/\s+/g, '_')}_${artifact.artifact_type}.txt`
+    }
+    
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

@@ -83,11 +83,11 @@ async function createArtifactFromContent(
     
     const detection = detectOutputType(content, isJson);
     
-    let fileContent = content;
+    let fileContent: string | Buffer = content;
     if (detection.targetFormat !== 'json' && detection.transformer) {
       try {
         const parsedContent = isJson ? JSON.parse(content) : content;
-        fileContent = await detection.transformer(parsedContent) as string;
+        fileContent = await detection.transformer(parsedContent) as string | Buffer;
       } catch (err) {
         console.error('[Format Transformation Error]', err);
         fileContent = content;
@@ -103,8 +103,11 @@ async function createArtifactFromContent(
       fileType = 'application/json';
       artifactType = 'data';
     } else if (detection.targetFormat === 'xlsx' || detection.targetFormat === 'csv') {
-      fileType = 'text/csv';
+      fileType = detection.targetFormat === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv';
       artifactType = 'spreadsheet';
+    } else if (detection.targetFormat === 'docx') {
+      fileType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      artifactType = 'document';
     } else if (detection.targetFormat === 'md') {
       fileType = 'text/markdown';
       artifactType = 'document';
