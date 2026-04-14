@@ -9,6 +9,7 @@ import { Composio } from "@composio/core";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 import { cleanLargePayload } from "@/lib/utils";
+import { detectOutputType } from "@/lib/artifact-transformers";
 
 export const dynamic = 'force-dynamic'
 
@@ -35,11 +36,35 @@ async function uploadArtifactFile(
   try {
     // Detect content type
     const isJson = tryParseJSON(content);
-    const isCsv = content.includes(',') && content.includes('\n') && !isJson;
+    const detection = detectOutputType(content, isJson);
+    
+    let fileContent = content;
+    if (detection.targetFormat !== 'json' && detection.transformer) {
+      try {
+        const parsedContent = isJson ? JSON.parse(content) : content;
+        fileContent = await detection.transformer(parsedContent) as string;
+      } catch (err) {
+        console.error('[Format Transformation Error]', err);
+        // Fallback to json output on failure
+        fileContent = content;
+        detection.targetFormat = isJson ? 'json' : 'txt';
+      }
+    }
 
-    let fileType = isJson ? 'application/json' : isCsv ? 'text/csv' : 'text/plain';
-    let extension = isJson ? '.json' : isCsv ? '.csv' : '.txt';
-    let artifactType: 'document' | 'data' | 'spreadsheet' = isJson ? 'data' : isCsv ? 'spreadsheet' : 'document';
+    let fileType = 'text/plain';
+    let extension = `.${detection.targetFormat}`;
+    let artifactType: 'document' | 'data' | 'spreadsheet' = 'document';
+
+    if (detection.targetFormat === 'json') {
+      fileType = 'application/json';
+      artifactType = 'data';
+    } else if (detection.targetFormat === 'xlsx' || detection.targetFormat === 'csv') {
+      fileType = 'text/csv';
+      artifactType = 'spreadsheet';
+    } else if (detection.targetFormat === 'md') {
+      fileType = 'text/markdown';
+      artifactType = 'document';
+    }
 
     // Generate filename
     const timestamp = Date.now();
