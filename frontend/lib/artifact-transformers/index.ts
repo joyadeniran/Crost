@@ -1,5 +1,7 @@
 import { transformToEmail } from './email-transformer';
 import { transformToMarkdownPlan, transformToMarkdownResearch } from './markdown-transformer';
+import { transformToDocument } from './document-transformer';
+import { transformToExcel } from './excel-transformer';
 
 export interface OutputDetection {
   sourceFormat: 'json' | 'text' | 'array';
@@ -28,7 +30,8 @@ export function detectOutputType(content: string, isJson: boolean): OutputDetect
     return {
       sourceFormat: 'array',
       contentType: 'research',
-      targetFormat: 'json', // Fallback to json in MVP for array
+      targetFormat: 'xlsx', 
+      transformer: transformToExcel
     };
   }
 
@@ -37,8 +40,8 @@ export function detectOutputType(content: string, isJson: boolean): OutputDetect
     return {
       sourceFormat: 'json',
       contentType: 'email',
-      targetFormat: 'txt',
-      transformer: transformToEmail
+      targetFormat: 'docx',
+      transformer: transformToDocument
     };
   }
 
