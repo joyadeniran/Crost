@@ -8,34 +8,140 @@ interface Props {
   artifact: Artifact
 }
 
-/** Extract a semantic text preview instead of dumping raw JSON */
+/** Enhanced universal JSON preview extraction with multi-strategy fallback */
 function extractPreviewText(raw: string | null, type: string, file_url?: string | null): string {
   if (!raw) {
-    if (file_url) return ` Native ${type} file attached. Click Download to retrieve the final asset.`;
+    if (file_url) return `Native ${type} file attached. Click Download to retrieve the asset.`;
     return 'No preview available.';
   }
-  
+
   const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-  
+
   try {
     const parsed = JSON.parse(stripped)
     if (typeof parsed === 'object' && parsed !== null) {
-      if (parsed.deliverable_content && typeof parsed.deliverable_content === 'string') return parsed.deliverable_content;
-      if (parsed.content && typeof parsed.content === 'string') return parsed.content;
-      if (parsed.summary) return parsed.summary;
-      if (parsed.body) return parsed.body;
-      
-      // Look for the first meaningful string
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === 'string' && value.length > 40) return value;
+
+      // STRATEGY 1: Look for immediate summary-like fields at top level
+      const summaryFields = ['summary', 'executive_summary', 'overview', 'description', 'title']
+      for (const field of summaryFields) {
+        if (field in parsed && typeof parsed[field as keyof typeof parsed] === 'string') {
+          const value = parsed[field as keyof typeof parsed] as string
+          if (value.length > 10) {
+            return cleanText(value).substring(0, 250)
+          }
+        }
       }
-      return `Structured ${type} payload containing ${Object.keys(parsed).length} keys. Download to view.`;
+
+      // STRATEGY 2: Look in nested objects (1 level deep) - common container fields
+      const contentFields = ['deliverable_content', 'output', 'analysis', 'strategy', 'content', 'data']
+      for (const field of contentFields) {
+        if (field in parsed && typeof parsed[field as keyof typeof parsed] === 'object' && parsed[field as keyof typeof parsed] !== null) {
+          const nested = parsed[field as keyof typeof parsed] as any
+
+          // Try summary fields in nested object
+          for (const summaryField of summaryFields) {
+            if (summaryField in nested && typeof nested[summaryField] === 'string') {
+              const value = nested[summaryField] as string
+              if (value.length > 10) {
+                return cleanText(value).substring(0, 250)
+              }
+            }
+          }
+
+          // Try extracting text from all string fields in nested object
+          const textContent = extractAllText(nested)
+          if (textContent.length > 20) {
+            return cleanText(textContent).substring(0, 250)
+          }
+        }
+      }
+
+      // STRATEGY 3: Recursively extract all text values from entire JSON
+      const allText = extractAllText(parsed)
+      if (allText.length > 20) {
+        return cleanText(allText).substring(0, 250)
+      }
+
+      // STRATEGY 4: Show structure information as fallback
+      const keyCount = Object.keys(parsed).length
+      const hasStringContent = Object.values(parsed).some(v => typeof v === 'string' && (v as string).length > 10)
+
+      if (hasStringContent) {
+        return `${getContentType(parsed)} artifact with ${keyCount} main sections. Download to view full details.`
+      }
+
+      return `Structured ${getContentType(parsed)} data containing ${keyCount} fields. Download to view.`
     }
   } catch {
-    // If it's not JSON, return the raw stripped text
     return stripped;
   }
   return stripped;
+}
+
+/** Extract all string values recursively from nested objects/arrays */
+function extractAllText(obj: any, maxDepth: number = 2, currentDepth: number = 0): string {
+  if (currentDepth >= maxDepth) return '';
+
+  const texts: string[] = []
+
+  if (typeof obj === 'string' && obj.length > 0) {
+    return obj
+  }
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (typeof item === 'string' && item.length > 10) {
+        texts.push(item)
+        break; // Take first substantial string from array
+      } else if (typeof item === 'object' && item !== null) {
+        const nested = extractAllText(item, maxDepth, currentDepth + 1)
+        if (nested) texts.push(nested)
+      }
+    }
+  } else if (typeof obj === 'object' && obj !== null) {
+    // Prioritize certain fields
+    const priorityFields = ['summary', 'overview', 'description', 'title', 'name', 'content']
+
+    for (const field of priorityFields) {
+      if (field in obj) {
+        const value = obj[field]
+        if (typeof value === 'string' && value.length > 10) {
+          return value
+        }
+      }
+    }
+
+    // Then extract from all other fields
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && value.length > 10) {
+        texts.push(value)
+      } else if (typeof value === 'object' && value !== null) {
+        const nested = extractAllText(value, maxDepth, currentDepth + 1)
+        if (nested) texts.push(nested)
+      }
+    }
+  }
+
+  return texts.slice(0, 2).join(' ').substring(0, 300)
+}
+
+/** Clean text of JSON artifacts */
+function cleanText(text: string): string {
+  return text
+    .replace(/\n/g, ' ') // Replace newlines
+    .replace(/\s+/g, ' ') // Collapse whitespace
+    .replace(/"/g, '') // Remove quotes
+    .trim()
+}
+
+/** Detect artifact type from structure */
+function getContentType(obj: any): string {
+  if ('deliverable_content' in obj) return 'Comprehensive';
+  if ('marketing_strategy_inputs' in obj) return 'Marketing';
+  if ('analysis' in obj) return 'Financial';
+  if ('output' in obj) return 'Strategy';
+  if ('strategy' in obj) return 'Plan';
+  return 'Work';
 }
 
 export function ArtifactCard({ artifact }: Props) {
@@ -80,27 +186,47 @@ export function ArtifactCard({ artifact }: Props) {
   const [isHovered, setIsHovered] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const downloadArtifact = (e: React.MouseEvent) => {
+  const downloadArtifact = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    const link = document.createElement('a')
     
-    if (artifact.file_url) {
-      link.href = artifact.file_url
-      link.target = "_blank"
-      link.download = artifact.file_url.split('/').pop() || `${artifact.title.replace(/\s+/g, '_')}`
-    } else if (artifact.preview_url) {
-      link.href = artifact.preview_url
-      link.download = `${artifact.title.replace(/\s+/g, '_')}_${artifact.artifact_type}.${artifact.artifact_type === 'image' ? 'png' : 'txt'}`
-    } else {
-      const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
-      const blob = new Blob([content], { type: 'text/plain' })
-      link.href = URL.createObjectURL(blob)
-      link.download = `${artifact.title.replace(/\s+/g, '_')}_${artifact.artifact_type}.txt`
+    // UI Feedback or loading state could go here if files get very large
+    try {
+      let downloadUrl = ''
+      let fileName = artifact.title.replace(/\s+/g, '_')
+      
+      if (artifact.file_url) {
+        const res = await fetch(artifact.file_url)
+        const blob = await res.blob()
+        downloadUrl = URL.createObjectURL(blob)
+        fileName = artifact.file_url.split('/').pop() || fileName
+      } else if (artifact.preview_url) {
+        const res = await fetch(artifact.preview_url)
+        const blob = await res.blob()
+        downloadUrl = URL.createObjectURL(blob)
+        fileName = `${fileName}.${artifact.artifact_type === 'image' ? 'png' : 'txt'}`
+      } else {
+        const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
+        const blob = new Blob([content], { type: 'text/plain' })
+        downloadUrl = URL.createObjectURL(blob)
+        fileName = `${fileName}.txt`
+      }
+      
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the object URL to free memory
+      if (artifact.file_url || artifact.preview_url) {
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+      }
+    } catch (err) {
+      console.error('[Download Failed]', err)
+      // Fallback: simple anchor click if fetch fails (CORS etc)
+      window.open(artifact.file_url || artifact.preview_url || '', '_blank')
     }
-    
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
   }
 
   const deleteArtifact = async (e: React.MouseEvent) => {

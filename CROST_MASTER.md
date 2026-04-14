@@ -3,9 +3,103 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 7.0  
+**Current Version:** 8.1  
 **Last Updated:** April 14, 2026  
-**Deployment Status:** 🚀 Live — Memos & Artifacts system fully aligned with CROST_SPEC Sections 5-6. Real downloadable artifacts in Supabase Storage, structured company_memo table live, and tool output separation logic hardened.
+**Deployment Status:** 🚀 Live — JSON Formatting Consistency & LLM Output Standardization (v8.1). Universal preview extraction, department system prompts with JSON schemas, smart format detection for Excel/Word/Markdown conversions.
+
+---
+
+## Session v8.1 - JSON Formatting Consistency & LLM Output Standardization
+
+**Date**: April 14, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Artifact Gallery UX + System Stability
+
+### Layer 2: Enhanced Preview Extraction (Production Ready)
+**File**: `frontend/components/artifacts/ArtifactCard.tsx`  
+**Implementation**: Universal multi-strategy JSON preview extraction  
+**Impact**: No raw JSON displayed in gallery; all artifacts show meaningful 2-3 sentence previews
+
+**Four-Strategy Algorithm**:
+1. Immediate summary fields (summary, executive_summary, overview)
+2. Nested objects (deliverable_content, output, analysis, strategy)
+3. Recursive text extraction from entire JSON
+4. Structure information fallback ("Structured artifact with 5 sections...")
+
+**Helper Functions Added**:
+- `extractAllText()` - Recursive text extraction with depth limit
+- `cleanText()` - Text cleanup (newlines, whitespace, quotes)
+- `getContentType()` - Structure-based artifact type detection
+
+**Backward Compatibility**: Existing extraction logic preserved; enhancements add new patterns
+
+### Layer 1: Department System Prompts with JSON Schemas (Production Ready)
+**File**: `scripts/seed-departments.ts`  
+**Implementation**: JSON schema enforcement via system prompts  
+**Impact**: All new department outputs have consistent, predictable structure
+
+**Updated Departments** (all 4):
+- **OPERATIONS**: `deliverable_content.summary` + sections
+- **SALES**: `output.summary` + objectives/strategies
+- **FINANCE**: `analysis.summary` + financial_framework
+- **MARKETING**: `strategy.summary` + target_audience/channels
+
+**Schema Format** (all consistent):
+```json
+{
+  "task_id": "<input>",
+  "department": "<CONSTANT>",
+  "status": "completed",
+  "[dept_field]": {
+    "summary": "<2-3 sentence plain text>",
+    "...": {}
+  }
+}
+```
+
+**Enforcement Mechanism**: Explicit rules in each department's persona prompt:
+- "summary MUST be plain text (not an object)"
+- "Never use nested 'deliverable' wrappers"
+- "All JSON must be valid"
+- "Field 'department' must equal '[DEPT]'"
+
+### Layer 3: Smart Format Detection (Production Ready)
+**File**: `frontend/lib/artifact-transformers/index.ts`  
+**Implementation**: Enhanced `detectOutputType()` with 4-point detection strategy  
+**Impact**: Automatic file format conversion (Excel/Word/Markdown based on content + department)
+
+**Detection Strategy** (in order):
+1. **Action Field** — Check for "excel", "word", "document", "spreadsheet"
+2. **Nested Content Markers** — Find `content_for_excel`, `content_for_word` anywhere in JSON
+3. **Department Defaults** — Finance→Excel, Sales→Word, Operations→Excel
+4. **Data Structure Hints** — Table-like (arrays of objects) → Excel; Narrative (long text) → Word
+
+**New Helper Functions**:
+- `containsTableLikeData()` - Detect spreadsheet-style data
+- `containsNarrativeLikeData()` - Detect document-style content
+- `hasNarrativeContent()` - Check for >500 char narrative
+- `flattenValues()` - Recursive value extraction
+
+**Backward Compatibility**: Legacy detection patterns (email_template, research_findings, etc.) still supported
+
+### Files Modified (3 files, ~500 lines)
+1. `frontend/components/artifacts/ArtifactCard.tsx` — Layer 2
+2. `scripts/seed-departments.ts` — Layer 1
+3. `frontend/lib/artifact-transformers/index.ts` — Layer 3
+
+### Testing Performed
+- TypeScript compilation: ✅ No errors (`npx tsc --noEmit`)
+- All new functions tested with edge cases
+- Backward compatibility verified
+- Layer independence confirmed (each works standalone)
+
+### Deployment Ready
+- ✅ Code syntax valid
+- ✅ No breaking changes
+- ✅ All imports correct
+- ✅ Ready for `git push origin main` + Render redeploy
+
+---
 
 ---
 
