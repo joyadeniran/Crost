@@ -77,7 +77,7 @@ async function uploadArtifactFile(
     const { data: uploadData, error: uploadErr } = await supabase
       .storage
       .from('artifacts')
-      .upload(`goals/${goalId}/${fileName}`, content, {
+      .upload(`goals/${goalId}/${fileName}`, fileContent, {
         contentType: fileType,
         upsert: false,
       });
