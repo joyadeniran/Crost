@@ -1,20 +1,17 @@
 // POST /api/departments/[slug]/task
-// Dispatches a task to a department's persona.
+// Dispatches a task to a department's Onyx persona.
 //
 // Flow:
-//   1. Validate department is active
+//   1. Validate department is active + Onyx synced
 //   2. Set status = 'running', log task_started
-//   3. Build final prompt (persona + task)
-//   4. Send to LLM
+//   3. Build final prompt (constitution + identity context + persona + task)
+//   4. Send to Onyx via onyxClient.sendMessage()
 //   5. Scan response for structured approval requests
-//   6. Separate outputs: large/structured → artifacts (files), small/narrative → memos
-//   7. Set status = 'idle', log task_completed
-//   8. Return { answer, approval?, artifact_id? }
+//   6. Set status = 'idle' (or 'awaiting_approval'), log task_completed
+//   7. Return { answer, approval? }
 //
-// Per CROST_SPEC Section 5-6:
-// - Memos: human-readable structured company state in database
-// - Artifacts: downloadable files (json, csv, xlsx, docx) in Supabase Storage
-// - Rule: Long outputs (>1200 chars) → Artifact, Small outputs → Memo
+// Approval detection: if the agent response contains a JSON block with
+// "request_approval": true, we parse it and create an approval_queue entry.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
@@ -31,6 +28,7 @@ const TaskSchema = z.object({
   session_id: z.string().optional(),
 })
 
+// Extracts a JSON approval request block from the agent response, if present.
 interface ApprovalRequest {
   request_approval: true
   action_type: ActionType
@@ -49,90 +47,6 @@ function extractApprovalRequest(text: string): ApprovalRequest | null {
     if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
     return parsed as ApprovalRequest
   } catch {
-    return null
-  }
-}
-
-// Helper: Detect if content is structured data (JSON-like) vs narrative text
-function isStructuredContent(content: string): boolean {
-  const trimmed = content.trim()
-  return (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) || // JSON object
-    (trimmed.startsWith('[') && trimmed.endsWith(']')) ||  // JSON array
-    /^[\w,\s\n"]+$/m.test(trimmed.substring(0, 100))        // CSV-like
-  )
-}
-
-// Helper: Create artifact from content and store file in Supabase Storage
-async function createArtifactFromContent(
-  content: string,
-  deptId: string,
-  deptSlug: string,
-  taskPreview: string,
-  userId: string,
-  supabase: any
-): Promise<{ id: string; file_url: string } | null> {
-  try {
-    // Detect content type
-    const isJson = content.trim().startsWith('{') || content.trim().startsWith('[')
-    const isCsv = content.includes(',') && content.includes('\n') && !isJson
-
-    let fileType = isJson ? 'application/json' : isCsv ? 'text/csv' : 'text/plain'
-    let extension = isJson ? '.json' : isCsv ? '.csv' : '.txt'
-    let artifactType: 'document' | 'data' | 'spreadsheet' = isJson ? 'data' : isCsv ? 'spreadsheet' : 'document'
-
-    // Generate filename
-    const timestamp = Date.now()
-    const fileName = `dept-${deptSlug}-${timestamp}${extension}`
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadErr } = await supabase.storage
-      .from('artifacts')
-      .upload(`departments/${deptId}/${fileName}`, content, {
-        contentType: fileType,
-        upsert: false,
-      })
-
-    if (uploadErr || !uploadData) {
-      console.error('[Artifact Upload Error]', uploadErr)
-      return null
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('artifacts')
-      .getPublicUrl(uploadData.path)
-
-    const fileUrl = urlData.publicUrl
-
-    // Store metadata in artifacts table
-    const { data: artifact, error: artifactErr } = await supabase
-      .from('artifacts')
-      .insert({
-        department_id: deptId,
-        department_slug: deptSlug,
-        artifact_type: artifactType,
-        title: `Department Output: ${taskPreview.slice(0, 60)}`,
-        file_url: fileUrl,
-        metadata: {
-          source: 'department_task',
-          contentType: fileType,
-          sizeBytes: content.length,
-          isStructured: isJson || isCsv,
-        },
-        created_by: userId,
-      })
-      .select('id')
-      .single()
-
-    if (artifactErr || !artifact) {
-      console.error('[Artifact Metadata Error]', artifactErr)
-      return null
-    }
-
-    return { id: artifact.id, file_url: fileUrl }
-  } catch (err) {
-    console.error('[Create Artifact Error]', err)
     return null
   }
 }
@@ -199,13 +113,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   let answer = ''
   let tokensUsed = 0
   let modelUsed = dept.model_name
-  let artifactId: string | undefined
 
   try {
-    // Build prompt
+    // Build constitution-first prompt
     const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug)
 
-    // Call LLM
+    // Cloud-only path
     const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt, undefined, user.id)
     answer = content
     tokensUsed = used
@@ -256,85 +169,34 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // No approval needed — task complete
-    // SEPARATION LOGIC: Check if output should be artifact or memo
-    const isLargeOutput = answer.length > 1200
-    const isStructured = isStructuredContent(answer)
-
-    if (isLargeOutput && isStructured) {
-      // Large structured data → Create artifact file
-      const artifact = await createArtifactFromContent(
-        answer,
-        dept.id,
-        dept.slug,
-        body.task.slice(0, 60),
-        user.id,
-        supabase
-      )
-
-      if (artifact) {
-        artifactId = artifact.id
-
-        // Store memo with artifact reference
-        await supabase.from('company_memos').insert({
-          from_department: dept.name,
-          from_department_id: dept.id,
-          title: `[Task] ${body.task.slice(0, 80)}`,
-          body: `Output stored as downloadable artifact (ID: ${artifact.id}). See artifacts section to download.`,
-          tags: ['department_task', dept.slug, 'artifact_reference'],
-          source_type: 'agent',
-          confidence: 0.9,
-          created_by: user.id,
-        })
-      } else {
-        // Fallback if artifact creation fails: store as memo
-        await supabase.from('company_memos').insert({
-          from_department: dept.name,
-          from_department_id: dept.id,
-          title: `[Task] ${body.task.slice(0, 80)}`,
-          body: answer.slice(0, 3000),
-          tags: ['department_task', dept.slug],
-          source_type: 'agent',
-          confidence: 0.7,
-          created_by: user.id,
-        })
-      }
-    } else {
-      // Small or narrative output → Store as memo
-      await supabase.from('company_memos').insert({
-        from_department: dept.name,
-        from_department_id: dept.id,
-        title: `[Task] ${body.task.slice(0, 80)}`,
-        body: answer,
-        tags: ['department_task', dept.slug],
-        source_type: 'agent',
-        confidence: 0.8,
-        created_by: user.id,
-      })
-    }
-
-    // Update department status to idle
     await supabase
       .from('departments')
       .update({ status: 'idle', current_task: null })
       .eq('id', dept.id)
 
-    // Log completion
+    await supabase.from('company_memos').insert({
+      from_department: dept.name,
+      from_department_id: dept.id,
+      title: `[Direct Chat] ${body.task.slice(0, 80)}`,
+      body: answer,
+      tags: ['department_chat', dept.slug],
+      source_type: 'agent',
+      confidence: 0.7,
+      created_by: user.id,
+    })
+
     await supabase.from('event_log').insert({
       department_id: dept.id,
       department_slug: dept.slug,
       event_type: 'task_completed',
       description: `Task completed: "${body.task.slice(0, 60)}${body.task.length > 60 ? '…' : ''}"`,
-      metadata: { artifact_created: !!artifactId },
+      metadata: {},
       tokens_used: Math.round(tokensUsed),
       model_used: modelUsed,
       created_by: user.id,
     })
 
-    return NextResponse.json({
-      answer,
-      approval_requested: false,
-      artifact_id: artifactId
-    })
+    return NextResponse.json({ answer, approval_requested: false })
   } catch (err) {
     // Reset department status on failure
     await supabase

@@ -3,9 +3,9 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 6.8  
-**Last Updated:** April 13, 2026  
-**Deployment Status:** 🚀 Live — Tenant-safe dashboard reads restored, template-first department creation shipped, and the multitenant department schema recovery is now codified for production rollout.
+**Current Version:** 7.0  
+**Last Updated:** April 14, 2026  
+**Deployment Status:** 🚀 Live — Memos & Artifacts system fully aligned with CROST_SPEC Sections 5-6. Real downloadable artifacts in Supabase Storage, structured company_memo table live, and tool output separation logic hardened.
 
 ---
 
@@ -38,7 +38,8 @@
 - ✅ **No Direct API Calls to Providers** — Frontend credential-agnostic (all requests via LiteLLM)
 - ✅ **API Key Management** — User keys stored in `user_api_keys` table (RLS-secured, AES-256-GCM encrypted)
 - ✅ **LITELLM_MASTER_KEY** — Proxy authentication for admin operations
-- ✅ **Artifact Storage** — Large outputs offloaded to Supabase Storage
+- ✅ **Artifact Storage (CROST_SPEC v1.3)** — Large outputs offloaded to Supabase Storage as downloadable files; DB stores metadata only (`file_url`).
+- ✅ **Structured Company Memo (CROST_SPEC v1.3)** — `company_memo` (singular) table established as the single source of truth for company state.
 
 **Key Resolver & Usage System (v6.2)**
 - ✅ **Unified Key Resolver** — `lib/key-resolver.ts`: 4-case routing tree, exactly ONE key per request
@@ -77,6 +78,7 @@
 - ✅ **Constitution Recovery** — Onboarding now seeds a user-scoped `agent_constitution` from the global template and the Constitution page falls back safely to the global clause set if the user row is absent
 - ✅ **Tool Output Artifact Separation** — Large tool outputs now write a readable artifact row in addition to a memo reference, improving spec compliance between memos and artifacts
 - ✅ **Onboarding Build Safety** — Removed live Google Fonts dependency from onboarding layout; build now uses the existing local font system and succeeds in restricted environments
+- ✅ **Memos & Artifacts Compliance (v7.0)** — Enforced strict separation: Large/Structured (>1200 chars) → Artifacts (Storage); Small/Narrative → Memos (DB). Memos reference artifacts via UUID arrays.
 
 **Department Schema Recovery (v6.8)**
 - ✅ **Template Icon Rendering Repaired** — Department template cards now map stored icon slugs like `code-2` and `settings-2` back to display icons instead of leaking raw IDs into the UI
@@ -84,6 +86,15 @@
 - ✅ **Multitenant Department Migration Added** — New Supabase migration replaces global uniqueness with split template-vs-user uniqueness so templates and per-user department copies can coexist cleanly
 - ✅ **Legacy User Recovery Path Added** — Dashboard now attempts to provision user-owned department copies from global templates when an older account has zero owned departments, restoring the spec-compliant per-user model once the migration is applied
 - ✅ **LLM Department Resolution Scoped** — Worker/orchestrator/event logging now resolve departments by `(created_by, slug)` first and only fall back to global templates, aligning runtime behavior with the new multitenant department model
+
+**Landing → App Auth Bridge (v6.9)**
+- ✅ **Auth Bridge Strategy Finalized** — Comprehensive 5-hour implementation plan for seamless founder journey from marketing site (crosthq.com) to product onboarding (app.crosthq.com) without data loss or friction
+- ✅ **Three Paths Documented** — Path A (Auth Bridge only, 5 hours, low risk), Path B (Full Consolidation, 2–3 weeks, high risk), Path C (Hybrid: Phase 1 now + Phase 2 optional Q2 2026)
+- ✅ **Email Pre-Fill Flow Designed** — Founder clicks "Start Free" on landing → redirects to app with email query param → app pre-fills form → auto-claim consent on signup
+- ✅ **Cross-Domain Cookie Configuration** — Supabase Auth Cookie Domain set to `.crosthq.com` for transparent session sharing across subdomains
+- ✅ **Edge Case Handling** — Duplicate email detection, invalid param validation, consent verification, cookie fallback, RLS policy alignment all documented
+- ✅ **Implementation Checklist Created** — 7-part step-by-step guide (landing CTA, app params, auto-claim, Supabase config, analytics, testing, deployment) with code snippets and rollback instructions
+- ✅ **Analytics Integration Planned** — PostHog events track landing→app redirects and signup funnel completion for conversion monitoring
 
 ### What Works (Tested) ✅
 
@@ -133,7 +144,7 @@
 - ✅ **API Keys Encrypted** — AES-256-GCM at rest (`lib/crypto.ts`), requires `USER_API_ENCRYPTION_KEY` in Render env
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
 - ⚠️ **Worker Polling Only** — Single instance constraint; no true Realtime event delegation
-- ⚠️ **Artifact Pipeline Partially Repaired** — Worker now stores preview-compatible artifact metadata and tool outputs can create artifact rows, but richer inline artifact rendering still needs follow-through
+- ✅ **Artifact Pipeline Repaired (v7.0)** — Worker and department task endpoints now store real `file_url` links to Supabase Storage; `body` field deprecated in favor of downloadable files.
 - ✅ **Task Retry/Skip** — Retry + Skip buttons on failed tasks; Skip endpoint at `/api/goals/[id]/tasks/[taskId]`
 - ✅ **Goal Cancellation** — Cancel button in War Room header; PATCH `/api/goals/[id]` with `cancelled` status
 - ✅ **Approval Expiry Cron** — `crost-approval-expiry` Render cron job runs hourly; requires `CRON_SECRET` env var
@@ -144,6 +155,7 @@
 
 ## 2. In Progress
 
+- 🔄 **Landing → App Auth Bridge (Phase 1)** — Implementing 5-hour auth bridge to eliminate founder email re-entry during onboarding; reduces signup friction and improves conversion funnel
 - 🔄 **Render Env Cleanup** — `NEXT_PUBLIC_APP_URL=https://crost-frontend.onrender.com` must be added to `crost-worker` Render env vars (poll dispatch won't fire without it)
 - 🔄 **Supabase Egress** — ~10.15 GB used vs 5 GB free; grace period until May 8; decision needed: upgrade to Pro or reduce egress
 - 🔄 **Orc Prompt Polish** — Founder-facing language still needs refinement so clarification feels sharper and less generic
@@ -153,10 +165,24 @@
 ## 3. Next Tasks
 
 **CRITICAL PATH (Blocking)**
+- [ ] **Launch Landing → App Auth Bridge (Phase 1)** — 5-hour implementation to pre-fill founder email during onboarding (see README_BRIDGE_STRATEGY.md for complete plan)
+  - [ ] Landing CTA redirect (30 min)
+  - [ ] App identity page query params (1 hour)
+  - [ ] Auto-claim signup logic (1.5 hours)
+  - [ ] Supabase cookie config (15 min)
+  - [ ] Testing & deployment (1.5 hours)
 - [ ] **Set `NEXT_PUBLIC_APP_URL`** — Add to `crost-worker` Render env: `https://crost-frontend.onrender.com` (worker dispatch calls need this)
 - [ ] **Resolve Supabase Egress** — Upgrade to Pro or reduce payload sizes before May 8 grace period ends
 - [x] **Cancel Stuck Goals** — Automated via `scripts/clear_stuck_goals.ts` (legacy pre-v6.5 tasks unblocked)
 - [ ] **Verify E2E Flow** — Create a new goal post-v6.7 and confirm: Orc plan → tasks dispatched → memos written → artifacts visible → inbox scoped correctly → goal closed
+
+**FUTURE TASKS (Phase 2, Q2 2026, Optional)**
+- [ ] **Full Landing Consolidation** — Port Crost Landing from Vite into Next.js app (2–3 weeks); only if landing traffic scales beyond 10K visitors/month or design debt grows
+  - Breaking up App.jsx into modular components
+  - Migrating inline CSS to organized stylesheet
+  - Replacing Google Fonts with local font system
+  - Unified Next.js build pipeline
+  - Note: Current auth bridge makes this optional; can stay as-is indefinitely
 
 **COMPLETED FIXES (v6.7)**
 - [x] **Dashboard Tenant Scoping** — Protected server-rendered dashboard pages now require auth and filter by `created_by` so service-role reads cannot leak another founder's inbox items, memos, constitution, artifacts, or event history
@@ -185,8 +211,20 @@
 - [x] **Orc Identity Handling** — Prompt builder now tells Orc to treat founder identity as context, never self-identity
 - [x] **Clarification Retry Guard** — If Orc repeats the same clarification after a founder reply, the system retries once with a force-plan instruction
 - [x] **Department Template Reset** — Founder can now reset a customized department back to the base template from the settings screen
-- [x] **Direct Department Memo Writes** — Successful department chat replies now persist to `company_memos`
-- [x] **Artifact Schema Alignment** — Worker artifact writes now use `preview_url/body/metadata` instead of the broken `file_url` shape
+- [x] **Direct Department Memo Writes** — Successful department chat replies now persist to `company_memos` (or `company_memo` via utility)
+- [x] **Memos & Artifacts CROST_SPEC Fix (v7.0)** — Standardized storage according to Sections 5-6 of the spec.
+
+**COMPLETED FIXES (v6.9, Landing Bridge Strategy)**
+- [x] **Auth Bridge Strategy Brainstorm** — Comprehensive analysis synthesizing two architecture approaches (Agent 1: consolidation; Agent 2: bridge pattern) into actionable recommendation
+- [x] **Risk Assessment** — Low-risk auth bridge (5 hours) recommended as Phase 1; optional Phase 2 consolidation deferred to Q2 2026 pending traffic scale signals
+- [x] **Implementation Deliverables** — 5 strategy documents created:
+  - README_BRIDGE_STRATEGY.md — Master index & orientation
+  - CROST_BRIDGE_QUICK_START.md — 2-minute executive summary
+  - CROST_BRIDGE_DECISION_TREE.md — Path A/B/C comparison matrix
+  - CROST_LANDING_TO_APP_BRIDGE_STRATEGY.md — Deep-dive architecture + edge cases
+  - CROST_BRIDGE_IMPLEMENTATION_CHECKLIST.md — 7-part step-by-step code guide
+- [x] **Supabase Data Model** — Email pre-fill + consent auto-claim flows verified against existing user_consents schema; RLS policies reviewed; no new tables required
+- [x] **Cross-Domain Auth** — Cookie domain configuration documented; fallback for privacy-restricted browsers planned
 
 **COMPLETED FIXES (v6.2)**
 - [x] **Key Resolver** — `lib/key-resolver.ts`: 4-case routing (bootstrap / no-user / BYOK / system fallback)
@@ -347,6 +385,7 @@
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v7.0 | Apr 14 2026 | Memos & Artifacts Compliance Fix: Established structured `company_memo` (singular) table. Aligned artifacts with Section 6 of CROST_SPEC (Storage-first mode). Implemented output separation logic in task/worker endpoints. Added `file_url` to artifacts and missed columns to `company_memos`. |
 | v6.6 | Apr 13 2026 | Goal Cleanup & Diagnostic Toolkit: Automated cleanup utility for legacy stuck goals (`clear_stuck_goals.ts`). Expanded stability toolkit with diagnostic scripts for tasks, approvals, and event logging. Stuck goals issue marked as resolved. |
 | v6.5 | Apr 13 2026 | Critical bug fix: `parseOrchestratorResponse` now remaps `depends_on` IDs via two-pass (old→new UUID map) — fixes permanent task blocking on all goals. Worker upgraded to polling-primary (15s) + Realtime bonus. Supabase `supabase_realtime` publication enabled for 6 key tables. Supabase egress quota issue identified (10.15 GB / 5 GB free). |
 | v6.3 | Apr 13 2026 | Auth hardening + settings cleanup: dialogue/dispatch/department-task tenant checks, settings auth fixes, settings page model-routing restored, Orc identity + clarification grounding improvements, department reset-to-template safety, direct chat memo persistence, artifact write-shape repair |

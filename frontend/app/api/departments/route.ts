@@ -10,17 +10,34 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const scope = searchParams.get('scope') ?? 'default'
     const activeOnly = searchParams.get('active_only') === 'true'
     const includeOrchestrator = searchParams.get('include_orchestrator') === 'true'
-    // Return user's own departments OR global templates (created_by IS NULL from seed)
-    // This ensures the onboarding team page shows departments for new users who haven't created any yet
+
+    // For template browsing (during onboarding), allow unauthenticated access
+    // These are public template departments that anyone can view
+    if (scope === 'templates') {
+      let query = supabase
+        .from('departments')
+        .select('*')
+        .is('created_by', null) // Only fetch templates (created_by IS NULL)
+        .neq('activation_stage', 'deprecated')
+        .order('created_at')
+      if (activeOnly) query = query.eq('activation_stage', 'active')
+      if (!includeOrchestrator) query = query.eq('is_orchestrator', false)
+      const { data, error } = await query
+      if (error) throw error
+      return NextResponse.json({ data: data ?? [] })
+    }
+
+    // For user departments, require authentication
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // Return user's own departments OR global templates
     let query = supabase
       .from('departments')
       .select('*')
@@ -39,8 +56,6 @@ export async function GET(req: NextRequest) {
     let result = userDepts.length > 0 ? userDepts : templateDepts
     if (scope === 'user') {
       result = userDepts
-    } else if (scope === 'templates') {
-      result = templateDepts
     } else if (scope === 'all') {
       result = [
         ...userDepts,
