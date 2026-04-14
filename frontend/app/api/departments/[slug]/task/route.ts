@@ -21,6 +21,7 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { buildFinalPrompt, callLLM } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
+import { detectOutputType } from '@/lib/artifact-transformers'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,12 +75,40 @@ async function createArtifactFromContent(
 ): Promise<{ id: string; file_url: string } | null> {
   try {
     // Detect content type
-    const isJson = content.trim().startsWith('{') || content.trim().startsWith('[')
-    const isCsv = content.includes(',') && content.includes('\n') && !isJson
+    let isJson = false;
+    try { JSON.parse(content); isJson = true; } catch { }
+    if (!isJson) {
+       isJson = content.trim().startsWith('{') || content.trim().startsWith('[');
+    }
+    
+    const detection = detectOutputType(content, isJson);
+    
+    let fileContent = content;
+    if (detection.targetFormat !== 'json' && detection.transformer) {
+      try {
+        const parsedContent = isJson ? JSON.parse(content) : content;
+        fileContent = await detection.transformer(parsedContent) as string;
+      } catch (err) {
+        console.error('[Format Transformation Error]', err);
+        fileContent = content;
+        detection.targetFormat = isJson ? 'json' : 'txt';
+      }
+    }
 
-    let fileType = isJson ? 'application/json' : isCsv ? 'text/csv' : 'text/plain'
-    let extension = isJson ? '.json' : isCsv ? '.csv' : '.txt'
-    let artifactType: 'document' | 'data' | 'spreadsheet' = isJson ? 'data' : isCsv ? 'spreadsheet' : 'document'
+    let fileType = 'text/plain';
+    let extension = `.${detection.targetFormat}`;
+    let artifactType: 'document' | 'data' | 'spreadsheet' = 'document';
+
+    if (detection.targetFormat === 'json') {
+      fileType = 'application/json';
+      artifactType = 'data';
+    } else if (detection.targetFormat === 'xlsx' || detection.targetFormat === 'csv') {
+      fileType = 'text/csv';
+      artifactType = 'spreadsheet';
+    } else if (detection.targetFormat === 'md') {
+      fileType = 'text/markdown';
+      artifactType = 'document';
+    }
 
     // Generate filename
     const timestamp = Date.now()
@@ -88,7 +117,7 @@ async function createArtifactFromContent(
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('artifacts')
-      .upload(`departments/${deptId}/${fileName}`, content, {
+      .upload(`departments/${deptId}/${fileName}`, fileContent, {
         contentType: fileType,
         upsert: false,
       })
@@ -118,7 +147,7 @@ async function createArtifactFromContent(
           source: 'department_task',
           contentType: fileType,
           sizeBytes: content.length,
-          isStructured: isJson || isCsv,
+          isStructured: isJson || detection.targetFormat === 'csv' || detection.targetFormat === 'xlsx' || detection.targetFormat === 'json',
         },
         created_by: userId,
       })
