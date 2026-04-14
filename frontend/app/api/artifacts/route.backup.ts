@@ -1,10 +1,5 @@
 // GET /api/artifacts — list artifacts (filter by type, department, goal)
-// POST /api/artifacts — create a new artifact with file_url reference
-//
-// Per CROST_SPEC Section 6:
-// - Artifacts store files in Supabase Storage (S3)
-// - Database stores metadata only (file_url, not body)
-// - Types: document, code, data, spreadsheet, image
+// POST /api/artifacts — create a new artifact (manually if needed, usually via worker)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
@@ -36,15 +31,15 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query
     if (error) throw error
-
-    return NextResponse.json({
+    
+    return NextResponse.json({ 
       success: true,
       data,
       timestamp: new Date().toISOString()
     })
   } catch (err) {
     console.error('[GET /api/artifacts]', err)
-    return NextResponse.json({
+    return NextResponse.json({ 
       success: false,
       error: 'Failed to fetch artifacts',
       timestamp: new Date().toISOString()
@@ -52,15 +47,13 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Schema for artifact creation — files should be uploaded to Supabase Storage separately
-// This endpoint only stores metadata
 const CreateArtifactSchema = z.object({
   goal_id: z.string().uuid().nullable().optional(),
   department_id: z.string().uuid().nullable().optional(),
   department_slug: z.string().min(1),
   artifact_type: z.enum(['image', 'document', 'code', 'data', 'spreadsheet']),
   title: z.string().min(1),
-  file_url: z.string().url('file_url must be a valid URL pointing to Supabase Storage'),
+  body: z.string().nullable().optional(),
   metadata: z.record(z.unknown()).default({}),
   preview_url: z.string().url().nullable().optional(),
 })
@@ -74,15 +67,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const parsed = CreateArtifactSchema.parse(body)
     const supabase = createServerSupabaseClient()
-
-    // Verify file_url is accessible (basic check)
-    if (!parsed.file_url.includes('supabase') && !parsed.file_url.includes('s3')) {
-      return NextResponse.json({
-        success: false,
-        error: 'file_url must point to Supabase Storage or S3. Did you upload the file first?',
-        code: 'INVALID_FILE_URL'
-      }, { status: 400 })
-    }
 
     const { data, error } = await supabase
       .from('artifacts')
@@ -99,30 +83,26 @@ export async function POST(req: NextRequest) {
       goal_id: parsed.goal_id,
       event_type: 'artifact_created',
       description: `Artifact created: "${parsed.title}"`,
-      metadata: {
-        artifact_id: data.id,
-        artifact_type: parsed.artifact_type,
-        file_url: parsed.file_url
-      },
+      metadata: { artifact_id: data.id, artifact_type: parsed.artifact_type },
       created_by: user.id,
     })
 
-    return NextResponse.json({
+    return NextResponse.json({ 
       success: true,
       data,
       timestamp: new Date().toISOString()
     }, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({
+      return NextResponse.json({ 
         success: false,
-        error: 'Validation failed',
+        error: 'Validation failed', 
         details: err.errors,
         timestamp: new Date().toISOString()
       }, { status: 400 })
     }
     console.error('[POST /api/artifacts]', err)
-    return NextResponse.json({
+    return NextResponse.json({ 
       success: false,
       error: 'Failed to create artifact',
       timestamp: new Date().toISOString()

@@ -1,7 +1,8 @@
-CROST SPEC — (v1.2)
+CROST SPEC — (v1.3)
 
 > This is the source of truth for Crost architecture.
 > Do not modify without founder approval.
+> Updated April 13, 2026: Landing → App auth bridge integration (Section 15) added.
 
 🧠 0. Core Philosophy
 
@@ -286,30 +287,187 @@ Users Do NOT See
 Internal logs
 Raw model routing
 Low-level execution noise
-🔮 15. FUTURE FEATURES (DO NOT BUILD NOW)
+🌍 15. Landing → App Integration (Auth Bridge)
+
+Purpose
+Connect public marketing site (crosthq.com) to product onboarding (app.crosthq.com) without friction or data loss.
+
+Architecture
+Two separate deployments sharing:
+- Single Supabase instance (auth + database)
+- Subdomain cookies (cross-domain session sharing)
+- User consent history (user_consents table)
+
+Flow
+
+```
+Landing Site (Vite + React, crosthq.com)
+  ↓
+Founder clicks "Start Free" (CTA handler)
+  ↓
+Landing captures email → redirects to app with query param
+  ↓
+window.location.href = `https://app.crosthq.com/onboarding/identity?email=...&source=landing`
+  ↓
+  
+App Site (Next.js 14, app.crosthq.com)
+  ↓
+Onboarding identity page reads URL params
+  ↓
+Email pre-fills in form (zero re-entry)
+  ↓
+Founder completes signup
+  ↓
+App auto-claims consent status (user_consents record created)
+  ↓
+Dashboard loads
+```
+
+Implementation Rules
+
+Phase 1 (MVP) — Auth Bridge (5 hours)
+1. **Landing CTA** — Modify "Start Free" button to redirect with email param (30 min)
+2. **App Pre-Fill** — Read ?email & ?source from URL, populate form (1 hour)
+3. **Auto-Claim** — On signup, create user_consents record if landing referral (1.5 hours)
+4. **Cookie Config** — Supabase Auth Cookie Domain = `.crosthq.com` (15 min)
+5. **Analytics** — Track landing→app redirects + signup completion (30 min)
+6. **Testing** — Full E2E + edge cases (1 hour)
+
+Phase 2 (Optional, Q2 2026) — Full Consolidation (2–3 weeks)
+Only if:
+- Landing traffic exceeds 10K visitors/month, OR
+- Design changes require landing + app sync, OR
+- Team capacity available
+
+Then:
+- Port Crost Landing from Vite → Next.js
+- Merge route groups: /landing/* (public) + /dashboard/* (private)
+- Break up App.jsx into modular components
+- Migrate inline CSS to organized stylesheets
+- Replace Google Fonts with local font system
+
+Edge Cases (MUST Handle)
+
+Duplicate Email
+- If founder email already exists → redirect to /login, not /signup
+- Check user table before allowing signup
+
+Invalid Email Param
+- If ?email=not-an-email → ignore param, show empty form
+- Validate email format on app side
+
+Missing Consent
+- If landing didn't capture consent → show consent modal during onboarding
+- Do NOT auto-approve, always ask founder
+
+Cookie Rejection
+- If user has strict privacy settings → fallback: pre-fill email in form only
+- Founder can still sign up, just loses cross-domain session share
+
+RLS Violations
+- Ensure user_consents RLS policy allows founder to insert own records
+- Verify user_id matches authenticated user
+
+Supabase Egress
+- Auth bridge adds ~1–2 MB per 100 signups (negligible)
+- Monitor egress during launch; upgrade to Pro if needed
+
+Data Model
+
+No new tables required. Uses existing:
+- users (creator of signup)
+- user_consents (consent tracking)
+- company_profiles (founder info)
+
+Consent Record Structure (auto-claimed)
+
+```
+INSERT INTO user_consents (user_id, email, accepted_terms, accepted_privacy, created_at)
+VALUES (
+  'authenticated-user-id',
+  'founder@example.com',
+  true,  -- landing captured acceptance
+  true,  -- landing captured acceptance
+  NOW()
+)
+```
+
+Supabase Configuration
+
+Auth → Email → "Auth Cookies" → Set "Cookie Domain" to `.crosthq.com`
+
+This allows both crosthq.com and app.crosthq.com to share the same session cookie.
+
+Risk & Rollback
+
+Risk Level: 🟢 **Low**
+- Both apps remain independent
+- 5-minute rollback per app (revert 1 commit each)
+- No data loss (query params only)
+- Edge cases fully documented
+
+Rollback (if needed)
+```
+# Landing: revert CTA change
+git revert HEAD
+git push origin main
+
+# App: revert pre-fill + auto-claim
+git revert HEAD
+git push origin main
+
+# Result: both apps work independently again
+```
+
+Success Criteria
+
+✅ Founder enters email once on landing
+✅ Email pre-fills on app onboarding form
+✅ Auto-claim writes to user_consents
+✅ Cookies shared across subdomains (verified in browser DevTools)
+✅ All edge cases handled gracefully
+✅ Zero data loss
+✅ PostHog tracks funnel
+✅ No increase in support tickets about "why re-enter email?"
+
+Governance
+
+Phase 1 (Auth Bridge)
+- Status: Ready to implement
+- Owner: Backend engineer (5 hours)
+- Timeline: This week
+- Approval: Proceed after team consensus
+
+Phase 2 (Consolidation)
+- Status: Optional, deferred
+- Trigger: Traffic > 10K visitors/month OR design debt signal
+- Owner: TBD (when triggered)
+- Timeline: Q2 2026 (not urgent)
+
+🔮 16. FUTURE FEATURES (DO NOT BUILD NOW)
 
 ⚠️ These are strictly not MVP features, but system must be designed to support them.
 
-15.1 Marketplace
+16.1 Marketplace
 Custom departments
 Prompt packs
 Tool integrations
-15.2 Autonomous Mode
+16.2 Autonomous Mode
 Full execution without approval
 Scheduled operations
-15.3 Advanced Tooling (Onyx-like)
+16.3 Advanced Tooling (Onyx-like)
 Connectors (Slack, GitHub, Gmail)
 Sandbox execution
-15.4 Local Mode
+16.4 Local Mode
 Ollama integration
 Private data processing
-15.5 Advanced Model Assignment UI
+16.5 Advanced Model Assignment UI
 Per-department models
 Per-task overrides
-15.6 OpenAI Provider
+16.6 OpenAI Provider
 GPT-4o and GPT-4o-mini via openai/ prefix
 Full parity with existing BYOK providers
-🚫 16. Explicit Non-Goals (MVP)
+🚫 17. Explicit Non-Goals (MVP)
 
 Do NOT build:
 
