@@ -243,18 +243,21 @@ export async function POST(req: Request) {
     }
 
     // 4. PERSIST: Save result using SEPARATION LOGIC
+    //    - Structured JSON (any size) → artifact file (docx/xlsx/md)
+    //    - Narrative/plain text       → memo only
     let bodyText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     const fullBodyText = bodyText;
 
-    // Determine storage strategy based on size and content type
-    const isLargeOutput = fullBodyText.length > 1200;
-    const isStructured = tryParseJSON(fullBodyText) || (fullBodyText.includes(',') && fullBodyText.includes('\n'));
+    // Strip markdown fences before structure detection
+    const strippedText = fullBodyText.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    const isStructured = (strippedText.startsWith('{') && strippedText.endsWith('}')) ||
+                         (strippedText.startsWith('[') && strippedText.endsWith(']'));
 
     let artifactId: string | null = null;
     let memoBody = '';
 
-    if (isLargeOutput && isStructured) {
-      // Large structured content → Store as artifact file
+    if (isStructured) {
+      // Any structured JSON → Store as typed artifact file
       const artifact = await uploadArtifactFile(
         fullBodyText,
         taskId,
@@ -267,14 +270,13 @@ export async function POST(req: Request) {
 
       if (artifact) {
         artifactId = artifact.id;
-        // For memo, create reference to artifact
-        memoBody = `Tool executed: ${toolName}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).\nAccess via artifacts section or download here: ${artifact.file_url}`;
+        memoBody = `Tool executed: ${toolName}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).\nAccess via artifacts section.`;
       } else {
         // Fallback if artifact creation fails
         memoBody = bodyText.substring(0, 3000) + (bodyText.length > 3000 ? '\n\n... [Output truncated]' : '');
       }
     } else {
-      // Small or unstructured content → Store as memo
+      // Narrative / plain-text content → Store as memo only
       memoBody = bodyText.length > 3000
         ? bodyText.substring(0, 3000) + '\n\n... [Output truncated for memo storage]'
         : bodyText;
