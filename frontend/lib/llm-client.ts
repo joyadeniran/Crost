@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { getModelForTask } from './model-routing'
 import { resolveApiKey } from './key-resolver'
 import { logUsage } from './usage-logger'
+import { detectOutputType } from './artifact-transformers'
 import type {
   Department,
   OrchestratorPlan,
@@ -123,24 +124,66 @@ const APPROVAL_SIGNAL_MARKER = 'REQUEST_APPROVAL'
 const APPROVAL_REGEX = /REQUEST_APPROVAL:?[\s\S]*?(\{[\s\S]*?\})/
 
 /**
- * Standalone storage helper to offload large worker products to Supabase Storage.
+ * Standalone storage helper — detects format, transforms to docx/xlsx/md, uploads to Storage.
+ * Returns { fileUrl, artifactType, extension } or null on failure.
  */
-async function uploadArtifact(goalId: string | null, taskId: string, content: string): Promise<string | null> {
+async function uploadArtifact(
+  goalId: string | null,
+  taskId: string,
+  deptSlug: string,
+  content: string
+): Promise<{ fileUrl: string; artifactType: 'document' | 'spreadsheet' | 'data'; extension: string } | null> {
   const supabase = createServerSupabaseClient()
-  const fileName = `${goalId || 'global'}/${taskId}_${Date.now()}.txt`
-  
+
   try {
+    // Strip markdown code fences LLMs often wrap JSON in
+    const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+    const isJson = (stripped.startsWith('{') && stripped.endsWith('}')) || (stripped.startsWith('[') && stripped.endsWith(']'))
+
+    const detection = detectOutputType(stripped, isJson)
+
+    let fileContent: string | Buffer = stripped
+    if (detection.transformer) {
+      try {
+        const parsedContent = isJson ? JSON.parse(stripped) : stripped
+        fileContent = await detection.transformer(parsedContent) as string | Buffer
+      } catch (err) {
+        console.error('[uploadArtifact] Transform error, falling back to raw:', err)
+        fileContent = stripped
+        detection.targetFormat = isJson ? 'json' : 'md'
+      }
+    }
+
+    const mimeMap: Record<string, string> = {
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      md: 'text/markdown',
+      json: 'application/json',
+      txt: 'text/plain',
+      csv: 'text/csv',
+    }
+    const typeMap: Record<string, 'document' | 'spreadsheet' | 'data'> = {
+      docx: 'document', md: 'document', txt: 'document',
+      xlsx: 'spreadsheet', csv: 'spreadsheet',
+      json: 'data',
+    }
+
+    const ext = detection.targetFormat
+    const contentType = mimeMap[ext] || 'text/plain'
+    const artifactType = typeMap[ext] || 'document'
+    const fileName = `goals/${goalId || 'global'}/task-${taskId}-${Date.now()}.${ext}`
+
     const { data, error } = await supabase.storage
       .from('artifacts')
-      .upload(fileName, content, {
-        contentType: 'text/plain',
-        upsert: true
-      })
-    
-    if (error) throw error
-    
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    return `${supabaseUrl}/storage/v1/object/public/artifacts/${data.path}`
+      .upload(fileName, fileContent, { contentType, upsert: false })
+
+    if (error || !data) {
+      console.error('[uploadArtifact] Storage upload failed:', error)
+      return null
+    }
+
+    const { data: urlData } = supabase.storage.from('artifacts').getPublicUrl(data.path)
+    return { fileUrl: urlData.publicUrl, artifactType, extension: ext }
   } catch (err) {
     console.error('[uploadArtifact] Failed:', err)
     return null
@@ -931,21 +974,32 @@ export async function runWorkerTask(
     } catch (e) { console.error('Worker JSON parse fail', e) }
   }
 
-  // Artefact Logic: If content is large or explicitly requested, save as artifact
+  // Artefact Logic: Any structured JSON output → typed file (docx/xlsx/md)
+  // Plain narrative text → memo only
+  const strippedContent = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+  const isJsonContent = (strippedContent.startsWith('{') && strippedContent.endsWith('}')) ||
+                        (strippedContent.startsWith('[') && strippedContent.endsWith(']'))
+
   let artifactUrl: string | null = null
-  if (content.length > 1000) {
-    artifactUrl = await uploadArtifact(goalId || null, task.id, content)
-    if (artifactUrl) {
+  if (isJsonContent) {
+    const uploaded = await uploadArtifact(goalId || null, task.id, dept, content)
+    if (uploaded) {
+      artifactUrl = uploaded.fileUrl
       await supabase.from('artifacts').insert({
         goal_id: goalId || null,
         created_by: userId,
         department_slug: dept,
         department_id: deptRow.id,
-        artifact_type: 'document',
+        artifact_type: uploaded.artifactType,
         title: `Output: ${task.label}`,
-        body: content.slice(0, 3000),
-        preview_url: artifactUrl,
-        metadata: { task_id: task.id, action: task.action, file_url: artifactUrl }
+        file_url: uploaded.fileUrl,          // ← file_url, not preview_url
+        metadata: {
+          task_id: task.id,
+          action: task.action,
+          extension: uploaded.extension,
+          sizeBytes: content.length,
+          source: 'worker_task',
+        }
       })
     }
   }
@@ -956,7 +1010,11 @@ export async function runWorkerTask(
     from_department: deptRow.name,
     from_department_id: deptRow.id,
     title: `[${task.action}] ${task.label}`,
-    body: formatMemoBody(workerResult.memo_summary + (artifactUrl ? `\n\nFull output saved as artifact: ${artifactUrl}` : '')),
+    body: formatMemoBody(
+      artifactUrl
+        ? `Output saved as downloadable artifact. See Artifacts section to download.\n\nSummary: ${workerResult.memo_summary}`
+        : workerResult.memo_summary
+    ),
     tags: [task.action, dept],
     confidence: 0.8,
     source_type: 'agent',
