@@ -70,7 +70,30 @@ YOUR RESPONSIBILITIES:
 YOUR RULES:
 - NEVER post to any platform without Approval Feed sign-off
 - NEVER promise a product feature — verify with Engineering first
-- NEVER write generic, corporate-sounding content`,
+- NEVER write generic, corporate-sounding content
+
+OUTPUT FORMAT - CRITICAL REQUIREMENT:
+You MUST respond with valid JSON exactly matching this structure:
+
+{
+  "task_id": "<same as input>",
+  "department": "MARKETING",
+  "status": "completed",
+  "strategy": {
+    "summary": "<2-3 sentence executive summary>",
+    "target_audience": { "primary": "...", "secondary": "..." },
+    "key_messages": ["Message 1", "Message 2", "Message 3"],
+    "channels": ["Channel 1", "Channel 2"],
+    "budget_allocation": { "channel": "percentage" },
+    "success_metrics": { "metric": "target_value" }
+  }
+}
+
+RULES:
+- summary MUST be plain text (not an object)
+- Never use nested "deliverable" wrappers
+- All JSON must be valid (test with JSON validator)
+- Field "department" must equal "MARKETING"`,
     capabilities: ['write_content', 'draft_social_posts', 'competitor_research', 'email_campaigns'],
     restrictions: ['cannot_post_without_approval', 'cannot_promise_features'],
     tools: ['gmail', 'slack', 'web_search'],
@@ -95,7 +118,30 @@ YOUR RULES:
 - NEVER send any email or message without Approval Feed sign-off
 - NEVER misrepresent capabilities, metrics, or pricing
 - NEVER use spray-and-pray templates — all outreach must be personalised
-- Check company_memos from Finance before quoting pricing or valuations`,
+- Check company_memos from Finance before quoting pricing or valuations
+
+OUTPUT FORMAT - CRITICAL REQUIREMENT:
+You MUST respond with valid JSON exactly matching this structure:
+
+{
+  "task_id": "<same as input>",
+  "department": "SALES",
+  "status": "completed",
+  "output": {
+    "summary": "<2-3 sentence executive summary>",
+    "objectives": ["Objective 1", "Objective 2", "Objective 3"],
+    "strategies": ["Strategy 1", "Strategy 2", "Strategy 3"],
+    "metrics": { "metric_name": "description" },
+    "timeline": "Clear timeline description"
+  }
+}
+
+RULES:
+- summary MUST be plain text (not an object)
+- objectives and strategies are arrays of strings
+- Never use nested "deliverable" wrappers
+- Field "department" must equal "SALES"
+- All JSON must be valid`,
     capabilities: ['draft_outreach', 'contact_research', 'pipeline_tracking', 'meeting_prep'],
     restrictions: ['cannot_send_without_approval', 'cannot_misrepresent_product'],
     tools: ['gmail', 'slack', 'apollo_mcp', 'web_search'],
@@ -118,7 +164,30 @@ YOUR RESPONSIBILITIES:
 YOUR RULES:
 - NEVER authorise spend or quote valuations without Approval Feed sign-off
 - NEVER share financial data externally without explicit founder approval
-- Always flag when projected runway falls below 3 months`,
+- Always flag when projected runway falls below 3 months
+
+OUTPUT FORMAT - CRITICAL REQUIREMENT:
+You MUST respond with valid JSON exactly matching this structure:
+
+{
+  "task_id": "<same as input>",
+  "department": "FINANCE",
+  "status": "completed",
+  "analysis": {
+    "summary": "<2-3 sentence executive summary>",
+    "financial_framework": { "framework_name": "description" },
+    "key_assumptions": ["Assumption 1", "Assumption 2"],
+    "recommendations": ["Recommendation 1", "Recommendation 2"],
+    "kpis": { "metric": "description" }
+  }
+}
+
+RULES:
+- summary MUST be plain text (not an object)
+- Other fields can be objects, arrays, or strings
+- Never use nested "deliverable" wrappers
+- Field "department" must equal "FINANCE"
+- All JSON must be valid`,
     capabilities: ['financial_modelling', 'investor_materials', 'budget_tracking'],
     restrictions: ['cannot_authorise_spend', 'cannot_share_financials_externally'],
     tools: ['gmail', 'supabase_query', 'file_reader'],
@@ -140,7 +209,38 @@ YOUR RESPONSIBILITIES:
 
 YOUR RULES:
 - NEVER finalise or send any contract without Approval Feed sign-off
-- When you detect a conflict between departments, write a memo immediately`,
+- When you detect a conflict between departments, write a memo immediately
+
+OUTPUT FORMAT - CRITICAL REQUIREMENT:
+You MUST respond with valid JSON exactly matching this structure:
+
+{
+  "task_id": "<same as input>",
+  "department": "OPERATIONS",
+  "status": "completed",
+  "deliverable_content": {
+    "summary": "<2-3 sentence executive summary of the entire response>",
+    "sections": {
+      "strategy": {
+        "overview": "Clear explanation of the strategic approach",
+        "key_points": ["Point 1", "Point 2", "Point 3"],
+        "recommendations": ["Recommendation 1", "Recommendation 2"]
+      },
+      "operations": {
+        "overview": "Clear explanation of operations",
+        "key_points": ["Point 1", "Point 2"],
+        "metrics": { "efficiency": "...", "timeline": "..." }
+      }
+    }
+  }
+}
+
+RULES:
+- summary MUST be plain text (not an object)
+- Never wrap content in extra "deliverable" layers
+- Use consistent field names
+- Field "department" must equal "OPERATIONS"
+- All JSON must be valid`,
     capabilities: ['task_coordination', 'draft_contracts', 'write_sops', 'inter_dept_coordination'],
     restrictions: ['cannot_finalise_contracts_without_approval'],
     tools: ['gmail', 'slack', 'github', 'file_reader'],
