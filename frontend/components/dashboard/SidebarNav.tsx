@@ -55,12 +55,16 @@ interface Props {
   identity: string
 }
 
+import { useOnboardingStore } from '@/lib/onboarding-store'
+
 export function SidebarNav({ pendingCount, identity }: Props) {
   const router = useRouter()
 
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
+      useOnboardingStore.getState().reset()
+      localStorage.removeItem('crost-onboarding-storage')
       router.push('/login')
       router.refresh()
     } catch (err) {
