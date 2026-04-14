@@ -10,208 +10,171 @@ export interface OutputDetection {
   transformer?: (data: any) => Promise<string | Buffer>;
 }
 
+/**
+ * Detect the best output format for a given LLM response.
+ *
+ * Priority order:
+ *   1. Explicit action field hints ("excel", "word", etc.)
+ *   2. Nested content_for_excel / content_for_word markers
+ *   3. Department identity (FINANCE → xlsx, SALES/MARKETING/OPS → docx)
+ *   4. Data structure analysis (table-like → xlsx, narrative → docx)
+ *   5. Legacy schema detection
+ *   6. Default → md  (never txt for structured JSON)
+ */
 export function detectOutputType(content: string, isJson: boolean): OutputDetection {
   if (!isJson) {
+    // Plain text: only use txt for truly unstructured text
     return {
       sourceFormat: 'text',
       contentType: 'generic',
-      targetFormat: 'txt'
+      targetFormat: 'txt',
     };
   }
+
+  // Strip markdown fences that LLMs often wrap JSON in
+  const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
   let parsed: any;
   try {
-    parsed = JSON.parse(content);
+    parsed = JSON.parse(stripped);
   } catch {
-    return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'txt' };
+    // Couldn't parse despite isJson flag — safe fallback
+    return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
   }
 
-  // LAYER 3 - SMART FORMAT DETECTION
+  // ── CHECK 0: Explicit format field set by department prompt ─────────────
+  if (parsed?.format && typeof parsed.format === 'string') {
+    const fmt = parsed.format.toLowerCase();
+    if (fmt === 'xlsx' || fmt === 'excel') {
+      return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
+    }
+    if (fmt === 'docx' || fmt === 'word' || fmt === 'document') {
+      return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
+    }
+    if (fmt === 'md' || fmt === 'markdown') {
+      return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+    }
+  }
 
-  // CHECK 1: Explicit format requests in action field
-  if (parsed && parsed.action && typeof parsed.action === 'string') {
+  // ── CHECK 1: Explicit action field ──────────────────────────────────────
+  if (parsed?.action && typeof parsed.action === 'string') {
     const action = parsed.action.toLowerCase();
     if (action.includes('excel') || action.includes('spreadsheet') || action.includes('table')) {
-      return {
-        sourceFormat: 'json',
-        contentType: 'generic',
-        targetFormat: 'xlsx',
-        transformer: transformToExcel
-      };
+      return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
     }
     if (action.includes('word') || action.includes('document') || action.includes('report')) {
-      return {
-        sourceFormat: 'json',
-        contentType: 'generic',
-        targetFormat: 'docx',
-        transformer: transformToDocument
-      };
+      return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
     }
   }
 
-  // CHECK 2: Nested content_for_excel or content_for_word
-  const findContentFor = (obj: any): string | null => {
-    if (obj?.content_for_excel) return 'xlsx';
-    if (obj?.content_for_word) return 'docx';
-    if (typeof obj === 'object' && obj !== null) {
-      for (const v of Object.values(obj)) {
-        const result = findContentFor(v);
-        if (result) return result;
-      }
-    }
-    return null;
-  };
-
-  const contentForFormat = findContentFor(parsed);
-  if (contentForFormat === 'xlsx') {
-    return {
-      sourceFormat: 'json',
-      contentType: 'generic',
-      targetFormat: 'xlsx',
-      transformer: transformToExcel
-    };
+  // ── CHECK 2: Nested content_for_excel / content_for_word markers ─────────
+  const nestedFormat = findContentMarker(parsed);
+  if (nestedFormat === 'xlsx') {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
   }
-  if (contentForFormat === 'docx') {
-    return {
-      sourceFormat: 'json',
-      contentType: 'generic',
-      targetFormat: 'docx',
-      transformer: transformToDocument
-    };
+  if (nestedFormat === 'docx') {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
   }
 
-  // CHECK 3: Department-specific defaults
-  if (parsed.department === 'FINANCE' || (parsed.analysis && parsed.department === 'FINANCE')) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'generic',
-      targetFormat: 'xlsx',
-      transformer: transformToExcel
-    };
+  // ── CHECK 3: Department identity ─────────────────────────────────────────
+  const dept = typeof parsed.department === 'string' ? parsed.department.toUpperCase() : null;
+
+  if (dept === 'FINANCE') {
+    // Finance → Excel (spreadsheets / models / tables)
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
   }
 
-  if (parsed.department === 'SALES' && hasNarrativeContent(parsed)) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'generic',
-      targetFormat: 'docx',
-      transformer: transformToDocument
-    };
+  if (dept === 'OPERATIONS' && parsed.deliverable_content?.sections) {
+    // Ops with sections → Excel (structured sections become sheets)
+    return { sourceFormat: 'json', contentType: 'plan', targetFormat: 'xlsx', transformer: transformToExcel };
   }
 
-  if (parsed.department === 'OPERATIONS' && parsed.deliverable_content?.sections) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'plan',
-      targetFormat: 'xlsx',
-      transformer: transformToExcel
-    };
+  if (dept === 'SALES' || dept === 'MARKETING' || dept === 'OPERATIONS') {
+    // Sales / Marketing / Ops → Word doc (strategy narrative)
+    return { sourceFormat: 'json', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
   }
 
-  // CHECK 4: Data structure hints
+  if (dept === 'ENGINEERING') {
+    return { sourceFormat: 'json', contentType: 'document', targetFormat: 'md', transformer: transformToMarkdownResearch };
+  }
+
+  // ── CHECK 4: Data structure analysis ─────────────────────────────────────
   if (containsTableLikeData(parsed)) {
-    return {
-      sourceFormat: 'array',
-      contentType: 'research',
-      targetFormat: 'xlsx',
-      transformer: transformToExcel
-    };
+    return { sourceFormat: 'array', contentType: 'research', targetFormat: 'xlsx', transformer: transformToExcel };
   }
 
   if (containsNarrativeLikeData(parsed)) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'generic',
-      targetFormat: 'docx',
-      transformer: transformToDocument
-    };
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
   }
 
-  // LEGACY DETECTION (for backwards compatibility)
-
-  if (Array.isArray(parsed) || (parsed && 'data' in parsed && Array.isArray(parsed.data))) {
-    return {
-      sourceFormat: 'array',
-      contentType: 'research',
-      targetFormat: 'xlsx',
-      transformer: transformToExcel
-    };
+  // ── CHECK 5: Legacy schema detection ─────────────────────────────────────
+  if (Array.isArray(parsed) || (parsed?.data && Array.isArray(parsed.data))) {
+    return { sourceFormat: 'array', contentType: 'research', targetFormat: 'xlsx', transformer: transformToExcel };
   }
 
-  if (parsed && ('refined_email_template' in parsed || 'email_template' in parsed || ('subject' in parsed && 'body' in parsed))) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'email',
-      targetFormat: 'docx',
-      transformer: transformToDocument
-    };
+  if (parsed?.refined_email_template || parsed?.email_template || (parsed?.subject && parsed?.body)) {
+    return { sourceFormat: 'json', contentType: 'email', targetFormat: 'docx', transformer: transformToDocument };
   }
 
-  if (parsed && ('coordinated_outreach_plan' in parsed || 'project_plan' in parsed)) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'plan',
-      targetFormat: 'md',
-      transformer: transformToMarkdownPlan
-    };
+  if (parsed?.coordinated_outreach_plan || parsed?.project_plan) {
+    return { sourceFormat: 'json', contentType: 'plan', targetFormat: 'md', transformer: transformToMarkdownPlan };
   }
 
-  if (parsed && ('research_findings' in parsed || 'key_insights' in parsed)) {
-    return {
-      sourceFormat: 'json',
-      contentType: 'research',
-      targetFormat: 'md',
-      transformer: transformToMarkdownResearch
-    };
+  if (parsed?.research_findings || parsed?.key_insights) {
+    return { sourceFormat: 'json', contentType: 'research', targetFormat: 'md', transformer: transformToMarkdownResearch };
   }
 
-  // Default: Markdown (safest for unstructured content)
+  // ── Default: Markdown — never raw .txt for JSON ──────────────────────────
   return {
     sourceFormat: 'json',
     contentType: 'generic',
     targetFormat: 'md',
-    transformer: transformToMarkdownResearch
+    transformer: transformToMarkdownResearch,
   };
 }
 
-/** Check if data structure contains table-like patterns */
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Search nested JSON for content_for_excel / content_for_word markers */
+function findContentMarker(obj: any, depth: number = 0): 'xlsx' | 'docx' | null {
+  if (depth > 3 || !obj || typeof obj !== 'object') return null;
+  if (obj.content_for_excel) return 'xlsx';
+  if (obj.content_for_word) return 'docx';
+  for (const v of Object.values(obj)) {
+    const result = findContentMarker(v, depth + 1);
+    if (result) return result;
+  }
+  return null;
+}
+
+/** True if data looks like a table: array of uniform objects, or nested numeric tables */
 function containsTableLikeData(obj: any): boolean {
   if (Array.isArray(obj)) {
-    return obj.length > 3 && obj.every(item => typeof item === 'object');
+    return obj.length > 3 && obj.every(item => typeof item === 'object' && item !== null);
   }
-
-  const values = Object.values(obj);
-  return values.some(v =>
-    Array.isArray(v) && v.length > 3 ||
-    (typeof v === 'object' && v !== null && Object.keys(v).length > 5 && Object.values(v).some(val => typeof val === 'number'))
+  return Object.values(obj).some(v =>
+    (Array.isArray(v) && (v as any[]).length > 3 && (v as any[]).every((i: any) => typeof i === 'object')) ||
+    (typeof v === 'object' && v !== null && Object.keys(v).length > 5 &&
+      Object.values(v).some(val => typeof val === 'number'))
   );
 }
 
-/** Check if data contains narrative/lengthy text content */
+/** True if data contains significant narrative text */
 function containsNarrativeLikeData(obj: any): boolean {
   const values = flattenValues(obj);
-  const longStrings = values.filter(v => typeof v === 'string' && v.length > 50);
+  const longStrings = values.filter(v => typeof v === 'string' && (v as string).length > 50);
   return longStrings.length > 2 && longStrings.join(' ').length > 500;
 }
 
-/** Recursively flatten all values from nested objects */
+/** Recursively extract all values from nested object */
 function flattenValues(obj: any, depth: number = 0): any[] {
-  if (depth > 3) return [];
+  if (depth > 4 || obj === null || obj === undefined) return [];
   const values: any[] = [];
-  if (typeof obj === 'object' && obj !== null) {
+  if (typeof obj === 'object') {
     for (const v of Object.values(obj)) {
       values.push(v);
-      if (typeof v === 'object') {
-        values.push(...flattenValues(v, depth + 1));
-      }
+      if (typeof v === 'object') values.push(...flattenValues(v, depth + 1));
     }
   }
   return values;
-}
-
-/** Check if JSON contains narrative-like text */
-function hasNarrativeContent(obj: any): boolean {
-  const values = flattenValues(obj);
-  const totalLength = values.filter(v => typeof v === 'string').join(' ').length;
-  return totalLength > 500;
 }

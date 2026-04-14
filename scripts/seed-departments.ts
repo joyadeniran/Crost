@@ -79,6 +79,7 @@ You MUST respond with valid JSON exactly matching this structure:
   "task_id": "<same as input>",
   "department": "MARKETING",
   "status": "completed",
+  "format": "docx",
   "strategy": {
     "summary": "<2-3 sentence executive summary>",
     "target_audience": { "primary": "...", "secondary": "..." },
@@ -93,7 +94,8 @@ RULES:
 - summary MUST be plain text (not an object)
 - Never use nested "deliverable" wrappers
 - All JSON must be valid (test with JSON validator)
-- Field "department" must equal "MARKETING"`,
+- Field "department" must equal "MARKETING"
+- Field "format" must equal "docx"`,
     capabilities: ['write_content', 'draft_social_posts', 'competitor_research', 'email_campaigns'],
     restrictions: ['cannot_post_without_approval', 'cannot_promise_features'],
     tools: ['gmail', 'slack', 'web_search'],
@@ -127,6 +129,7 @@ You MUST respond with valid JSON exactly matching this structure:
   "task_id": "<same as input>",
   "department": "SALES",
   "status": "completed",
+  "format": "docx",
   "output": {
     "summary": "<2-3 sentence executive summary>",
     "objectives": ["Objective 1", "Objective 2", "Objective 3"],
@@ -141,6 +144,7 @@ RULES:
 - objectives and strategies are arrays of strings
 - Never use nested "deliverable" wrappers
 - Field "department" must equal "SALES"
+- Field "format" must equal "docx"
 - All JSON must be valid`,
     capabilities: ['draft_outreach', 'contact_research', 'pipeline_tracking', 'meeting_prep'],
     restrictions: ['cannot_send_without_approval', 'cannot_misrepresent_product'],
@@ -173,6 +177,7 @@ You MUST respond with valid JSON exactly matching this structure:
   "task_id": "<same as input>",
   "department": "FINANCE",
   "status": "completed",
+  "format": "xlsx",
   "analysis": {
     "summary": "<2-3 sentence executive summary>",
     "financial_framework": { "framework_name": "description" },
@@ -187,6 +192,7 @@ RULES:
 - Other fields can be objects, arrays, or strings
 - Never use nested "deliverable" wrappers
 - Field "department" must equal "FINANCE"
+- Field "format" must equal "xlsx"
 - All JSON must be valid`,
     capabilities: ['financial_modelling', 'investor_materials', 'budget_tracking'],
     restrictions: ['cannot_authorise_spend', 'cannot_share_financials_externally'],
@@ -218,6 +224,7 @@ You MUST respond with valid JSON exactly matching this structure:
   "task_id": "<same as input>",
   "department": "OPERATIONS",
   "status": "completed",
+  "format": "docx",
   "deliverable_content": {
     "summary": "<2-3 sentence executive summary of the entire response>",
     "sections": {
@@ -240,6 +247,7 @@ RULES:
 - Never wrap content in extra "deliverable" layers
 - Use consistent field names
 - Field "department" must equal "OPERATIONS"
+- Field "format" must equal "docx"
 - All JSON must be valid`,
     capabilities: ['task_coordination', 'draft_contracts', 'write_sops', 'inter_dept_coordination'],
     restrictions: ['cannot_finalise_contracts_without_approval'],
