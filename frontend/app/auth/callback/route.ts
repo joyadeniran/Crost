@@ -47,11 +47,17 @@ export async function GET(request: Request) {
     )
     
     // Exchange the code for a session
-    const { error } = await supabaseWithRes.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabaseWithRes.auth.exchangeCodeForSession(code)
     
-    if (!error) {
+    if (!error && data.user) {
+      const step = data.user.user_metadata?.onboarding_step
+      let target = '/onboarding/identity'
+      if (step === 'complete') target = '/dashboard'
+      else if (step === 'activated') target = '/onboarding/activate'
+      else if (step === 'control') target = '/onboarding/control'
+
       // Create response and set cookies correctly using Next 13+ route handler pattern
-      const response = NextResponse.redirect(`${origin}${next}`)
+      const response = NextResponse.redirect(`${origin}${target}`)
       
       // We must construct a properly scoped client one more time to inject response cookies
       const finalSupabase = createServerClient(

@@ -45,7 +45,13 @@ export async function middleware(request: NextRequest) {
 
     if (!onboardingComplete) {
       const step = user.user_metadata?.onboarding_step
-      return NextResponse.redirect(new URL(step === 'activated' ? '/onboarding/activate' : '/onboarding/identity', request.url))
+      let target = '/onboarding/identity'
+      if (step === 'activated') target = '/onboarding/activate'
+      else if (step === 'control') target = '/onboarding/control'
+      
+      if (pathname !== target) {
+        return NextResponse.redirect(new URL(target, request.url))
+      }
     }
   }
 
@@ -57,9 +63,13 @@ export async function middleware(request: NextRequest) {
          return NextResponse.redirect(new URL('/dashboard', request.url))
        }
        
-       // If they are on the earlier onboarding pages but are already 'activated', push them to activation
-       if (pathname !== '/onboarding/activate' && user.user_metadata?.onboarding_step === 'activated' && pathname.startsWith('/onboarding')) {
-         return NextResponse.redirect(new URL('/onboarding/activate', request.url))
+       const step = user.user_metadata?.onboarding_step
+       let target = '/onboarding/identity'
+       if (step === 'activated') target = '/onboarding/activate'
+       else if (step === 'control') target = '/onboarding/control'
+
+       if (pathname.startsWith('/onboarding') && pathname !== target) {
+         return NextResponse.redirect(new URL(target, request.url))
        }
     }
   }
