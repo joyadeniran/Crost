@@ -50,12 +50,12 @@ export default function TeamPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identity: { 
-            founder_name: founderName,
-            company_name: useOnboardingStore.getState().companyName,
+            founderName: founderName,
+            companyName: useOnboardingStore.getState().companyName,
             city, 
             country, 
-            business_description: useOnboardingStore.getState().businessDescription,
-            business_category: businessCategory,
+            businessDescription: useOnboardingStore.getState().businessDescription,
+            businessCategory: businessCategory,
             stage 
           },
           riskTolerance: useOnboardingStore.getState().riskTolerance,
