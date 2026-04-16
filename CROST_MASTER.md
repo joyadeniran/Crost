@@ -3,9 +3,37 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 8.2  
+**Current Version:** 8.3  
 **Last Updated:** April 16, 2026  
-**Deployment Status:** 🚀 Live — SYNC FAILED UI Fix & Department Chat Restoration (v8.2). Resolved root cause of false-positive sync failures, restored department chat for modern Direct LLM mode, and implemented robust self-healing across dashboard and detail pages.
+**Deployment Status:** 🚀 Live — Composio Sync Fix & UI Reactivity (v8.3). Fixed toolkit name case-sensitivity mismatch and implemented window-focus auto-sync for tool connections.
+
+---
+
+## Session v8.3 - Composio Sync Fix & UI Reactivity
+
+**Date**: April 16, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Integration UX + Tool Reliability
+
+### Root Cause Analysis
+**Issue**: Composio "Connect" button still showed as disconnected even after successful authorization.
+**Findings**: 
+1. `api/connect/sync` used strict equality (`t.name === slug`) when matching Composio toolkits. Composio returns capitalized names (e.g., "Gmail"), while Crost uses lowercase slugs ("gmail"), causing every match to fail.
+2. Next.js page transitions/redirects occasionally bypassed the `useEffect` mount sync, leaving the UI stale until a manual refresh.
+
+### Implementation: Case-Insensitive Matching (Production Ready)
+**File**: `frontend/app/api/connect/sync/route.ts`  
+**Change**: Updated matching logic to `.toLowerCase() === slug.toLowerCase()`.
+**Impact**: Existing and new connections are now correctly identified and written to the `available_tools` table.
+
+### Implementation: Window-Focus Synchronization (Production Ready)
+**File**: `frontend/components/settings/McpSettings.tsx`  
+**Change**: Added a `window` focus listener that triggers `syncStatus()`.
+**Impact**: When a founder returns from a Composio OAuth tab/window, the "CONNECT" button automatically flips to "DISCONNECT/ACTIVE" without requiring a page reload.
+
+### Files Modified (2 files)
+1. `frontend/app/api/connect/sync/route.ts`
+2. `frontend/components/settings/McpSettings.tsx`
 
 ---
 
@@ -319,6 +347,10 @@
   - Replacing Google Fonts with local font system
   - Unified Next.js build pipeline
   - Note: Current auth bridge makes this optional; can stay as-is indefinitely
+
+**COMPLETED FIXES (v8.3)**
+- [x] **Composio Sync Case-Sensitivity** — Fixed toolkit name matching in `api/connect/sync` to handle capitalized names from Composio.
+- [x] **Composio UI Focus-Sync** — Added window focus event listener to `McpSettings` to automatically refresh tool status when returning from OAuth.
 
 **COMPLETED FIXES (v8.2)**
 - [x] **SYNC FAILED UI Fix** — Resolved false-positive sync failure badge by treating `null` and `DIRECT_LLM` as valid modern states.
