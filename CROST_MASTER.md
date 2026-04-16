@@ -3,9 +3,37 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 8.5  
+**Current Version:** 8.6  
 **Last Updated:** April 16, 2026  
-**Deployment Status:** 🚀 Live — Cross-Subdomain Session Persistence (v8.5). Resolved 401 Unauthorized errors during onboarding by hardening cookie domain configuration for the `.crosthq.com` ecosystem.
+**Deployment Status:** 🚀 Live — Browser Client & Social Login Cookie Hardening (v8.6). Correctly implemented `cookieOptions` across browser-side auth to ensure `.crosthq.com` session persistence without SDK configuration errors.
+
+---
+
+## Session v8.6 - Browser Client & Social Login Cookie Hardening
+
+**Date**: April 16, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Auth Reliability + Cross-Subdomain Stability
+
+### Root Cause Analysis
+**Issue**: Browser-side `createBrowserClient` was throwing an error about missing `getAll/setAll` methods when attempting to configure cookies.
+**Findings**: 
+1. Providing an empty `cookies: {}` object to `createBrowserClient` triggers a deprecation/requirement check in `@supabase/ssr`.
+2. To set the cookie domain in the browser without providing custom storage methods, the `cookieOptions` property must be used at the top level of the configuration object.
+
+### Implementation: Robust Browser Cookie Configuration (Production Ready)
+**File**: `frontend/lib/supabase-browser.ts`  
+**Change**: Replaced `cookies: {}` with top-level `cookieOptions: { domain: '.crosthq.com', ... }`.
+**Impact**: Browser client now correctly scopes cookies to the entire `.crosthq.com` ecosystem without runtime errors.
+
+**Files**: `frontend/app/login/page.tsx`, `frontend/app/signup/page.tsx`  
+**Change**: Added `cookieOptions` with the `.crosthq.com` domain to `signInWithOAuth` calls.
+**Impact**: Initial session cookies created during the OAuth redirect are immediately scoped correctly, preventing 401 errors on the subsequent `/api/onboarding/complete` call.
+
+### Files Modified (3 files)
+1. `frontend/lib/supabase-browser.ts`
+2. `frontend/app/login/page.tsx`
+3. `frontend/app/signup/page.tsx`
 
 ---
 
@@ -412,6 +440,9 @@
   - Replacing Google Fonts with local font system
   - Unified Next.js build pipeline
   - Note: Current auth bridge makes this optional; can stay as-is indefinitely
+
+**COMPLETED FIXES (v8.6)**
+- [x] **Browser/Social Cookie Options** — Correctly configured `cookieOptions` in `createBrowserClient` and `signInWithOAuth` for the `.crosthq.com` domain.
 
 **COMPLETED FIXES (v8.5)**
 - [x] **Cross-Subdomain Session Persistence** — Explicitly set cookie domain to `.crosthq.com` to prevent 401 errors on subdomains like `app.crosthq.com`.
