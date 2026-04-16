@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -8,53 +10,37 @@ export async function GET(request: Request) {
   
   // Use NEXT_PUBLIC_APP_URL if available to avoid internal proxy issues (e.g. localhost:10000 on Render)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin
+  const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+  const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
 
   if (code) {
+    // Create a temporary response to hold cookies
+    const response = NextResponse.redirect(`${baseUrl}/dashboard`) // Default target, will refine below
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            // Using standard Request headers rather than relying on NextRequest cookies
-            // for the edge case of route handlers where we don't have NextRequest
+          get(name: string) {
             const cookieHeader = request.headers.get('cookie') || ''
-            return cookieHeader.split(';').map(c => {
-              const [name, ...rest] = c.trim().split('=')
-              return { name, value: rest.join('=') }
-            }).filter(c => c.name) // Filter empties
+            const cookies = cookieHeader.split(';').map(c => c.trim().split('='))
+            const cookie = cookies.find(([n]) => n === name)
+            return cookie ? cookie[1] : undefined
           },
-          setAll(cookiesToSet: any[]) {
-            // we do the setting below
+          set(name: string, value: string, options: CookieOptions) {
+            response.cookies.set(name, value, { ...options, ...cookieOptions })
           },
-        },
-      }
-    )
-
-    // Actually proper setAll needs Response object. Better pattern for Route Handlers:
-    const supabaseWithRes = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => {
-            const cookieHeader = request.headers.get('cookie') || ''
-            return cookieHeader.split(';').map(c => {
-              const [name, ...rest] = c.trim().split('=')
-              return { name, value: rest.join('=') }
-            }).filter(c => c.name)
+          remove(name: string, options: CookieOptions) {
+            response.cookies.set(name, '', { ...options, ...cookieOptions })
           },
-          setAll: (cookiesToSet: any[]) => {}, // Handled by NextResponse 
         },
       }
     )
     
     // Exchange the code for a session
-    const { data, error } = await supabaseWithRes.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
-    const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
-    const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
-
     if (!error && data.user) {
       const step = data.user.user_metadata?.onboarding_step
       let target = '/onboarding/identity'
@@ -62,29 +48,24 @@ export async function GET(request: Request) {
       else if (step === 'activated') target = '/onboarding/activate'
       else if (step === 'control') target = '/onboarding/control'
 
-      // Create response and set cookies correctly using Next 13+ route handler pattern
-      const response = NextResponse.redirect(`${baseUrl}${target}`)
+      // Return a new redirect to the correct target, but we MUST keep the cookies from the previous response
+      const finalResponse = NextResponse.redirect(`${baseUrl}${target}`)
       
-      // We must construct a properly scoped client one more time to inject response cookies
-      const finalSupabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            getAll: () => [],
-            setAll: (cookiesToSet: any[]) => {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                response.cookies.set(name, value, { ...options, ...cookieOptions })
-              })
-            },
-          },
-        }
-      )
-      
-      // trigger token refresh / cookie set
-      await finalSupabase.auth.getUser()
-      
-      return response
+      // Copy cookies from our temporary 'response' to 'finalResponse'
+      response.cookies.getAll().forEach(cookie => {
+        finalResponse.cookies.set(cookie.name, cookie.value, {
+          domain: cookie.domain,
+          path: cookie.path,
+          maxAge: cookie.maxAge,
+          secure: cookie.secure,
+          sameSite: cookie.sameSite as any,
+          httpOnly: cookie.httpOnly,
+        })
+      })
+
+      return finalResponse
+    } else {
+      console.error('[Auth Callback] Exchange Error:', error)
     }
   }
 
