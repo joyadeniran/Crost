@@ -11,6 +11,47 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showOtp, setShowOtp] = useState(false)
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) throw error
+      setShowOtp(true)
+      toast('Verification code sent!', 'success')
+    } catch (err: any) {
+      toast(err.message || 'Signup failed', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { error } = await supabaseClient.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup'
+      })
+      if (error) throw error
+      window.location.href = '/onboarding/identity'
+    } catch (err: any) {
+      toast(err.message || 'Invalid code', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     try {
       const { error } = await supabaseClient.auth.signInWithOAuth({
