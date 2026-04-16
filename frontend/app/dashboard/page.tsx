@@ -103,6 +103,48 @@ export default async function DashboardPage() {
     }
   }
 
+  // Self-healing: Ensure all existing active/draft departments have a valid cloud bridge ID
+  const rawDepartments = (deptResult.data ?? [])
+  const needsHealing = rawDepartments.filter(d => 
+    !d.orc_persona_id || 
+    d.orc_persona_id === 'SYNC_FAILED' || 
+    d.orc_persona_id === 'DIRECT_LLM' ||
+    (d.orc_persona_id.startsWith('direct_llm:') && d.orc_persona_id !== `direct_llm:${d.slug}`)
+  )
+
+  if (needsHealing.length > 0) {
+    for (const dept of needsHealing) {
+      await supabase
+        .from('departments')
+        .update({ orc_persona_id: `direct_llm:${dept.slug}` })
+        .eq('id', dept.id)
+    }
+    // Re-fetch once to have clean local state for the first render
+    const { data: healed } = await supabase
+      .from('departments')
+      .select('*')
+      .eq('created_by', currentUser.id)
+      .neq('activation_stage', 'deprecated')
+      .neq('slug', 'orchestrator')
+      .order('created_at')
+    deptResult.data = healed
+  }
+
+  // Also heal the orchestrator specifically (it is excluded from the list query above)
+  const { data: orcDept } = await supabase
+    .from('departments')
+    .select('id, orc_persona_id, slug')
+    .eq('created_by', currentUser.id)
+    .eq('slug', 'orchestrator')
+    .maybeSingle()
+
+  if (orcDept && (!orcDept.orc_persona_id || orcDept.orc_persona_id !== 'direct_llm:orchestrator')) {
+    await supabase
+      .from('departments')
+      .update({ orc_persona_id: 'direct_llm:orchestrator' })
+      .eq('id', orcDept.id)
+  }
+
   const [approvalResult, identityResult] = await Promise.all([
     supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', currentUser.id),
     supabase
