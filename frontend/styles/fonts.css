@@ -1,14 +1,14 @@
-/* Local font families - loaded from public/fonts */
+/* Local font families - switched to CDN to resolve corrupt local file errors */
 :root {
   --font-syne: 'Syne', sans-serif;
   --font-dm-mono: 'DM Mono', monospace;
   --font-dm-sans: 'DM Sans', sans-serif;
 }
 
-/* Syne - Display font */
+/* Syne - Display font (via CDN) */
 @font-face {
   font-family: 'Syne';
-  src: url('/fonts/Syne-Regular.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/syne/v22/8vIX7w8qzS7L-m6v_XzV.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'Syne';
-  src: url('/fonts/Syne-Medium.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/syne/v22/8vIX7w8qzS7L-mqv_XzV.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Syne';
-  src: url('/fonts/Syne-SemiBold.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/syne/v22/8vIX7w8qzS7L-m2v_XzV.woff2') format('woff2');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -32,24 +32,16 @@
 
 @font-face {
   font-family: 'Syne';
-  src: url('/fonts/Syne-Bold.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/syne/v22/8vIX7w8qzS7L-mCv_XzV.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Syne';
-  src: url('/fonts/Syne-ExtraBold.ttf') format('truetype');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* DM Mono - Monospace font */
+/* DM Mono - Monospace font (via CDN) */
 @font-face {
   font-family: 'DM Mono';
-  src: url('/fonts/DMMono-Light.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmmono/v14/u-4n0qW7mXv_H862Z_6b_Tsz.woff2') format('woff2');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
@@ -57,7 +49,7 @@
 
 @font-face {
   font-family: 'DM Mono';
-  src: url('/fonts/DMMono-Regular.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmmono/v14/u-4l0qW7mXv_H862Z_6N_Q.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -65,16 +57,16 @@
 
 @font-face {
   font-family: 'DM Mono';
-  src: url('/fonts/DMMono-Medium.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmmono/v14/u-4n0qW7mXv_H862Z_6b9Dsz.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 
-/* DM Sans - Sans font */
+/* DM Sans - Sans font (via CDN) */
 @font-face {
   font-family: 'DM Sans';
-  src: url('/fonts/DMSans-Light.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2Fp2ywxg089UriCZa4Hz-A.woff2') format('woff2');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
@@ -82,7 +74,7 @@
 
 @font-face {
   font-family: 'DM Sans';
-  src: url('/fonts/DMSans-Regular.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2Fp2ywxg089UriCZa4Hz-A.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -90,7 +82,7 @@
 
 @font-face {
   font-family: 'DM Sans';
-  src: url('/fonts/DMSans-Medium.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2Fp2ywxg089UriCZa4Hz-A.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -98,7 +90,7 @@
 
 @font-face {
   font-family: 'DM Sans';
-  src: url('/fonts/DMSans-SemiBold.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2Fp2ywxg089UriCZa4Hz-A.woff2') format('woff2');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -106,16 +98,8 @@
 
 @font-face {
   font-family: 'DM Sans';
-  src: url('/fonts/DMSans-Bold.ttf') format('truetype');
+  src: url('https://fonts.gstatic.com/s/dmsans/v15/rP2Fp2ywxg089UriCZa4Hz-A.woff2') format('woff2');
   font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'DM Sans';
-  src: url('/fonts/DMSans-ExtraBold.ttf') format('truetype');
-  font-weight: 800;
   font-style: normal;
   font-display: swap;
 }

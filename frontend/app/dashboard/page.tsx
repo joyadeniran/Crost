@@ -44,6 +44,7 @@ export default async function DashboardPage() {
         color: template.color,
         is_orchestrator: false,
         created_by: currentUser.id,
+        orc_persona_id: `direct_llm:${template.slug}`,
         activation_stage: template.activation_stage === 'active' ? 'active' : 'draft',
         status: 'idle',
       })
@@ -68,6 +69,7 @@ export default async function DashboardPage() {
         color: orchestratorTemplate.color,
         is_orchestrator: true,
         created_by: currentUser.id,
+        orc_persona_id: `direct_llm:${orchestratorTemplate.slug}`,
         activation_stage: 'active',
         status: 'idle',
       })
