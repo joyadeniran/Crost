@@ -188,6 +188,7 @@ Never claim the founder's personal identity as your own.`
               color: template.color,
               is_orchestrator: template.is_orchestrator,
               created_by: user.id,
+              orc_persona_id: `direct_llm:${template.slug}`,
               activation_stage: 'active',
               status: 'idle',
             })
@@ -227,6 +228,7 @@ Never claim the founder's personal identity as your own.`
             color: orcTemplate.color,
             is_orchestrator: orcTemplate.is_orchestrator,
             created_by: user.id,
+            orc_persona_id: `direct_llm:${orcTemplate.slug}`,
             activation_stage: 'active',
             status: 'idle',
           })
