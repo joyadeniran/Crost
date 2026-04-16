@@ -154,6 +154,7 @@ export async function POST(req: NextRequest) {
           color: template.color,
           is_orchestrator: template.is_orchestrator,
           created_by: user.id,
+          orc_persona_id: `direct_llm:${template.slug}`,
           activation_stage: 'active',
           status: 'idle',
         })
@@ -222,7 +223,13 @@ export async function POST(req: NextRequest) {
     // Step 2: Insert into Supabase with activation_stage = 'draft'
     const { data: dept, error: dbError } = await supabase
       .from('departments')
-      .insert({ ...parsed, activation_stage: 'draft', status: 'idle', created_by: user.id })
+      .insert({ 
+        ...parsed, 
+        activation_stage: 'draft', 
+        status: 'idle', 
+        created_by: user.id,
+        orc_persona_id: `direct_llm:${parsed.slug}`
+      })
       .select()
       .single()
     if (dbError) throw new Error(dbError.message)
