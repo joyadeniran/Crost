@@ -106,18 +106,22 @@ export default async function DashboardPage() {
   // Self-healing: Ensure all existing active/draft departments have a valid cloud bridge ID
   const rawDepartments = (deptResult.data ?? [])
   const needsHealing = rawDepartments.filter(d => 
-    !d.orc_persona_id || 
     d.orc_persona_id === 'SYNC_FAILED' || 
     d.orc_persona_id === 'DIRECT_LLM' ||
-    (d.orc_persona_id.startsWith('direct_llm:') && d.orc_persona_id !== `direct_llm:${d.slug}`)
+    (d.orc_persona_id && d.orc_persona_id.startsWith('direct_llm:') && d.orc_persona_id !== `direct_llm:${d.slug}`)
   )
 
   if (needsHealing.length > 0) {
     for (const dept of needsHealing) {
-      await supabase
-        .from('departments')
-        .update({ orc_persona_id: `direct_llm:${dept.slug}` })
-        .eq('id', dept.id)
+      try {
+        await supabase
+          .from('departments')
+          .update({ orc_persona_id: `direct_llm:${dept.slug}` })
+          .eq('id', dept.id)
+      } catch (e) {
+        // Fail silently — DB constraint prevents duplicate direct_llm:slug IDs across different users
+        console.warn(`[dashboard] Failed to heal dept ${dept.slug}:`, e)
+      }
     }
     // Re-fetch once to have clean local state for the first render
     const { data: healed } = await supabase
@@ -138,11 +142,15 @@ export default async function DashboardPage() {
     .eq('slug', 'orchestrator')
     .maybeSingle()
 
-  if (orcDept && (!orcDept.orc_persona_id || orcDept.orc_persona_id !== 'direct_llm:orchestrator')) {
-    await supabase
-      .from('departments')
-      .update({ orc_persona_id: 'direct_llm:orchestrator' })
-      .eq('id', orcDept.id)
+  if (orcDept && (orcDept.orc_persona_id === 'SYNC_FAILED' || orcDept.orc_persona_id === 'DIRECT_LLM' || (orcDept.orc_persona_id && orcDept.orc_persona_id !== 'direct_llm:orchestrator'))) {
+    try {
+      await supabase
+        .from('departments')
+        .update({ orc_persona_id: 'direct_llm:orchestrator' })
+        .eq('id', orcDept.id)
+    } catch (e) {
+      console.warn(`[dashboard] Failed to heal orchestrator:`, e)
+    }
   }
 
   const [approvalResult, identityResult] = await Promise.all([
@@ -169,8 +177,9 @@ export default async function DashboardPage() {
   const unsyncedCount = departments.filter((d) => {
     if (d.activation_stage !== 'active') return false
     const id = d.orc_persona_id
-    if (!id || id === 'SYNC_FAILED' || id === 'DIRECT_LLM') return true
-    if (id.startsWith('direct_llm:') && id !== `direct_llm:${d.slug}`) return true
+    if (id === 'SYNC_FAILED') return true
+    // null and direct_llm are considered synced in modern mode
+    if (id && id.startsWith('direct_llm:') && id !== `direct_llm:${d.slug}`) return true
     return false
   }).length
 

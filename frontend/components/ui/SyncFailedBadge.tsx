@@ -4,7 +4,11 @@ interface Props {
 }
 
 function getState(id: string | null, slug?: string): 'ok' | 'direct_llm' | 'failed' {
-  if (!id || id === 'SYNC_FAILED' || id === 'DIRECT_LLM') return 'failed'
+  if (id === 'SYNC_FAILED') return 'failed'
+  
+  // If null or explicitly set to legacy DIRECT_LLM, it's direct LLM mode
+  if (!id || id === 'DIRECT_LLM') return 'direct_llm'
+
   if (id.startsWith('direct_llm:')) {
     // Only valid if it matches this department's slug
     return (!slug || id === `direct_llm:${slug}`) ? 'direct_llm' : 'failed'
