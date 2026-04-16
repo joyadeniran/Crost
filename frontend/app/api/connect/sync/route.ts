@@ -60,7 +60,8 @@ export async function GET(req: Request) {
     // 4. PRE-SEED / SYNC: Ensure all SUPPORTED_TOOLKITS are present
     for (const slug of SUPPORTED_TOOLKITS) {
       // Find if Composio already has a connection status for this
-      const toolkit = toolkits.find((t: any) => t.name === slug);
+      // Case-insensitive match since Composio names are capitalized (Gmail, GitHub, etc.)
+      const toolkit = toolkits.find((t: any) => t.name.toLowerCase() === slug.toLowerCase());
       const isConnected = toolkit?.connection?.isActive ?? false;
 
       // Toolkit row (UI primary)

@@ -27,7 +27,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
   const connectedTools = filteredTools.filter(t => t.is_configured)
   const availableTools = filteredTools.filter(t => !t.is_configured)
 
-  // Synchronize Composio status on mount
+  // Synchronize Composio status on mount and window focus
   useEffect(() => {
     const syncStatus = async () => {
       setIsSyncing(true)
@@ -54,6 +54,10 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
     }
 
     syncStatus()
+
+    // Also sync on window focus (useful after redirect back from Composio)
+    window.addEventListener('focus', syncStatus)
+    return () => window.removeEventListener('focus', syncStatus)
   }, [])
 
   const handleConnect = async (tool: Tool) => {
