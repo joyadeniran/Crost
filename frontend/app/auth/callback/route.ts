@@ -5,6 +5,9 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+  
+  // Use NEXT_PUBLIC_APP_URL if available to avoid internal proxy issues (e.g. localhost:10000 on Render)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin
 
   if (code) {
     const supabase = createServerClient(
@@ -57,7 +60,7 @@ export async function GET(request: Request) {
       else if (step === 'control') target = '/onboarding/control'
 
       // Create response and set cookies correctly using Next 13+ route handler pattern
-      const response = NextResponse.redirect(`${origin}${target}`)
+      const response = NextResponse.redirect(`${baseUrl}${target}`)
       
       // We must construct a properly scoped client one more time to inject response cookies
       const finalSupabase = createServerClient(
@@ -83,5 +86,5 @@ export async function GET(request: Request) {
   }
 
   // Return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/login?error=auth-callback-failed`)
+  return NextResponse.redirect(`${baseUrl}/login?error=auth-callback-failed`)
 }
