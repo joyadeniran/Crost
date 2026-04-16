@@ -3,9 +3,44 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 8.3  
+**Current Version:** 8.4  
 **Last Updated:** April 16, 2026  
-**Deployment Status:** 🚀 Live — Composio Sync Fix & UI Reactivity (v8.3). Fixed toolkit name case-sensitivity mismatch and implemented window-focus auto-sync for tool connections.
+**Deployment Status:** 🚀 Live — Social Login & Onboarding Flow Hardening (v8.4). Fixed Google/Apple redirect loop via PKCE callback route and improved middleware routing for multi-step onboarding.
+
+---
+
+## Session v8.4 - Social Login & Onboarding Flow Hardening
+
+**Date**: April 16, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Auth Reliability + Onboarding UX
+
+### Root Cause Analysis
+**Issue**: Social login (Google/Apple) was redirecting users back to the login page instead of the dashboard/onboarding.
+**Findings**: 
+1. `signInWithOAuth` was redirecting directly to `/dashboard`. Since the session exchange happens via a code, the browser had no session yet when hitting the protected dashboard, causing the middleware to bounce the user back to `/login`.
+2. Middleware logic was too aggressive and didn't handle `undefined` onboarding steps correctly for new social users.
+3. `auth/callback` route existed but was bypassed by the frontend implementation.
+
+### Implementation: PKCE Callback Integration (Production Ready)
+**File**: `frontend/app/login/page.tsx`, `frontend/app/signup/page.tsx`  
+**Change**: Updated `redirectTo` to use `${origin}/auth/callback`.
+**Impact**: Authorization code is now correctly exchanged for a session on the server before any dashboard redirection occurs.
+
+### Implementation: Dynamic Onboarding Routing (Production Ready)
+**File**: `frontend/app/auth/callback/route.ts`  
+**Change**: Added logic to read `onboarding_step` from user metadata and redirect to the specific missing step (`identity`, `activate`, or `control`).
+**Impact**: New users go to step 1; returning users resume exactly where they left off.
+
+**File**: `frontend/middleware.ts`  
+**Change**: Hardened the protection logic to prevent redirect loops and default new users to `/onboarding/identity`.
+**Impact**: Eliminates "flicker" and redundant redirects during the auth flow.
+
+### Files Modified (4 files)
+1. `frontend/app/login/page.tsx`
+2. `frontend/app/signup/page.tsx`
+3. `frontend/app/auth/callback/route.ts`
+4. `frontend/middleware.ts`
 
 ---
 
@@ -347,6 +382,10 @@
   - Replacing Google Fonts with local font system
   - Unified Next.js build pipeline
   - Note: Current auth bridge makes this optional; can stay as-is indefinitely
+
+**COMPLETED FIXES (v8.4)**
+- [x] **Social Login PKCE Redirect** — Redirected Google/Apple login to `/auth/callback` to properly exchange authorization codes for sessions.
+- [x] **Onboarding Middleware Logic** — Hardened middleware and callback routing to correctly handle `undefined` or partial onboarding steps for new users.
 
 **COMPLETED FIXES (v8.3)**
 - [x] **Composio Sync Case-Sensitivity** — Fixed toolkit name matching in `api/connect/sync` to handle capitalized names from Composio.
