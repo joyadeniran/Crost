@@ -9,10 +9,14 @@ let _client: SupabaseClient | null = null
 
 export function getSupabaseClient(): SupabaseClient {
   if (!_client) {
+    const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+    const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax', secure: true } : {}
+
     _client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        cookieOptions,
         global: {
           fetch: (url: RequestInfo | URL, options?: RequestInit) =>
             fetch(url, { ...options, cache: 'no-store' as RequestCache }),

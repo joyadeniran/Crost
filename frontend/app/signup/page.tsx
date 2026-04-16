@@ -54,11 +54,15 @@ export default function SignUpPage() {
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     try {
+      const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+      const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax', secure: true } : {}
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+      
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${baseUrl}/auth/callback`,
+          cookieOptions,
         },
       })
       if (error) throw error
