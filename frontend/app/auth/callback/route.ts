@@ -24,9 +24,12 @@ export async function GET(request: Request) {
         cookies: {
           get(name: string) {
             const cookieHeader = request.headers.get('cookie') || ''
-            const cookies = cookieHeader.split(';').map(c => c.trim().split('='))
-            const cookie = cookies.find(([n]) => n === name)
-            return cookie ? cookie[1] : undefined
+            const cookies = cookieHeader.split(';').reduce((acc, c) => {
+              const [key, ...val] = c.trim().split('=')
+              acc[key] = val.join('=')
+              return acc
+            }, {} as Record<string, string>)
+            return cookies[name]
           },
           set(name: string, value: string, options: CookieOptions) {
             response.cookies.set(name, value, { ...options, ...cookieOptions })
