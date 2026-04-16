@@ -3,9 +3,37 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 8.4  
+**Current Version:** 8.5  
 **Last Updated:** April 16, 2026  
-**Deployment Status:** 🚀 Live — Social Login & Onboarding Flow Hardening (v8.4). Fixed Google/Apple redirect loop via PKCE callback route and improved middleware routing for multi-step onboarding.
+**Deployment Status:** 🚀 Live — Cross-Subdomain Session Persistence (v8.5). Resolved 401 Unauthorized errors during onboarding by hardening cookie domain configuration for the `.crosthq.com` ecosystem.
+
+---
+
+## Session v8.5 - Cross-Subdomain Session Persistence
+
+**Date**: April 16, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Auth Stability + Ecosystem Connectivity
+
+### Root Cause Analysis
+**Issue**: `/api/onboarding/complete` returning 401 Unauthorized even when the user was authenticated.
+**Findings**: 
+1. The app runs on `app.crosthq.com`. Default Supabase/Next.js cookie settings were scoping cookies to the specific subdomain or losing them during redirects.
+2. The server-side `auth.getUser()` check in the API route failed to find a valid session because the cookie wasn't being correctly passed in the cross-subdomain request.
+
+### Implementation: Explicit Cookie Domain (Production Ready)
+**Files**: `frontend/middleware.ts`, `frontend/app/auth/callback/route.ts`, `frontend/lib/supabase-browser.ts`, `frontend/lib/supabase.ts`  
+**Change**: Added logic to detect production environments (`crosthq.com`) and explicitly set the cookie domain to `.crosthq.com`.
+**Impact**: 
+- Sessions are now shared across all `*.crosthq.com` subdomains.
+- Middleware, API routes, and browser-side requests now see a consistent, persistent auth state.
+- Fixed the 401 block on the final onboarding step.
+
+### Files Modified (4 files)
+1. `frontend/middleware.ts`
+2. `frontend/app/auth/callback/route.ts`
+3. `frontend/lib/supabase-browser.ts`
+4. `frontend/lib/supabase.ts`
 
 ---
 
@@ -384,6 +412,9 @@
   - Replacing Google Fonts with local font system
   - Unified Next.js build pipeline
   - Note: Current auth bridge makes this optional; can stay as-is indefinitely
+
+**COMPLETED FIXES (v8.5)**
+- [x] **Cross-Subdomain Session Persistence** — Explicitly set cookie domain to `.crosthq.com` to prevent 401 errors on subdomains like `app.crosthq.com`.
 
 **COMPLETED FIXES (v8.4)**
 - [x] **Social Login PKCE Redirect** — Redirected Google/Apple login to `/auth/callback` to properly exchange authorization codes for sessions.
