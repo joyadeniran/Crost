@@ -24,13 +24,15 @@
 
 ### Implementation: PKCE Callback Integration (Production Ready)
 **File**: `frontend/app/login/page.tsx`, `frontend/app/signup/page.tsx`  
-**Change**: Updated `redirectTo` to use `${origin}/auth/callback`.
-**Impact**: Authorization code is now correctly exchanged for a session on the server before any dashboard redirection occurs.
+**Change**: Updated `redirectTo` to use `${baseUrl}/auth/callback` where `baseUrl` prioritizes `NEXT_PUBLIC_APP_URL` over `window.location.origin`.
+**Impact**: Authorization code is now correctly exchanged for a session on the server before any dashboard redirection occurs, and internal ports (like localhost:10000 on Render) no longer leak into the redirect URL.
 
 ### Implementation: Dynamic Onboarding Routing (Production Ready)
 **File**: `frontend/app/auth/callback/route.ts`  
-**Change**: Added logic to read `onboarding_step` from user metadata and redirect to the specific missing step (`identity`, `activate`, or `control`).
-**Impact**: New users go to step 1; returning users resume exactly where they left off.
+**Change**: 
+1. Added logic to read `onboarding_step` from user metadata and redirect to the specific missing step (`identity`, `activate`, or `control`).
+2. Updated all redirects to use `NEXT_PUBLIC_APP_URL` (base URL) to ensure public-facing routing consistency.
+**Impact**: New users go to step 1; returning users resume exactly where they left off; production routing is now robust against proxy internal headers.
 
 **File**: `frontend/middleware.ts`  
 **Change**: Hardened the protection logic to prevent redirect loops and default new users to `/onboarding/identity`.
