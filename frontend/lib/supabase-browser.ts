@@ -9,10 +9,17 @@ let _client: SupabaseClient | null = null
 
 export function getSupabaseClient(): SupabaseClient {
   if (!_client) {
+    const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+    const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax', secure: true } : {}
+
     _client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        cookies: {
+          // Pass the options to the browser client if needed, 
+          // though usually handled by GoTrue defaults, being explicit helps.
+        },
         global: {
           fetch: (url: RequestInfo | URL, options?: RequestInit) =>
             fetch(url, { ...options, cache: 'no-store' as RequestCache }),

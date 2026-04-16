@@ -52,6 +52,9 @@ export async function GET(request: Request) {
     // Exchange the code for a session
     const { data, error } = await supabaseWithRes.auth.exchangeCodeForSession(code)
     
+    const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+    const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
+
     if (!error && data.user) {
       const step = data.user.user_metadata?.onboarding_step
       let target = '/onboarding/identity'
@@ -71,7 +74,7 @@ export async function GET(request: Request) {
             getAll: () => [],
             setAll: (cookiesToSet: any[]) => {
               cookiesToSet.forEach(({ name, value, options }) => {
-                response.cookies.set(name, value, options)
+                response.cookies.set(name, value, { ...options, ...cookieOptions })
               })
             },
           },
