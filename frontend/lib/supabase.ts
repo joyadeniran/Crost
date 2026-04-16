@@ -70,6 +70,9 @@ export async function updateSession(request: any) {
     },
   })
 
+  const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+  const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax', secure: true } : {}
+
   const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
@@ -83,7 +86,7 @@ export async function updateSession(request: any) {
           },
         })
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
+          response.cookies.set(name, value, { ...options, ...cookieOptions })
         )
       },
     },

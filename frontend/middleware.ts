@@ -8,6 +8,9 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+  const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
+
   // Use the public anon key for middleware (browser context)
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,7 +28,7 @@ export async function middleware(request: NextRequest) {
             },
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, { ...options, ...cookieOptions })
           )
         },
       },
