@@ -36,10 +36,27 @@ export default async function DepartmentDetailPage({ params }: Props) {
 
   if (deptResult.error || !deptResult.data) return notFound()
 
-  const dept = deptResult.data as Department
+  let dept = deptResult.data as Department
+
+  // Self-healing: Ensure orc_persona_id is set to direct_llm:slug if not synced
+  const targetId = dept.is_orchestrator ? 'direct_llm:orchestrator' : `direct_llm:${dept.slug}`
+  if (!dept.orc_persona_id || 
+      dept.orc_persona_id === 'SYNC_FAILED' || 
+      dept.orc_persona_id === 'DIRECT_LLM' ||
+      (dept.orc_persona_id.startsWith('direct_llm:') && dept.orc_persona_id !== targetId)) {
+    
+    await supabase
+      .from('departments')
+      .update({ orc_persona_id: targetId })
+      .eq('id', dept.id)
+    
+    // Refresh local copy
+    dept.orc_persona_id = targetId
+  }
+
   const events = (eventsResult.data ?? []) as EventLogEntry[]
   const canActivate = dept.activation_stage !== 'active' && dept.activation_stage !== 'deprecated'
-  const syncFailed = !dept.orc_persona_id || dept.orc_persona_id === 'SYNC_FAILED'
+  const syncFailed = dept.orc_persona_id === 'SYNC_FAILED'
 
   // Stuck = running for > 30 min
   const isStuck = dept.status === 'running' && dept.last_active_at
