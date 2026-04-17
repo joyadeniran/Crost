@@ -21,11 +21,11 @@ type ExecuteOptions = {
 
 // Department Permission Mask
 const DEPARTMENT_TOOL_RULES: Record<string, string[]> = {
-  marketing: ["gmail", "slack", "notion"],
-  engineering: ["github", "linear", "slack"],
-  sales: ["gmail", "hubspot", "apollo", "slack", "notion"],
-  finance: ["gmail", "googlesheets"],
-  executive: ["gmail", "slack", "notion", "googlecalendar"] // Default orchestrator/executive access
+  marketing: ["gmail", "slack", "notion", "internal"],
+  engineering: ["github", "linear", "slack", "internal"],
+  sales: ["gmail", "hubspot", "apollo", "slack", "notion", "internal"],
+  finance: ["gmail", "googlesheets", "internal"],
+  executive: ["gmail", "slack", "notion", "googlecalendar", "internal"] // Default orchestrator/executive access
 };
 
 // Auto-run rules
@@ -52,7 +52,20 @@ export async function executeToolCall(options: ExecuteOptions) {
   const supabase = createServerSupabaseClient();
   const fullyQualifiedTool = `${service}.${action}`.toLowerCase();
 
-  // 1. Connection Guard: Does the user have this service hooked up?
+  // 1. Internal tool bypass — knowledge_base_search and future internal tools
+  if (service.toLowerCase() === 'internal') {
+    const searchResult = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/knowledge/search`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, query: params.query, category: params.category, limit: params.limit || 5 })
+      }
+    );
+    return searchResult.json();
+  }
+
+  // 2. Connection Guard: Does the user have this service hooked up?
   const { data: connection, error: connErr } = await supabase
     .from("connections")
     .select("*")
