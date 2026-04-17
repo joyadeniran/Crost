@@ -1,13 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    const authClient = await createSupabaseServerComponentClient();
+    const { data: { user }, error: authErr } = await authClient.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const supabase = createServerSupabaseClient();
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('query') || '';
@@ -41,9 +42,11 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    const authClient = await createSupabaseServerComponentClient();
+    const { data: { user }, error: authErr } = await authClient.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const supabase = createServerSupabaseClient();
 
     const { searchParams } = new URL(req.url);
     const fileId = searchParams.get('id');

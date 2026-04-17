@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 import { extractText } from '@/lib/knowledge/extract-text';
 import { callLLM, getModel } from '@/lib/llm-client';
 
@@ -23,12 +23,16 @@ const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
+    // 1. Authenticate user using cookie-aware client
+    const authClient = await createSupabaseServerComponentClient();
+    const { data: { user }, error: authErr } = await authClient.auth.getUser();
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // 2. Use service role client for DB/Storage operations (bypasses RLS for async processing)
+    const supabase = createServerSupabaseClient();
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
