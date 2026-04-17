@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.0  
+**Current Version:** 9.1  
 **Last Updated:** April 17, 2026  
-**Deployment Status:** 🚀 Live — Composio Unified Tool Execution Architecture (v9.0). Consolidated all worker APIs to funnel through a strictly permissioned, audited, and HITL-safe execution tool layer.
+**Deployment Status:** 🚀 Live — Knowledge Base (v9.1). Introduced native context archives via Hybrid Text Extraction (Local+LLM) separating active working memory from bulk document sets.
+
+---
+
+## Session v9.1 - Founder Knowledge Base & Hybrid Extraction
+
+**Date**: April 17, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Context Window Optimiziation + Enhanced Founder Profiling
+
+### Implementation Details:
+1. **Migrations**: Added `knowledge_base_files` and `knowledge_base_chunks`. Registered `knowledge_base_search` local tool.
+2. **Hybrid Extraction**: Built `/lib/knowledge/extract-text.ts` splitting loads between node local parsers (`pdf-parse`, `mammoth`, `xlsx`) for fast deterministic extraction, cascading visual and scanned drops to the existing `LiteLLM` pipeline.
+3. **API Logic**: Built `/api/knowledge/upload` for async extraction, summarization, and tag generation offloading main loops.
+4. **Tool Linkage**: Spliced the `internal` service flag into the `/lib/tools/execute-tool-call.ts` gateway logic to natively intercept search requests and inject strictly concise summaries and semantic chunks rather than overloading `Orc` logic tokens.
+5. **Dashboard**: Styled `/dashboard/knowledge` natively fitting the dark gradient UI standard with drag-and-drop queues and detail inspection sliding drawers.
 
 ---
 
@@ -703,6 +718,9 @@
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.1 | Apr 17 2026 | Knowledge Base: Deployed a hybrid local+LLM text extractor bound to new Supabase schema preventing prompt bloats. Created `/dashboard/knowledge` and bound extraction layers directly into the local `executeToolCall` gateway enabling agent queries on founder documents. |
+| v9.0 | Apr 17 2026 | Composio Unified Tool Architecture: Refactored remote execution API into a strict executeToolCall boundary. Enforced multi-tenant `connections` mappings onto `available_tools`, added auditing via `tool_executions`, and automated dependency risk handling. |
+| v8.7 | Apr 17 2026 | UI/UX Premium Aesthetic Upgrade: Rewrote layout schemas to apply glassmorphism dynamically to the login-card layout with multi-layered gradient ambient backgrounds and editorial `Fraunces` typographies. |
 | v8.2 | Apr 16 2026 | SYNC FAILED UI Fix: Resolved false-positive sync failure badge by treating `null` and `DIRECT_LLM` as valid modern states. Restored department chat for Direct LLM mode. Implemented robust fail-safe healing in Dashboard and Detail pages to handle DB unique constraints. |
 | v7.0 | Apr 14 2026 | Memos & Artifacts Compliance Fix: Established structured `company_memo` (singular) table. Aligned artifacts with Section 6 of CROST_SPEC (Storage-first mode). Implemented output separation logic in task/worker endpoints. Added `file_url` to artifacts and missed columns to `company_memos`. |
 | v6.6 | Apr 13 2026 | Goal Cleanup & Diagnostic Toolkit: Automated cleanup utility for legacy stuck goals (`clear_stuck_goals.ts`). Expanded stability toolkit with diagnostic scripts for tasks, approvals, and event logging. Stuck goals issue marked as resolved. |
