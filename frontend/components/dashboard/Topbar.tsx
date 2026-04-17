@@ -11,6 +11,7 @@ import { NotificationDropdown } from './NotificationDropdown'
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':               'Agent Office',
   '/dashboard/approvals':     'Approval Feed',
+  '/dashboard/knowledge':     'Knowledge Base',
   '/dashboard/memos':         'Company Memos',
   '/dashboard/settings':      'Settings',
   '/dashboard/constitution':  'Constitution',

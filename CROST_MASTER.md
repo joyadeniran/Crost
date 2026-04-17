@@ -3,9 +3,23 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.1  
+**Current Version:** 9.2  
 **Last Updated:** April 17, 2026  
-**Deployment Status:** 🚀 Live — Knowledge Base (v9.1). Introduced native context archives via Hybrid Text Extraction (Local+LLM) separating active working memory from bulk document sets.
+**Deployment Status:** 🚀 Live — Knowledge Base / HITL Approval Fixes (v9.2). UI routing and HITL gateway integrations verified.
+
+---
+
+## Session v9.2 - Knowledge Base UI Routing & HITL Gateway Fix
+
+**Date**: April 17, 2026  
+**Status**: ✅ HOTFIX COMPLETE  
+**Impact**: Restored Human-in-The-Loop capability for Agentic tools
+
+### Patch Details:
+1. **HITL Silent Failure Fix**: Resolved a critical defect in `lib/tools/execute-tool-call.ts` where high/critical risk tools correctly paused execution, but unconditionally failed to insert requests into `approval_queue`. This blocked tool execution perpetually with no human fallback mechanism.
+2. **System Fallback Memos**: Orchestrator now strictly inserts a `system` tier Company Memo outlining the exact reason why a tool execution paused for Founder-action.
+3. **Knowledge Base UI Layouts**: Patched `SidebarNav.tsx`, `Topbar.tsx`, and `ContentWrapper.tsx` bringing the `/dashboard/knowledge` backend into the standard navigation hierarchy with proper padding scopes and icons.
+4. **Typesafety Lock**: Enforced standard `eslint-disable-next-line` directive on `require('pdf-parse')` bypassing Next.js 14 specific linter errors generated inside the Render node build.
 
 ---
 
@@ -718,6 +732,7 @@
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.2 | Apr 17 2026 | HITL Hotfix: Patched `execute-tool-call.ts` pipeline bug silencing approvals for critical risk toolsets. Patched dashboard layouts injecting the Knowledge Base app suite. |
 | v9.1 | Apr 17 2026 | Knowledge Base: Deployed a hybrid local+LLM text extractor bound to new Supabase schema preventing prompt bloats. Created `/dashboard/knowledge` and bound extraction layers directly into the local `executeToolCall` gateway enabling agent queries on founder documents. |
 | v9.0 | Apr 17 2026 | Composio Unified Tool Architecture: Refactored remote execution API into a strict executeToolCall boundary. Enforced multi-tenant `connections` mappings onto `available_tools`, added auditing via `tool_executions`, and automated dependency risk handling. |
 | v8.7 | Apr 17 2026 | UI/UX Premium Aesthetic Upgrade: Rewrote layout schemas to apply glassmorphism dynamically to the login-card layout with multi-layered gradient ambient backgrounds and editorial `Fraunces` typographies. |
