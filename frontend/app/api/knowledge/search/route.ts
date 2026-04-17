@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { callEmbeddings } from '@/lib/llm-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,49 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
 
     if (!files || files.length === 0) {
-      // Fallback: search chunks for keyword match
+      // Phase 3: Try semantic search first
+      try {
+        const queryEmbeddings = await callEmbeddings(query, userId);
+        const { data: vectorMatches, error: matchErr } = await supabase.rpc('match_kb_chunks', {
+          query_embedding: queryEmbeddings[0],
+          match_threshold: 0.5,
+          match_count: limit,
+          p_user_id: userId
+        });
+
+        if (vectorMatches && vectorMatches.length > 0) {
+          // Hydrate with parent file info
+          const fileIds = [...new Set(vectorMatches.map((c: any) => c.knowledge_file_id))];
+          const { data: parentFiles } = await supabase
+            .from('knowledge_base_files')
+            .select('id, title, category, extracted_summary')
+            .in('id', fileIds);
+
+          const fileMap = new Map((parentFiles ?? []).map(f => [f.id, f]));
+
+          const matches = vectorMatches.map((chunk: any) => {
+            const parent = fileMap.get(chunk.knowledge_file_id);
+            return {
+              title: parent?.title || 'Unknown',
+              summary: parent?.extracted_summary || '',
+              chunk: chunk.content,
+              category: parent?.category || '',
+              relevance: Math.round(chunk.similarity * 100) / 100,
+            };
+          });
+
+          // Increment reference_count for matched files (async)
+          fileIds.forEach(id => {
+            supabase.rpc('increment_kb_reference', { file_id: id }).catch(() => {});
+          });
+
+          return NextResponse.json({ matches });
+        }
+      } catch (embedErr) {
+        console.warn('[KB Search] Semantic search failed, falling back to keywords:', embedErr);
+      }
+
+      // Keyword Fallback (Existing logic)
       const { data: chunks } = await supabase
         .from('knowledge_base_chunks')
         .select('content, knowledge_file_id, chunk_index')
