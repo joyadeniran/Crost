@@ -3,9 +3,35 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.2  
+**Current Version:** 9.3  
 **Last Updated:** April 17, 2026  
-**Deployment Status:** 🚀 Live — Knowledge Base / HITL Approval Fixes (v9.2). UI routing and HITL gateway integrations verified.
+**Deployment Status:** 🚀 Live — Knowledge Base Upload Fix (v9.3). Storage bucket provisioned; upload pipeline unblocked.
+
+---
+
+## Session v9.3 - Knowledge Base Upload Fix & Documentation
+
+**Date**: April 17, 2026  
+**Status**: ✅ HOTFIX COMPLETE  
+**Impact**: Unblocked all knowledge base file uploads; spec and master brought up to date
+
+### Root Cause Analysis
+**Issue**: Every file upload to `/api/knowledge/upload` silently failed at the storage step.  
+**Findings**:
+1. Migration `20260417020000_knowledge_base.sql` created the `knowledge_base_files` and `knowledge_base_chunks` tables but never provisioned the `knowledge-base` Supabase Storage bucket. Every `supabase.storage.from('knowledge-base').upload(...)` call returned "bucket not found", immediately setting `upload_status: 'failed'` on the DB row.
+2. `storagePath` in the upload route was prefixed with `knowledge-base/` (e.g. `knowledge-base/userId/fileId/name`), making the stored path redundant since the bucket is already named `knowledge-base`. Files would have been double-nested under `knowledge-base/[bucket]/knowledge-base/...`.
+
+### Patch Details:
+1. **Storage Bucket Created** — New migration `20260417030000_knowledge_base_storage.sql` provisions the `knowledge-base` bucket and adds SELECT / INSERT / DELETE storage-object policies.
+2. **Storage Path Fixed** — `storagePath` in `frontend/app/api/knowledge/upload/route.ts` corrected from `knowledge-base/${user.id}/...` to `${user.id}/...` (path is relative within the bucket, not absolute).
+3. **CROST_SPEC v1.4** — Added Section 16 (Founder Knowledge Base) documenting storage model, file object schema, extraction pipeline, retrieval rules, and dashboard. Future Features renumbered to Section 17; Non-Goals to Section 18. Full RAG moved from Non-Goals to Section 17.7 (future).
+4. **CROST_MASTER v9.3** — This entry.
+
+### Files Modified:
+1. `supabase/migrations/20260417030000_knowledge_base_storage.sql` — new
+2. `frontend/app/api/knowledge/upload/route.ts` — storagePath prefix removed
+3. `CROST_SPEC.md` — Section 16 added, sections renumbered
+4. `CROST_MASTER.md` — version 9.3, this session entry
 
 ---
 
@@ -352,6 +378,7 @@
 - ✅ **Polling-Primary Worker Supervision** — 15s poll loop is primary engine; Realtime is opportunistic bonus when available
 - ✅ **Supabase Realtime Publication** — `goal_tasks`, `goals`, `company_memos`, `event_log`, `departments`, `approval_queue` all enabled in `supabase_realtime` publication
 - ✅ **Goal Cleanup & Diagnostic Toolkit** — Automated detection/cancellation of stuck goals (`scripts/clear_stuck_goals.ts`) + 10+ diagnostic scripts for system health.
+- ✅ **Founder Knowledge Base (CROST_SPEC v1.4 §16)** — Hybrid extraction engine (`pdf-parse`, `mammoth`, `xlsx`, LLM Vision fallback) + async summarization/tagging/chunking. `knowledge_base_search` internal tool wired into executeToolCall gateway. `/dashboard/knowledge` UI. Storage: `knowledge-base` Supabase bucket + `knowledge_base_files` / `knowledge_base_chunks` tables.
 
 **Frontend & Deployment**
 - ✅ **Next.js Frontend** — Dynamic rendering, all 35 API routes with force-dynamic export
@@ -732,6 +759,7 @@
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.3 | Apr 17 2026 | KB Upload Fix: Provisioned missing `knowledge-base` storage bucket (new migration). Fixed redundant storagePath prefix. Added CROST_SPEC §16 (Founder Knowledge Base). |
 | v9.2 | Apr 17 2026 | HITL Hotfix: Patched `execute-tool-call.ts` pipeline bug silencing approvals for critical risk toolsets. Patched dashboard layouts injecting the Knowledge Base app suite. |
 | v9.1 | Apr 17 2026 | Knowledge Base: Deployed a hybrid local+LLM text extractor bound to new Supabase schema preventing prompt bloats. Created `/dashboard/knowledge` and bound extraction layers directly into the local `executeToolCall` gateway enabling agent queries on founder documents. |
 | v9.0 | Apr 17 2026 | Composio Unified Tool Architecture: Refactored remote execution API into a strict executeToolCall boundary. Enforced multi-tenant `connections` mappings onto `available_tools`, added auditing via `tool_executions`, and automated dependency risk handling. |
