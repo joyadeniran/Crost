@@ -4,7 +4,7 @@
 // Fallback: LLM vision extraction via existing LiteLLM gateway
 // All LLM calls go through lib/llm-client.ts for BYOK + usage logging.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line
 const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
