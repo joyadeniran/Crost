@@ -603,7 +603,7 @@ body::before {
 /* ─── AUTH PAGES (LOGIN / SIGNUP) ─────────────────────────────────────────── */
 .login-root {
   min-height: 100vh;
-  background: #09090b;
+  background: radial-gradient(circle at 30% 50%, rgba(0, 212, 170, 0.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(0, 100, 255, 0.05) 0%, transparent 40%), #09090b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -621,11 +621,13 @@ body::before {
 }
 
 .login-card {
-  background: #0c0c0f;
+  background: rgba(20, 20, 25, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 20px;
   padding: 48px 40px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.6);
   position: relative;
   overflow: hidden;
 }
@@ -650,13 +652,13 @@ body::before {
 }
 
 .login-heading {
-  font-family: var(--font-syne, sans-serif);
+  font-family: var(--font-fraunces, serif);
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 600;
   color: #fff;
   margin: 0 0 12px 0;
-  letter-spacing: -0.03em;
-  line-height: 1;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .login-subheading {
@@ -748,8 +750,8 @@ body::before {
 
 .login-button:hover:not(:disabled) {
   background: #00efc0;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0, 212, 170, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 212, 170, 0.3);
 }
 
 .login-button:disabled {
@@ -1008,6 +1010,8 @@ body::before {
   color: #fff;
   font-size: 16px;
   width: 100%;
+  min-width: 0;
+  flex: 1;
   transition: all 0.2s;
   border-radius: 10px;
 }
@@ -1023,6 +1027,7 @@ body::before {
 .identity-form input:focus, .business-form textarea:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.4);
 }
 
 .business-form textarea:focus {
@@ -1103,15 +1108,15 @@ body::before {
 
 /* ─── ONBOARDING PROFILE SUMMARY ─────────────────────────────────────────── */
 .profile-summary {
-  background: rgba(12, 12, 15, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 20, 25, 0.5);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
   padding: 32px;
   position: sticky;
   top: 100px;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
 
