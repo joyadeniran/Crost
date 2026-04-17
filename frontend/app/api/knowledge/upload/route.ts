@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     const fileId = fileRow.id;
-    const storagePath = `knowledge-base/${user.id}/${fileId}/${file.name}`;
+    const storagePath = `${user.id}/${fileId}/${file.name}`;
 
     // 2. Upload to Supabase Storage
     const buffer = Buffer.from(await file.arrayBuffer());
