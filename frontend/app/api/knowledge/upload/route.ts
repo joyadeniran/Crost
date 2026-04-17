@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 import { extractText } from '@/lib/knowledge/extract-text';
-import { callLLM, getModel } from '@/lib/llm-client';
+import { callLLM, getModel, callEmbeddings } from '@/lib/llm-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -176,17 +176,35 @@ Respond in JSON exactly: { "summary": "...", "tags": ["tag1", "tag2", ...] }`;
       chunks.push({ content: current.trim(), index: chunkIndex, tokenCount: Math.ceil(current.length / 4) });
     }
 
-    // Save chunks
+    // Save chunks with embeddings (Phase 3)
     if (chunks.length > 0) {
-      await supabase.from('knowledge_base_chunks').insert(
-        chunks.map(c => ({
-          knowledge_file_id: fileId,
-          created_by: userId,
-          chunk_index: c.index,
-          content: c.content,
-          token_count: c.tokenCount,
-        }))
-      );
+      try {
+        const texts = chunks.map(c => c.content);
+        const embeddings = await callEmbeddings(texts, userId);
+
+        await supabase.from('knowledge_base_chunks').insert(
+          chunks.map((c, i) => ({
+            knowledge_file_id: fileId,
+            created_by: userId,
+            chunk_index: c.index,
+            content: c.content,
+            token_count: c.tokenCount,
+            embedding: embeddings[i],
+          }))
+        );
+      } catch (embedErr) {
+        console.warn('[KB Embeddings] Failed to generate/store embeddings, saving chunks without them:', embedErr);
+        // Fallback: save without embeddings
+        await supabase.from('knowledge_base_chunks').insert(
+          chunks.map(c => ({
+            knowledge_file_id: fileId,
+            created_by: userId,
+            chunk_index: c.index,
+            content: c.content,
+            token_count: c.tokenCount,
+          }))
+        );
+      }
     }
 
     // Mark completed
@@ -199,6 +217,7 @@ Respond in JSON exactly: { "summary": "...", "tags": ["tag1", "tag2", ...] }`;
         pageCount: extracted.pageCount,
         chunkCount: chunks.length,
         warnings: extracted.warnings,
+        hasEmbeddings: true,
       },
       tags,
       processing_status: 'completed',

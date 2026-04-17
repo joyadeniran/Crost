@@ -601,6 +601,40 @@ export async function callLLM(
   return callLiteLLM(model, prompt, systemNote, userId, providerOverride, isBootstrap)
 }
 
+export async function callEmbeddings(
+  input: string | string[],
+  userId?: string | null
+): Promise<number[][]> {
+  const model = process.env.EMBEDDING_MODEL ?? 'text-embedding-3-small'
+  const provider = model.split('/')[0]
+
+  // Key resolution
+  const { apiKey } = await resolveApiKey({ userId, provider })
+
+  const body: any = {
+    model,
+    input: Array.isArray(input) ? input : [input],
+  }
+  if (apiKey) body.api_key = apiKey
+
+  const res = await fetch(`${LITELLM_BASE_URL}/v1/embeddings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Embedding error ${res.status}: ${errText}`)
+  }
+
+  const data = await res.json()
+  return data.data.map((item: any) => item.embedding)
+}
+
 // ─── Token budget check (per-user, per-day) ──────────────────────────────────
 
 export async function checkTokenBudget(userId: string): Promise<
