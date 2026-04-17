@@ -1,8 +1,8 @@
-CROST SPEC — (v1.3)
+CROST SPEC — (v1.4)
 
 > This is the source of truth for Crost architecture.
 > Do not modify without founder approval.
-> Updated April 13, 2026: Landing → App auth bridge integration (Section 15) added.
+> Updated April 17, 2026: Founder Knowledge Base (Section 16) added. Sections renumbered accordingly.
 
 🧠 0. Core Philosophy
 
@@ -444,34 +444,115 @@ Phase 2 (Consolidation)
 - Owner: TBD (when triggered)
 - Timeline: Q2 2026 (not urgent)
 
-🔮 16. FUTURE FEATURES (DO NOT BUILD NOW)
+📚 16. Founder Knowledge Base
+
+Purpose
+The Knowledge Base is a founder-controlled document store that gives Orc and
+departments direct access to company context — without polluting the Memo or
+consuming context tokens on raw file contents.
+
+This is NOT a full RAG system. It is a hybrid extraction and retrieval layer:
+- Local parsers handle deterministic formats (PDF, DOCX, XLSX, CSV, TXT, MD, JSON)
+- LLM Vision handles scanned/image-only documents as a fallback
+- Semantic chunks are stored for future vector search (Phase 3, pgvector)
+
+Storage
+Files:    Supabase Storage bucket `knowledge-base`
+Metadata: `knowledge_base_files` table (RLS-secured, per-user)
+Chunks:   `knowledge_base_chunks` table (cascade-deletes with parent file)
+
+File Object
+KnowledgeBaseFile = {
+  id: UUID
+  created_by: UUID
+  title: string
+  file_name: string
+  file_type: string
+  mime_type: string
+  file_size: integer
+  storage_path: string          -- path within `knowledge-base` bucket
+  file_url: string              -- public URL
+  category: "company_profile" | "pitch_deck" | "financial_report" | "handbook"
+          | "meeting_notes" | "research" | "legal" | "marketing" | "sales"
+          | "product" | "operations" | "custom"
+  tags: string[]
+  upload_status: "uploading" | "uploaded" | "failed"
+  processing_status: "pending" | "processing" | "completed" | "failed"
+  extracted_text: text          -- first 50k chars
+  extracted_summary: text
+  extracted_metadata: JSONB
+}
+
+Extraction Pipeline
+1. Founder uploads file via /dashboard/knowledge
+2. API route POST /api/knowledge/upload:
+   a. Validates MIME type and size (max 25MB)
+   b. Inserts pending metadata row in knowledge_base_files
+   c. Uploads file to Supabase Storage (knowledge-base bucket)
+   d. Returns immediately — extraction is async
+3. Async extraction via lib/knowledge/extract-text.ts:
+   - PDF     → pdf-parse (local) → LLM Vision fallback if <300 chars
+   - DOCX    → mammoth (local) → LLM Vision fallback
+   - XLSX/CSV → xlsx library (local, deterministic)
+   - TXT/MD/JSON → native UTF-8
+   - Images  → LLM Vision always
+4. LLM summarization + tag generation (via LiteLLM, respects BYOK)
+5. Text chunked into ~800-char segments → stored in knowledge_base_chunks
+6. Phase 3 (future): pgvector embeddings on each chunk
+
+Retrieval
+Internal tool: `knowledge_base_search`
+- Registered in `available_tools` with risk_level = 'low'
+- Intercepted natively in executeToolCall gateway (not via Composio)
+- Returns: concise summaries and semantic chunks to Orc/departments
+- Search modes: keyword, category filter, file type
+
+Rules
+- Files are strictly per-user (RLS: created_by = auth.uid())
+- Max file size: 25MB
+- Supported types: PDF, DOCX, XLSX, CSV, TXT, MD, JSON, PNG, JPG, WEBP, GIF
+- Upload response is immediate; extraction runs asynchronously
+- Orc reads KB via knowledge_base_search tool — never raw file bytes
+- KB does NOT replace the Memo:
+    Memo   = active, distilled company state (current goals, strategies, decisions)
+    KB     = static founder context (documents, research, references)
+    Artefacts = task outputs (generated files, reports, models)
+
+Dashboard
+Route:    /dashboard/knowledge
+Features: drag-and-drop upload, category tagging, processing status badges,
+          detail inspection sliding drawer
+
+🔮 17. FUTURE FEATURES (DO NOT BUILD NOW)
 
 ⚠️ These are strictly not MVP features, but system must be designed to support them.
 
-16.1 Marketplace
+17.1 Marketplace
 Custom departments
 Prompt packs
 Tool integrations
-16.2 Autonomous Mode
+17.2 Autonomous Mode
 Full execution without approval
 Scheduled operations
-16.3 Advanced Tooling (Onyx-like)
+17.3 Advanced Tooling (Onyx-like)
 Connectors (Slack, GitHub, Gmail)
 Sandbox execution
-16.4 Local Mode
+17.4 Local Mode
 Ollama integration
 Private data processing
-16.5 Advanced Model Assignment UI
+17.5 Advanced Model Assignment UI
 Per-department models
 Per-task overrides
-16.6 OpenAI Provider
+17.6 OpenAI Provider
 GPT-4o and GPT-4o-mini via openai/ prefix
 Full parity with existing BYOK providers
-🚫 17. Explicit Non-Goals (MVP)
+17.7 Full RAG (Phase 3)
+pgvector embeddings on knowledge_base_chunks
+True semantic similarity search across all KB files
+🚫 18. Explicit Non-Goals (MVP)
 
 Do NOT build:
 
-Full RAG system
 Auto-retry loops
 Complex agent hierarchies
 Code execution sandbox
