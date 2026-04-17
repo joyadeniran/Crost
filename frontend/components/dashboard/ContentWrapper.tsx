@@ -16,6 +16,7 @@ export function ContentWrapper({ children, initialEvents }: Props) {
   // These are focus-heavy or space-intensive pages.
   const hideSidebarOn = [
     '/dashboard/settings',
+    '/dashboard/knowledge',
     '/dashboard/memos',
     '/dashboard/approvals',
     '/dashboard/artifacts'

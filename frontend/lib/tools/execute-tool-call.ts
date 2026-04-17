@@ -121,8 +121,35 @@ export async function executeToolCall(options: ExecuteOptions) {
   if (execErr || !executionLog) throw new Error("Failed to track tool execution");
 
   if (requiresApproval) {
-    // Generate an approval request (this implies hitting the `approval_queue` table normally)
-    // We update the table to say it needs approval and return early.
+    // Generate an approval request
+    await supabase.from("approval_queue").insert({
+      goal_id: goalId,
+      task_id: taskId,
+      requested_by: departmentId,
+      user_id: userId,
+      type: "content_review",
+      status: "pending",
+      context: {
+        tool_execution_id: executionLog.id,
+        service,
+        action,
+        params,
+        reasoning: toolCall.reasoning || `Security protocol: HITL approval required for ${fullyQualifiedTool}`,
+        is_tool_call: true
+      }
+    });
+
+    // Write a system memo so there's a paper trail
+    await supabase.from("company_memos").insert({
+      from_department: 'system',
+      goal_id: goalId,
+      title: `Tool Execution Paused: ${fullyQualifiedTool}`,
+      body: `Action \`${fullyQualifiedTool}\` requested by ${departmentId} has been paused awaiting Founder approval.\n\nReason: High-risk action detected.`,
+      tags: ['system', 'tool_approval'],
+      priority: 'high',
+      created_by: userId
+    });
+
     return {
       status: "requires_approval",
       execution_id: executionLog.id,
