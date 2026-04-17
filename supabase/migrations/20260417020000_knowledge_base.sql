@@ -79,7 +79,6 @@ CREATE POLICY "kb_chunks_select" ON knowledge_base_chunks FOR SELECT USING (auth
 CREATE POLICY "kb_chunks_insert" ON knowledge_base_chunks FOR INSERT WITH CHECK (auth.uid() = created_by);
 CREATE POLICY "kb_chunks_delete" ON knowledge_base_chunks FOR DELETE USING (auth.uid() = created_by);
 
--- Update available_tools to register the internal knowledge_base_search tool
-INSERT INTO available_tools (id, label, description, requires_config, risk_level)
-VALUES ('knowledge_base_search', 'Knowledge Base Search', 'Search the founder knowledge base by keyword, category, or file type', false, 'low')
-ON CONFLICT (id) DO NOTHING;
+-- Note: knowledge_base_search is an internal tool intercepted directly by the
+-- executeToolCall gateway. It does NOT need a row in available_tools, which
+-- now has a composite PK (id, user_id) and is scoped per-user for external tools only.
