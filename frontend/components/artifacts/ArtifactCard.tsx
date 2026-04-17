@@ -8,249 +8,230 @@ interface Props {
   artifact: Artifact
 }
 
-/** Enhanced universal JSON preview extraction with multi-strategy fallback */
-function extractPreviewText(raw: string | null, type: string, file_url?: string | null): string {
-  if (!raw) {
-    if (file_url) return `Native ${type} file attached. Click Download to retrieve the asset.`;
-    return 'No preview available.';
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function inferFilename(artifact: Artifact): { name: string; ext: string } {
+  // 1. Try to pull from the storage URL (most accurate)
+  if (artifact.file_url) {
+    const raw = artifact.file_url.split('/').pop()?.split('?')[0] ?? ''
+    const parts = raw.split('.')
+    if (parts.length >= 2) {
+      const ext = parts.pop()!.toLowerCase()
+      const name = parts.join('.')
+      return { name: decodeURIComponent(name), ext }
+    }
   }
 
-  const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+  // 2. Fallback: derive from artifact type + title
+  const title = artifact.title.replace(/[^a-zA-Z0-9\s_-]/g, '').replace(/\s+/g, '_')
+  const extMap: Record<string, string> = {
+    spreadsheet: 'xlsx',
+    document: 'docx',
+    image: 'png',
+    data: 'json',
+    code: 'txt',
+  }
+  const ext = extMap[artifact.artifact_type] ?? 'txt'
+  return { name: title, ext }
+}
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function extractPreviewText(raw: string | null, file_url?: string | null): string {
+  if (!raw) {
+    if (file_url) return 'Native file attached. Use the Download button to retrieve it.'
+    return 'No preview available.'
+  }
+  const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
   try {
     const parsed = JSON.parse(stripped)
     if (typeof parsed === 'object' && parsed !== null) {
-
-      // STRATEGY 1: Look for immediate summary-like fields at top level
-      const summaryFields = ['summary', 'executive_summary', 'overview', 'description', 'title']
-      for (const field of summaryFields) {
-        if (field in parsed && typeof parsed[field as keyof typeof parsed] === 'string') {
-          const value = parsed[field as keyof typeof parsed] as string
-          if (value.length > 10) {
-            return cleanText(value).substring(0, 250)
-          }
+      const pick = (obj: any, keys: string[]): string => {
+        for (const k of keys) {
+          if (typeof obj[k] === 'string' && obj[k].length > 10) return obj[k]
+        }
+        const vals = Object.values(obj).filter(v => typeof v === 'string' && (v as string).length > 10) as string[]
+        return vals[0] ?? ''
+      }
+      const topLevel = pick(parsed, ['summary', 'executive_summary', 'overview', 'description', 'title'])
+      if (topLevel) return topLevel.slice(0, 280)
+      // Nested
+      for (const v of Object.values(parsed)) {
+        if (typeof v === 'object' && v !== null) {
+          const nested = pick(v as any, ['summary', 'overview', 'description'])
+          if (nested) return nested.slice(0, 280)
         }
       }
-
-      // STRATEGY 2: Look in nested objects (1 level deep) - common container fields
-      const contentFields = ['deliverable_content', 'output', 'analysis', 'strategy', 'content', 'data']
-      for (const field of contentFields) {
-        if (field in parsed && typeof parsed[field as keyof typeof parsed] === 'object' && parsed[field as keyof typeof parsed] !== null) {
-          const nested = parsed[field as keyof typeof parsed] as any
-
-          // Try summary fields in nested object
-          for (const summaryField of summaryFields) {
-            if (summaryField in nested && typeof nested[summaryField] === 'string') {
-              const value = nested[summaryField] as string
-              if (value.length > 10) {
-                return cleanText(value).substring(0, 250)
-              }
-            }
-          }
-
-          // Try extracting text from all string fields in nested object
-          const textContent = extractAllText(nested)
-          if (textContent.length > 20) {
-            return cleanText(textContent).substring(0, 250)
-          }
-        }
-      }
-
-      // STRATEGY 3: Recursively extract all text values from entire JSON
-      const allText = extractAllText(parsed)
-      if (allText.length > 20) {
-        return cleanText(allText).substring(0, 250)
-      }
-
-      // STRATEGY 4: Show structure information as fallback
-      const keyCount = Object.keys(parsed).length
-      const hasStringContent = Object.values(parsed).some(v => typeof v === 'string' && (v as string).length > 10)
-
-      if (hasStringContent) {
-        return `${getContentType(parsed)} artifact with ${keyCount} main sections. Download to view full details.`
-      }
-
-      return `Structured ${getContentType(parsed)} data containing ${keyCount} fields. Download to view.`
+      return `Structured ${artifact_type_label(parsed)} data. Download to view full content.`
     }
+    return stripped.slice(0, 280)
   } catch {
-    return stripped;
+    return stripped.slice(0, 280)
   }
-  return stripped;
 }
 
-/** Extract all string values recursively from nested objects/arrays */
-function extractAllText(obj: any, maxDepth: number = 2, currentDepth: number = 0): string {
-  if (currentDepth >= maxDepth) return '';
+function artifact_type_label(obj: any): string {
+  if ('analysis' in obj) return 'Financial'
+  if ('strategy' in obj) return 'Strategy'
+  if ('marketing' in obj) return 'Marketing'
+  return 'Work'
+}
 
-  const texts: string[] = []
+// ─── File Type Icon ───────────────────────────────────────────────────────────
 
-  if (typeof obj === 'string' && obj.length > 0) {
-    return obj
+function FileTypeIcon({ ext, size = 20 }: { ext: string; size?: number }) {
+  const s = { width: size, height: size, display: 'block' } as const
+  switch (ext) {
+    case 'xlsx':
+    case 'csv':
+      return (
+        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+        </svg>
+      )
+    case 'docx':
+    case 'doc':
+    case 'md':
+    case 'txt':
+      return (
+        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="8" y1="13" x2="16" y2="13"/>
+          <line x1="8" y1="17" x2="16" y2="17"/>
+        </svg>
+      )
+    case 'json':
+      return (
+        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+      )
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'webp':
+      return (
+        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      )
+    default:
+      return (
+        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      )
   }
-
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      if (typeof item === 'string' && item.length > 10) {
-        texts.push(item)
-        break; // Take first substantial string from array
-      } else if (typeof item === 'object' && item !== null) {
-        const nested = extractAllText(item, maxDepth, currentDepth + 1)
-        if (nested) texts.push(nested)
-      }
-    }
-  } else if (typeof obj === 'object' && obj !== null) {
-    // Prioritize certain fields
-    const priorityFields = ['summary', 'overview', 'description', 'title', 'name', 'content']
-
-    for (const field of priorityFields) {
-      if (field in obj) {
-        const value = obj[field]
-        if (typeof value === 'string' && value.length > 10) {
-          return value
-        }
-      }
-    }
-
-    // Then extract from all other fields
-    for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'string' && value.length > 10) {
-        texts.push(value)
-      } else if (typeof value === 'object' && value !== null) {
-        const nested = extractAllText(value, maxDepth, currentDepth + 1)
-        if (nested) texts.push(nested)
-      }
-    }
-  }
-
-  return texts.slice(0, 2).join(' ').substring(0, 300)
 }
 
-/** Clean text of JSON artifacts */
-function cleanText(text: string): string {
-  return text
-    .replace(/\n/g, ' ') // Replace newlines
-    .replace(/\s+/g, ' ') // Collapse whitespace
-    .replace(/"/g, '') // Remove quotes
-    .trim()
+// ─── Extension Badge ──────────────────────────────────────────────────────────
+
+const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
+  xlsx: { bg: 'rgba(0,180,100,0.12)', fg: '#00c866' },
+  csv:  { bg: 'rgba(0,180,100,0.12)', fg: '#00c866' },
+  docx: { bg: 'rgba(40,130,255,0.12)', fg: '#5aabff' },
+  doc:  { bg: 'rgba(40,130,255,0.12)', fg: '#5aabff' },
+  pdf:  { bg: 'rgba(255,70,70,0.12)',  fg: '#ff7070' },
+  png:  { bg: 'rgba(200,100,255,0.12)', fg: '#cc66ff' },
+  jpg:  { bg: 'rgba(200,100,255,0.12)', fg: '#cc66ff' },
+  json: { bg: 'rgba(255,180,0,0.12)', fg: '#ffb800' },
+  md:   { bg: 'rgba(80,200,255,0.12)', fg: '#50c8ff' },
 }
 
-/** Detect artifact type from structure */
-function getContentType(obj: any): string {
-  if ('deliverable_content' in obj) return 'Comprehensive';
-  if ('marketing_strategy_inputs' in obj) return 'Marketing';
-  if ('analysis' in obj) return 'Financial';
-  if ('output' in obj) return 'Strategy';
-  if ('strategy' in obj) return 'Plan';
-  return 'Work';
+function ExtBadge({ ext }: { ext: string }) {
+  const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
+  return (
+    <span style={{
+      padding: '2px 8px',
+      borderRadius: 5,
+      fontSize: 10,
+      fontFamily: 'var(--font-dm-mono, monospace)',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+      background: c.bg,
+      color: c.fg,
+      border: `1px solid ${c.fg}20`,
+    }}>
+      {ext}
+    </span>
+  )
 }
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ArtifactCard({ artifact }: Props) {
-  const createdAt = new Date(artifact.created_at)
-  const previewText = extractPreviewText(artifact.body, artifact.artifact_type, artifact.file_url)
-
-  const IconType = () => {
-    switch (artifact.artifact_type) {
-      case 'image':
-        return (
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
-          </svg>
-        )
-      case 'spreadsheet':
-      case 'data':
-        return (
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18" />
-          </svg>
-        )
-      case 'code':
-        return (
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-        )
-      default:
-        return (
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-        )
-    }
-  }
-
-  const [showPreview, setShowPreview] = useState(false)
+  const [showDrawer, setShowDrawer] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+
+  const createdAt = new Date(artifact.created_at)
+  const { name, ext } = inferFilename(artifact)
+  const displayFilename = `${name}.${ext}`
+  const previewText = extractPreviewText(artifact.body, artifact.file_url)
+  const fileSize = (artifact as any).file_size ? formatBytes((artifact as any).file_size) : null
+  const iconColor = EXT_COLORS[ext]?.fg ?? 'var(--accent)'
+  const iconBg   = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
 
   const downloadArtifact = async (e: React.MouseEvent) => {
     e.stopPropagation()
-
-    // UI Feedback or loading state could go here if files get very large
+    setDownloading(true)
     try {
       let downloadUrl = ''
-      let fileName = artifact.title.replace(/\s+/g, '_').replace(/[^\w_-]/g, '')
-
-      // Helper: infer extension from content when no file is available
-      const inferExtension = (content: string): { ext: string; mime: string } => {
-        const trimmed = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-        const isJson = (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))
-        if (isJson) return { ext: 'json', mime: 'application/json' }
-        if (trimmed.startsWith('#')) return { ext: 'md', mime: 'text/markdown' }
-        return { ext: 'txt', mime: 'text/plain' }
-      }
+      let fileName = displayFilename
 
       if (artifact.file_url) {
         const res = await fetch(artifact.file_url)
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
-        // Use the filename from the URL (includes correct extension)
-        fileName = artifact.file_url.split('/').pop() || `${fileName}`
+        fileName = artifact.file_url.split('/').pop()?.split('?')[0] ?? displayFilename
       } else if (artifact.preview_url) {
         const res = await fetch(artifact.preview_url)
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
-        const ext = artifact.artifact_type === 'image' ? 'png' : 'md'
-        fileName = `${fileName}.${ext}`
       } else {
         const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
-        const { ext, mime } = inferExtension(content)
+        const mime = ext === 'json' ? 'application/json' : ext === 'md' ? 'text/markdown' : 'text/plain'
         const blob = new Blob([content], { type: mime })
         downloadUrl = URL.createObjectURL(blob)
-        fileName = `${fileName}.${ext}`
       }
-      
+
       const link = document.createElement('a')
       link.href = downloadUrl
       link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
-      // Clean up the object URL to free memory
-      if (artifact.file_url || artifact.preview_url) {
-        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
-      }
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
     } catch (err) {
       console.error('[Download Failed]', err)
-      // Fallback: simple anchor click if fetch fails (CORS etc)
       window.open(artifact.file_url || artifact.preview_url || '', '_blank')
+    } finally {
+      setDownloading(false)
     }
   }
 
   const deleteArtifact = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this artifact? This action cannot be undone.')) return
+    if (!confirm('Delete this artifact? This cannot be undone.')) return
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
-      if (!response.ok) throw new Error('Failed to delete artifact')
+      const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
       window.location.reload()
-    } catch (error) {
-      console.error('Delete error:', error)
+    } catch {
       alert('Failed to delete artifact. Please try again.')
       setIsDeleting(false)
     }
@@ -258,291 +239,369 @@ export function ArtifactCard({ artifact }: Props) {
 
   return (
     <>
-      <div 
-        style={{ 
-          cursor: 'pointer', 
-          position: 'relative',
-          padding: '24px',
-          borderRadius: '16px',
-          background: isHovered 
-            ? 'linear-gradient(145deg, rgba(30, 30, 35, 0.95), rgba(20, 20, 24, 0.95))' 
-            : 'rgba(20, 20, 24, 0.6)',
-          border: isHovered 
-            ? '1px solid rgba(255, 255, 255, 0.15)' 
-            : '1px solid rgba(255, 255, 255, 0.05)',
-          backdropFilter: 'blur(12px)',
-          boxShadow: isHovered 
-            ? '0 12px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)' 
-            : '0 4px 15px rgba(0,0,0,0.2)',
-          transition: 'all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-          transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+      {/* ── File Row Card ────────────────────────────────────────── */}
+      <div
+        className="artifact-row"
+        style={{
           display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }} 
+          alignItems: 'center',
+          gap: 16,
+          padding: '14px 18px',
+          borderRadius: 12,
+          background: isHovered ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+          border: `1px solid ${isHovered ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)'}`,
+          cursor: 'pointer',
+          transition: 'all 0.18s ease',
+          transform: isHovered ? 'translateX(2px)' : 'none',
+        }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onClick={() => setShowPreview(true)}
+        onClick={() => setShowDrawer(true)}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <div style={{ 
-              color: 'var(--accent)', 
-              background: 'rgba(0, 255, 170, 0.1)',
-              padding: '10px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: 'inset 0 0 0 1px rgba(0,255,170,0.2)'
-            }}>
-              <IconType />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ 
-                fontWeight: 700, 
-                fontSize: 16, 
-                color: 'var(--text)', 
-                letterSpacing: '-0.02em',
-                fontFamily: 'var(--font-syne, Syne)'
-              }}>
-                {artifact.title}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ 
-                  color: 'var(--text-3)', 
-                  fontSize: '12px', 
-                  fontFamily: 'Inter, sans-serif' 
-                }}>
-                  {createdAt.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}
-                </span>
-                <span style={{ color: 'var(--text-4)' }}>•</span>
-                <span style={{ 
-                  color: 'var(--accent)', 
-                  fontSize: '11px', 
-                  fontFamily: 'var(--font-dm-mono, monospace)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}>
-                  {artifact.department_slug}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        {/* Icon */}
         <div style={{
-          fontSize: 14,
-          color: 'var(--text-2)',
-          lineHeight: 1.6,
-          fontFamily: 'Inter, sans-serif',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          padding: '0 4px'
+          width: 40, height: 40,
+          borderRadius: 10,
+          background: iconBg,
+          border: `1px solid ${iconColor}25`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: iconColor,
+          flexShrink: 0,
         }}>
-          {previewText}
+          <FileTypeIcon ext={ext} size={18} />
         </div>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-             <span style={{ 
-              padding: '4px 10px', 
-              borderRadius: '6px', 
-              fontFamily: 'var(--font-dm-mono, monospace)', 
-              fontSize: 10, 
-              background: 'rgba(255,255,255,0.05)', 
-              color: 'var(--text-2)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              border: '1px solid rgba(255,255,255,0.05)'
+        {/* Name + Meta */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap'
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 280,
             }}>
-              {artifact.artifact_type}
+              {displayFilename}
             </span>
-            {(artifact.file_url || artifact.preview_url) && (
-              <span style={{ 
-                padding: '4px 10px', 
-                borderRadius: '6px', 
-                fontFamily: 'var(--font-dm-mono, monospace)', 
-                fontSize: 10, 
-                background: 'rgba(0,255,170,0.05)', 
-                color: 'var(--accent)',
-                textTransform: 'uppercase',
-                border: '1px solid rgba(0,255,170,0.1)'
-              }}>
-                ATTACHMENT
-              </span>
+            <ExtBadge ext={ext} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
+              {artifact.department_slug}
+            </span>
+            <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10 }}>•</span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
+              {createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+            {fileSize && (
+              <>
+                <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10 }}>•</span>
+                <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                  {fileSize}
+                </span>
+              </>
             )}
           </div>
-          
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={downloadArtifact}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontFamily: 'var(--font-dm-sans, sans-serif)',
-                fontWeight: 600,
-                fontSize: 12,
-                background: 'var(--accent)',
-                color: '#000',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 10px rgba(0,255,170,0.2)'
-              }}>
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v4M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              Download
-            </button>
-            <button
-              onClick={deleteArtifact}
-              disabled={isDeleting}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontFamily: 'var(--font-dm-sans, sans-serif)',
-                fontWeight: 600,
-                fontSize: 12,
-                background: 'rgba(255, 60, 60, 0.1)',
-                color: 'rgb(255, 90, 90)',
-                border: '1px solid rgba(255, 60, 60, 0.2)',
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                opacity: isDeleting ? 0.6 : 1,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 60, 60, 0.2)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 60, 60, 0.1)'; }}
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-              </svg>
-            </button>
-          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+          <button
+            id={`download-artifact-${artifact.id}`}
+            onClick={downloadArtifact}
+            disabled={downloading}
+            title={`Download ${displayFilename}`}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 8,
+              fontFamily: 'var(--font-dm-sans, sans-serif)',
+              fontWeight: 600,
+              fontSize: 12,
+              background: downloading ? 'rgba(0,255,170,0.5)' : 'var(--accent)',
+              color: '#000',
+              border: 'none',
+              cursor: downloading ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
+              boxShadow: '0 2px 8px rgba(0,255,170,0.15)',
+              transition: 'all 0.15s',
+            }}
+          >
+            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            {downloading ? '…' : 'Download'}
+          </button>
+          <button
+            id={`delete-artifact-${artifact.id}`}
+            onClick={deleteArtifact}
+            disabled={isDeleting}
+            title="Delete artifact"
+            style={{
+              padding: '6px 10px',
+              borderRadius: 8,
+              background: 'rgba(255,60,60,0.08)',
+              color: 'rgba(255,90,90,0.8)',
+              border: '1px solid rgba(255,60,60,0.15)',
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center',
+              opacity: isDeleting ? 0.5 : 1,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.18)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.08)' }}
+          >
+            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
+          </button>
         </div>
       </div>
 
-      {showPreview && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(10,10,12,0.85)',
-          backdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '40px',
-          animation: 'fadeIn 0.2s ease-out'
-        }} onClick={() => setShowPreview(false)}>
-          <div style={{
-            background: 'linear-gradient(180deg, rgba(30,30,35,1), rgba(20,20,24,1))',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '20px',
-            maxWidth: '900px',
-            width: '100%',
-            maxHeight: '85vh',
+      {/* ── Detail Drawer ─────────────────────────────────────────── */}
+      {showDrawer && (
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 1000,
             display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ 
-              padding: '24px 32px', 
-              borderBottom: '1px solid rgba(255,255,255,0.05)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              background: 'rgba(255,255,255,0.02)'
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            animation: 'fadeIn 0.15s ease-out',
+          }}
+          onClick={() => setShowDrawer(false)}
+        >
+          <div
+            style={{
+              width: 520,
+              maxWidth: '95vw',
+              height: '100%',
+              background: 'linear-gradient(180deg, rgba(26,26,32,1) 0%, rgba(18,18,22,1) 100%)',
+              borderLeft: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '-24px 0 60px rgba(0,0,0,0.5)',
+              animation: 'slideInRight 0.22s cubic-bezier(0.2,0.8,0.2,1)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div style={{
+              padding: '24px 28px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+              background: 'rgba(255,255,255,0.01)',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ color: 'var(--accent)', background: 'rgba(0,255,170,0.1)', padding: '8px', borderRadius: '8px' }}>
-                   <IconType />
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{
+                  width: 48, height: 48,
+                  borderRadius: 12,
+                  background: iconBg,
+                  border: `1px solid ${iconColor}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: iconColor, flexShrink: 0,
+                }}>
+                  <FileTypeIcon ext={ext} size={22} />
                 </div>
                 <div>
-                   <h3 style={{ margin: 0, fontFamily: 'var(--font-syne, Syne)', fontSize: 22, color: '#fff' }}>{artifact.title}</h3>
-                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
-                      Generated by {artifact.department_slug} on {createdAt.toLocaleDateString()}
-                   </div>
+                  <div style={{
+                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontSize: 14, fontWeight: 700,
+                    color: 'var(--text)', marginBottom: 5,
+                    wordBreak: 'break-all',
+                  }}>
+                    {displayFilename}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <ExtBadge ext={ext} />
+                    {fileSize && (
+                      <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                        {fileSize}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button 
-                  onClick={downloadArtifact} 
-                  style={{ 
-                    padding: '8px 20px', 
-                    fontSize: 13, 
-                    background: 'var(--accent)', 
-                    color: '#000', 
-                    border: 'none', 
-                    borderRadius: '8px', 
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    boxShadow: '0 4px 14px rgba(0,255,170,0.25)' 
-                  }}
-                >
-                  Download File
-                </button>
-                <button onClick={() => setShowPreview(false)} style={{
-                  background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-3)', fontSize: 24, cursor: 'pointer',
-                  width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  ×
-                </button>
-              </div>
+              <button
+                onClick={() => setShowDrawer(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', border: 'none',
+                  background: 'rgba(255,255,255,0.06)', color: 'var(--text-3)',
+                  fontSize: 18, cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                ×
+              </button>
             </div>
-            
-            <div style={{ padding: '32px', overflowY: 'auto', flex: 1, color: 'var(--text-2)' }}>
+
+            {/* Metadata Row */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr',
+              gap: 0,
+              borderBottom: '1px solid rgba(255,255,255,0.05)',
+            }}>
+              {[
+                { label: 'DEPARTMENT', value: artifact.department_slug },
+                { label: 'CREATED', value: createdAt.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }) },
+                { label: 'TYPE', value: artifact.artifact_type },
+                { label: 'FORMAT', value: ext.toUpperCase() },
+              ].map(({ label, value }) => (
+                <div key={label} style={{
+                  padding: '14px 20px',
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  borderRight: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 4 }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
+                    {value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Preview */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
               {artifact.artifact_type === 'image' && artifact.preview_url ? (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9' }}>
-                  <Image src={artifact.preview_url} fill unoptimized style={{ borderRadius: 12, border: '1px solid var(--border)', objectFit: 'contain' }} alt={artifact.title} />
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 12, overflow: 'hidden' }}>
+                  <Image src={artifact.preview_url} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <>
                   {artifact.file_url && (
-                    <div style={{ padding: '20px', background: 'rgba(0,255,170,0.05)', border: '1px solid rgba(0,255,170,0.1)', borderRadius: '12px', display: 'flex', gap: 16, alignItems: 'center' }}>
-                      <svg width="32" height="32" fill="none" stroke="var(--accent)" strokeWidth="1.5" viewBox="0 0 24 24">
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                      </svg>
+                    <div style={{
+                      padding: '16px 18px',
+                      background: `${iconBg}`,
+                      border: `1px solid ${iconColor}20`,
+                      borderRadius: 12,
+                      display: 'flex', alignItems: 'center', gap: 14,
+                    }}>
+                      <div style={{ color: iconColor }}>
+                        <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                      </div>
                       <div>
-                        <div style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>Native File Available</div>
-                        <div style={{ color: 'var(--accent)', fontSize: 13, marginTop: 4 }}>This artifact was successfully exported. Use the download button to access the native document.</div>
+                        <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>Native File Available</div>
+                        <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 2 }}>
+                          Exported as <strong style={{ color: iconColor }}>.{ext}</strong> — download to open in your native application.
+                        </div>
                       </div>
                     </div>
                   )}
-                  <div style={{ fontFamily: 'Inter, sans-serif', whiteSpace: 'pre-wrap', fontSize: 15, lineHeight: 1.8 }}>
-                    {previewText || "No text content available for this artifact."}
+
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                      CONTENT PREVIEW
+                    </div>
+                    <div style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: 14,
+                      lineHeight: 1.75,
+                      color: 'var(--text-2)',
+                      whiteSpace: 'pre-wrap',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      borderRadius: 10,
+                      padding: '16px 18px',
+                    }}>
+                      {previewText}
+                    </div>
                   </div>
-                  
-                  {artifact.metadata && (
-                    <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <label style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 11, color: 'var(--text-4)', display: 'block', marginBottom: 12 }}>
-                        RAW METADATA
-                      </label>
-                      <pre style={{ 
-                        background: 'rgba(0,0,0,0.3)', 
-                        padding: '20px', 
-                        borderRadius: '12px', 
-                        fontSize: 12, 
+
+                  {artifact.metadata && Object.keys(artifact.metadata).length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                        METADATA
+                      </div>
+                      <pre style={{
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '16px 18px',
+                        borderRadius: 10,
+                        fontSize: 11,
                         color: 'var(--text-3)',
                         overflow: 'auto',
-                        border: '1px solid rgba(255,255,255,0.05)'
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        margin: 0,
                       }}>
                         {JSON.stringify(artifact.metadata, null, 2)}
                       </pre>
                     </div>
                   )}
-                </div>
+                </>
               )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div style={{
+              padding: '18px 28px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', gap: 10,
+              background: 'rgba(0,0,0,0.2)',
+            }}>
+              <button
+                id={`drawer-download-${artifact.id}`}
+                onClick={downloadArtifact}
+                disabled={downloading}
+                style={{
+                  flex: 1,
+                  padding: '10px 0',
+                  borderRadius: 10,
+                  background: 'var(--accent)',
+                  color: '#000',
+                  border: 'none',
+                  fontFamily: 'var(--font-dm-sans, sans-serif)',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: downloading ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  boxShadow: '0 4px 14px rgba(0,255,170,0.2)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                {downloading ? 'Downloading…' : `Download ${displayFilename}`}
+              </button>
+              <button
+                id={`drawer-delete-${artifact.id}`}
+                onClick={deleteArtifact}
+                disabled={isDeleting}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  background: 'rgba(255,60,60,0.08)',
+                  color: 'rgba(255,90,90,0.9)',
+                  border: '1px solid rgba(255,60,60,0.2)',
+                  fontFamily: 'var(--font-dm-sans, sans-serif)',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.18)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.08)' }}
+              >
+                <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+                Delete
+              </button>
             </div>
           </div>
         </div>
