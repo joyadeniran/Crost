@@ -3,9 +3,34 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 8.7  
+**Current Version:** 9.0  
 **Last Updated:** April 17, 2026  
-**Deployment Status:** 🚀 Live — UI/UX Premium Aesthetic Upgrade (v8.7). Added glassmorphism, depth meshes, modern typography alignment, and input flex layout restructuring.
+**Deployment Status:** 🚀 Live — Composio Unified Tool Execution Architecture (v9.0). Consolidated all worker APIs to funnel through a strictly permissioned, audited, and HITL-safe execution tool layer.
+
+---
+
+## Session v9.0 - Composio Unified Tool Call Architecture
+
+**Date**: April 17, 2026  
+**Status**: ✅ IMPLEMENTATION COMPLETE  
+**Impact**: Security + Execution Scaling + Extensibility
+
+### Root Cause Analysis
+**Issue**: Department agents were calling `composio.tools.execute()` directly inside the raw API route, offering no clear mapping for department-specific access checks, granular risk evaluation, database logging of raw executions, or cross-platform tool definitions.
+
+### Implementation: The ExecuteToolCall Gateway (Production Ready)
+**Files**: `frontend/lib/tools/execute-tool-call.ts`, `frontend/lib/tools/providers/composio.ts`, `frontend/app/api/worker/execute/route.ts`  
+**Change**: 
+1. Abstracted entire raw execution layer into `lib/tools/execute-tool-call.ts`. 
+2. Integrated `DEPARTMENT_TOOL_RULES` dictating which departments match to which services.
+3. Automatically evaluates execution risk against a `CRITICAL_TOOLS` whitelist, immediately returning `"status": "requires_approval"` to prompt the HITL framework for dangerous actions (like deleting branches/emails).
+4. Re-housed standard memo truncation and native artifact uploading out of route.ts directly into the gateway.
+
+### Implementation: Database Tool Relations
+**File**: `supabase/migrations/20260417010000_composio_tool_architecture.sql`  
+**Change**: 
+1. Re-defined `connections` to map founder authorizations directly to `available_tools`.
+2. Initialized `tool_executions` schema mapping real-time status (`pending, running, success, blocked`), risks, references to `approval_id`, and `artefact_id` mapping.
 
 ---
 

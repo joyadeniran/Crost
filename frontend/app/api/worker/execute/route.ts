@@ -5,128 +5,14 @@
 // - Artifacts have file_url (no body field)
 // - Memos reference artifacts via artefact_references (not text)
 
-import { Composio } from "@composio/core";
+export const dynamic = 'force-dynamic'
+
+import { executeToolCall } from "@/lib/tools/execute-tool-call";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 import { cleanLargePayload } from "@/lib/utils";
-import { detectOutputType } from "@/lib/artifact-transformers";
 
-export const dynamic = 'force-dynamic'
-
-// Helper: Try to parse JSON
-function tryParseJSON(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Helper: Upload artifact file to Supabase Storage
-async function uploadArtifactFile(
-  content: string,
-  taskId: string,
-  goalId: string,
-  deptSlug: string,
-  toolName: string,
-  userId: string,
-  supabase: any
-): Promise<{ id: string; file_url: string } | null> {
-  try {
-    // Detect content type
-    const isJson = tryParseJSON(content);
-    const detection = detectOutputType(content, isJson);
-    
-    let fileContent: string | Buffer = content;
-    if (detection.targetFormat !== 'json' && detection.transformer) {
-      try {
-        const parsedContent = isJson ? JSON.parse(content) : content;
-        fileContent = await detection.transformer(parsedContent) as string | Buffer;
-      } catch (err) {
-        console.error('[Format Transformation Error]', err);
-        // Fallback to json output on failure
-        fileContent = content;
-        detection.targetFormat = isJson ? 'json' : 'txt';
-      }
-    }
-
-    let fileType = 'text/plain';
-    let extension = `.${detection.targetFormat}`;
-    let artifactType: 'document' | 'data' | 'spreadsheet' = 'document';
-
-    if (detection.targetFormat === 'json') {
-      fileType = 'application/json';
-      artifactType = 'data';
-    } else if (detection.targetFormat === 'xlsx' || detection.targetFormat === 'csv') {
-      fileType = detection.targetFormat === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv';
-      artifactType = 'spreadsheet';
-    } else if (detection.targetFormat === 'docx') {
-      fileType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      artifactType = 'document';
-    } else if (detection.targetFormat === 'md') {
-      fileType = 'text/markdown';
-      artifactType = 'document';
-    }
-
-    // Generate filename
-    const timestamp = Date.now();
-    const fileName = `task-${taskId}-${timestamp}${extension}`;
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadErr } = await supabase
-      .storage
-      .from('artifacts')
-      .upload(`goals/${goalId}/${fileName}`, fileContent, {
-        contentType: fileType,
-        upsert: false,
-      });
-
-    if (uploadErr || !uploadData) {
-      console.error('[Artifact Upload Error]', uploadErr);
-      return null;
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase
-      .storage
-      .from('artifacts')
-      .getPublicUrl(uploadData.path);
-
-    const fileUrl = urlData.publicUrl;
-
-    // Store metadata in artifacts table
-    const { data: artifact, error: artifactErr } = await supabase
-      .from('artifacts')
-      .insert({
-        goal_id: goalId,
-        department_slug: deptSlug,
-        artifact_type: artifactType,
-        title: `Tool Output: ${toolName}`,
-        file_url: fileUrl,
-        metadata: {
-          toolName,
-          taskId,
-          source: 'tool_execution',
-          contentType: fileType,
-          sizeBytes: content.length,
-        },
-        created_by: userId,
-      })
-      .select('id')
-      .single();
-
-    if (artifactErr || !artifact) {
-      console.error('[Artifact Metadata Error]', artifactErr);
-      return null;
-    }
-
-    return { id: artifact.id, file_url: fileUrl };
-  } catch (err) {
-    console.error('[Create Artifact Error]', err);
-    return null;
-  }
-}
+// uploadArtifactFile logic extracted into unified execute-tool-call layer
 
 export async function POST(req: Request) {
   try {
@@ -216,116 +102,48 @@ export async function POST(req: Request) {
       result = data;
     }
     else {
-      // 3. EXTERNAL DYNAMIC TOOLS (via Composio)
-      if (!process.env.COMPOSIO_API_KEY) throw new Error("COMPOSIO_API_KEY missing.");
-      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
-
-      try {
-        const execution = await composio.tools.execute(toolName, {
-          userId,
-          arguments: args,
-          dangerouslySkipVersionCheck: true
-        });
-        result = execution;
-      } catch (err: any) {
-        if (err.message?.includes('401') || err.message?.includes('Unauthorized') || err.status === 401) {
-          console.warn(`[Composio] Token potentially expired (401). Retrying...`);
-          const execution = await composio.tools.execute(toolName, {
-            userId,
-            arguments: args,
-            dangerouslySkipVersionCheck: true
-          });
-          result = execution;
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    // 4. PERSIST: Save result using SEPARATION LOGIC
-    //    - Structured JSON (any size) → artifact file (docx/xlsx/md)
-    //    - Narrative/plain text       → memo only
-    let bodyText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-    const fullBodyText = bodyText;
-
-    // Strip markdown fences before structure detection
-    const strippedText = fullBodyText.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-    const isStructured = (strippedText.startsWith('{') && strippedText.endsWith('}')) ||
-                         (strippedText.startsWith('[') && strippedText.endsWith(']'));
-
-    let artifactId: string | null = null;
-    let memoBody = '';
-
-    if (isStructured) {
-      // Any structured JSON → Store as typed artifact file
-      const artifact = await uploadArtifactFile(
-        fullBodyText,
-        taskId,
-        task.goal_id,
-        task.dept_slug,
-        toolName,
+      // 3. EXTERNAL DYNAMIC TOOLS (Unified Execution Gateway)
+      const parts = toolName.split(".");
+      const service = parts[0] || toolName;
+      const action = parts[1] || "";
+      
+      const executionResult = await executeToolCall({
         userId,
-        supabase
-      );
-
-      if (artifact) {
-        artifactId = artifact.id;
-        memoBody = `Tool executed: ${toolName}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).\nAccess via artifacts section.`;
-      } else {
-        // Fallback if artifact creation fails
-        memoBody = bodyText.substring(0, 3000) + (bodyText.length > 3000 ? '\n\n... [Output truncated]' : '');
-      }
-    } else {
-      // Narrative / plain-text content → Store as memo only
-      memoBody = bodyText.length > 3000
-        ? bodyText.substring(0, 3000) + '\n\n... [Output truncated for memo storage]'
-        : bodyText;
+        departmentId: task.dept_slug,
+        taskId,
+        goalId: task.goal_id,
+        toolCall: {
+          service,
+          action,
+          params: args,
+          reasoning: "Automated department call",
+          risk: "medium", // Fallback, gateway re-evaluates
+          requiresApproval: false // Fallback, gateway dynamically asserts CRITICAL_TOOLS
+        }
+      });
+      
+      // The gateway natively handles Memo logging, Artifacts, and Execution tracking!
+      return NextResponse.json(executionResult, { status: 200 });
     }
 
-    // Store memo with proper reference structure
-    await supabase.from('company_memos').insert({
-      from_department: task.dept_slug,
-      goal_id: task.goal_id,
-      title: `Tool Output: ${toolName}`,
-      body: memoBody,
-      tags: ['tool_output', `task_${taskId}`],
-      priority: 'normal',
-      source_type: 'agent',
-      metadata: {
-        toolName,
-        taskId,
-        hasArtifact: !!artifactId,
-        artifactId: artifactId || null,
-        contentType: tryParseJSON(fullBodyText) ? 'json' : (fullBodyText.includes(',') ? 'csv' : 'text')
-      },
-      created_by: userId
-    });
-
-    // 5. Update Event Log
+    // Only REACHED if SUPABASE_QUERY or COMPANY_MEMOS
+    // 4. Update Event Log for Internal Tools
     await supabase.from('event_log').insert({
       department_slug: task.dept_slug,
       goal_id: task.goal_id,
       event_type: 'tool_called',
-      description: `Executed tool: ${toolName}${artifactId ? ' → Created artifact' : ''}`,
+      description: `Executed internal tool: ${toolName}`,
       metadata: cleanLargePayload({
         toolName,
         args,
         taskId,
-        artifactId,
-        outputSize: fullBodyText.length,
-        isStructured,
-        result: typeof result === 'object' ? { status: 'success' } : result
       }),
       created_by: userId
     });
 
     return NextResponse.json({
-      ...result,
-      _metadata: {
-        artifactId,
-        stored: artifactId ? 'artifact' : 'memo',
-        outputSize: fullBodyText.length
-      }
+      data: result,
+      _metadata: { stored: 'internal' }
     }, { status: 200 });
   } catch (error: any) {
     console.error("[Worker Execute Error]:", error);
