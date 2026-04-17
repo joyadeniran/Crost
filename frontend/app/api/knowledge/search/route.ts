@@ -1,3 +1,4 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { callEmbeddings } from '@/lib/llm-client';
 
@@ -68,9 +69,9 @@ export async function POST(req: NextRequest) {
             };
           });
 
-          // Increment reference_count for matched files (async)
-          fileIds.forEach(id => {
-            supabase.rpc('increment_kb_reference', { file_id: id }).catch(() => {});
+          // Increment reference_count for matched files (async, best-effort)
+          fileIds.forEach(async (id) => {
+            try { await supabase.rpc('increment_kb_reference', { file_id: id }); } catch { /* best-effort */ }
           });
 
           return NextResponse.json({ matches });
