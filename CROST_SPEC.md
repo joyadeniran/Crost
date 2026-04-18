@@ -1,9 +1,10 @@
-CROST SPEC — (v1.5)
+CROST SPEC — (v1.6)
 
 > This is the source of truth for Crost architecture.
 > Do not modify without founder approval.
 > Updated April 17, 2026: Founder Knowledge Base (Section 16) added. Sections renumbered accordingly.
 > Updated April 18, 2026: Interactive Command Syntax §17 (@dept / /tool prefix UX). Non-Goals renumbered to §19.
+> Updated April 18, 2026: HITL Approval Protocol hardened — departments instructed via buildFinalPrompt; approval_queue RLS fixed; Mission Report replaces Post-mortem throughout.
 
 🧠 0. Core Philosophy
 
@@ -251,10 +252,37 @@ NOTHING executes without founder approval
 
 Flow
 Goal → Orc Strategy → Founder Approval → Execution
+
+Approval Protocol (Departments)
+When a department receives a task that requires external action (email, Slack, GitHub push, etc.)
+it MUST output a REQUEST_APPROVAL block before taking any action:
+
+  REQUEST_APPROVAL: {
+    "action_type": "<category>",
+    "action_label": "<human-readable description>",
+    "reasoning": "<why this action is needed>",
+    "payload": { <execution parameters> },
+    "context": "<context for founder review>"
+  }
+
+This block is injected via buildFinalPrompt() HITL APPROVAL PROTOCOL section.
+The department task route (extractApprovalRequest) parses both REQUEST_APPROVAL: and
+the legacy ```json { "request_approval": true }``` format.
+
+Approval Queue
+- Rows inserted into approval_queue with created_by = userId for RLS compliance
+- Real-time subscription in RealtimeProvider drives pendingApprovalCount in Zustand
+- Bell badge in Topbar shows red count; NotificationDropdown lists pending items
+- Approving via /api/approvals/[id] executes the queued action (Composio or internal)
+
 Risk Mode
 Configurable setting:
 Conservative (strict approval)
 Aggressive (auto-execution allowed)
+
+Goal Completion: Mission Report
+On goal completion the Orc worker writes a [Mission Report] memo summarising
+which tasks completed, failed, or were rejected. Event type: goal_mission_report_written.
 🌐 12. Onboarding Intelligence
 Flow
 User inputs:

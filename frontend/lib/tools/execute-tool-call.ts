@@ -126,6 +126,7 @@ export async function executeToolCall(options: ExecuteOptions) {
       goal_id: goalId,
       task_id: taskId,
       user_id: userId,
+      created_by: userId,           // Required for RLS and pending count queries
       tool_execution_id: executionLog.id,
       department_slug: departmentId,
       action_type: "tool_call",

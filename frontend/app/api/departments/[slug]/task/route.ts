@@ -42,16 +42,35 @@ interface ApprovalRequest {
 }
 
 function extractApprovalRequest(text: string): ApprovalRequest | null {
-  const match = text.match(/```(?:json)?\s*(\{[\s\S]*?"request_approval"[\s\S]*?\})\s*```/)
-  if (!match) return null
-  try {
-    const parsed = JSON.parse(match[1])
-    if (parsed.request_approval !== true) return null
-    if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
-    return parsed as ApprovalRequest
-  } catch {
-    return null
+  // Format 1: REQUEST_APPROVAL: { ... }  (used by the HITL protocol in buildFinalPrompt)
+  const raMatch = text.match(/REQUEST_APPROVAL\s*:\s*(\{[\s\S]*?\})\s*$/)
+  if (raMatch) {
+    try {
+      const parsed = JSON.parse(raMatch[1])
+      if (!parsed.action_type || !parsed.action_label) return null
+      return {
+        request_approval: true,
+        action_type: parsed.action_type,
+        action_label: parsed.action_label,
+        payload: parsed.payload ?? {},
+        context: parsed.context ?? parsed.reasoning ?? '',
+        risk_level: parsed.risk_level,
+      } as ApprovalRequest
+    } catch { /* fall through to format 2 */ }
   }
+
+  // Format 2: ```json { "request_approval": true, ... }``` (legacy JSON block)
+  const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?"request_approval"[\s\S]*?\})\s*```/)
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1])
+      if (parsed.request_approval !== true) return null
+      if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
+      return parsed as ApprovalRequest
+    } catch { return null }
+  }
+
+  return null
 }
 
 // Helper: Detect if content is structured data (JSON-like) vs narrative text

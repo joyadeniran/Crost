@@ -298,6 +298,27 @@ export async function buildFinalPrompt(
     !founderIdentity && !companyIdentity && legacyIdentity ? `### LEGACY IDENTITY\n${legacyIdentity}` : '',
   ].filter(Boolean).join('\n\n')
 
+  const hitlProtocol = departmentSlug && departmentSlug !== 'orchestrator'
+    ? `## HITL APPROVAL PROTOCOL (Mandatory)
+
+You MUST request founder approval before taking ANY external action (sending emails, posting messages, creating/deleting records, pushing to GitHub, etc.).
+
+When you need to take an external action, OUTPUT ONLY this block and STOP — do not also narrate or describe the action:
+
+REQUEST_APPROVAL: {
+  "action_type": "<category: email_send | slack_post | github_push | data_write | calendar_event | other>",
+  "action_label": "<short human-readable description of what you are about to do>",
+  "reasoning": "<why this action is necessary for the task>",
+  "payload": { <all parameters needed to execute the action once approved> },
+  "context": "<brief context for the founder reviewing this request>"
+}
+
+Rules:
+- NEVER send an email, post to Slack, push code, or modify external data without outputting REQUEST_APPROVAL first.
+- If the task only requires analysis, research, or writing a draft — complete it without REQUEST_APPROVAL.
+- Do NOT include any text after the REQUEST_APPROVAL block. It will be parsed automatically.`
+    : ''
+
   return [
     `## CROST CONSTITUTION (Non-negotiable)\n${constitution}`,
     `## YOUR ROLE\n${departmentPrompt}`,
@@ -305,6 +326,7 @@ export async function buildFinalPrompt(
     `## IDENTITY CONTEXT\n${identityContext || `### ASSISTANT IDENTITY\n${DEFAULT_ASSISTANT_IDENTITY}`}`,
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
+    hitlProtocol,
     memoBrief ? `## COMPANY MEMOS (recent, high priority)\n<trusted_internal_memos>\n${memoBrief}\n</trusted_internal_memos>` : '',
     `## TASK\n${task}`,
   ].filter(Boolean).join('\n\n---\n\n')
