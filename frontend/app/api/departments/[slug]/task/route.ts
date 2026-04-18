@@ -284,22 +284,94 @@ export async function POST(req: NextRequest, { params }: Params) {
     const approvalReq = extractApprovalRequest(answer)
 
     if (approvalReq) {
-      // Create approval_queue entry
-      const { data: approval } = await supabase
+      // Pre-flight connection check: if the action is composio-tool-backed,
+      // verify the user has connected the relevant integration. This prevents
+      // the UI from getting stuck on a "pending" approval that can never execute.
+      const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
+      const actionLower = (approvalReq.action_type || '').toLowerCase()
+      // Derive a service slug from: (1) explicit composio-style action (e.g. gmail_send_email)
+      // (2) anywhere in the task string ("/gmail.send_email"), (3) payload.service
+      let requiredService: string | null = SUPPORTED_TOOLKITS.find(kit => actionLower.startsWith(kit + '_')) ?? null
+      if (!requiredService) {
+        const slashMatch = body.task.match(/\/([a-z][a-z0-9_]*)\.[a-z][a-z0-9_]*/i)
+        if (slashMatch) requiredService = slashMatch[1].toLowerCase()
+      }
+      if (!requiredService && typeof (approvalReq.payload as any)?.service === 'string') {
+        requiredService = ((approvalReq.payload as any).service as string).toLowerCase()
+      }
+
+      if (requiredService && SUPPORTED_TOOLKITS.includes(requiredService)) {
+        const { data: connRow } = await supabase
+          .from('connections')
+          .select('status')
+          .eq('user_id', user.id)
+          .eq('tool_slug', requiredService)
+          .maybeSingle()
+        if (!connRow || connRow.status !== 'connected') {
+          // Reset department status and return a clear error — no stuck approval row
+          await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', dept.id)
+          await supabase.from('event_log').insert({
+            department_id: dept.id,
+            department_slug: dept.slug,
+            event_type: 'task_failed',
+            description: `Blocked: ${requiredService} is not connected`,
+            metadata: { missing_connection: requiredService, action: approvalReq.action_type },
+            created_by: user.id,
+          })
+          return NextResponse.json({
+            error: `${requiredService.toUpperCase()} is not connected. Connect it in Settings → Integrations, then retry.`,
+            missing_connection: true,
+            service: requiredService,
+          }, { status: 409 })
+        }
+      }
+
+      // Create approval_queue entry. The action_type CHECK constraint only
+      // accepts canonical enum values (send_email, post_social, etc.) — if the
+      // LLM emitted a raw composio action (e.g. "GMAIL_SEND_EMAIL") we must
+      // map it to a canonical type AND preserve the raw tool name in the
+      // payload so executor code can still dispatch it.
+      const CANONICAL_ACTION_TYPES = new Set([
+        'send_email','post_social','send_message','merge_code','spend_budget',
+        'create_document','run_query','delete_data','external_api_call','tool_call','other',
+      ])
+      let canonicalActionType: string = approvalReq.action_type
+      let rawToolAction: string | null = null
+      if (!CANONICAL_ACTION_TYPES.has(canonicalActionType)) {
+        rawToolAction = approvalReq.action_type
+        canonicalActionType = 'tool_call'
+      }
+
+      const enrichedPayload = rawToolAction
+        ? { ...approvalReq.payload, __tool_action: rawToolAction, __service: requiredService }
+        : approvalReq.payload
+
+      const { data: approval, error: approvalInsertErr } = await supabase
         .from('approval_queue')
         .insert({
           department_id: dept.id,
           department_name: dept.name,
           department_slug: dept.slug,
-          action_type: approvalReq.action_type,
+          action_type: canonicalActionType,
           action_label: approvalReq.action_label,
-          payload: approvalReq.payload,
+          payload: enrichedPayload,
           context: approvalReq.context ?? body.task.slice(0, 300),
           risk_level: approvalReq.risk_level ?? 'medium',
           created_by: user.id,
+          user_id: user.id,
         })
         .select()
         .single()
+
+      if (approvalInsertErr || !approval) {
+        // Roll back department status and surface a real error instead of a
+        // half-constructed response the UI can't act on.
+        await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', dept.id)
+        console.error('[Approval Insert Error]', approvalInsertErr)
+        return NextResponse.json({
+          error: `Could not create approval: ${approvalInsertErr?.message ?? 'unknown error'}`,
+        }, { status: 500 })
+      }
 
       // Set department status to awaiting_approval
       await supabase
