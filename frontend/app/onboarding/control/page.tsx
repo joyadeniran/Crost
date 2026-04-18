@@ -35,7 +35,14 @@ export default function ControlPage() {
 
   const handleSelect = (id: 'careful' | 'balanced' | 'aggressive') => {
     setRiskTolerance(id)
-    // Advance immediately as per spec
+  }
+
+  const handleProceed = async () => {
+    await fetch('/api/onboarding/set-step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'team' })
+    }).catch(err => console.error('Failed to update onboarding step:', err))
     router.push('/onboarding/team')
   }
 
@@ -66,7 +73,14 @@ export default function ControlPage() {
         </section>
 
         <footer className="footer-note">
-           You can change this anytime in Settings → Control Style.
+          <p>You can change this anytime in Settings → Control Style.</p>
+          <button
+            onClick={handleProceed}
+            disabled={!riskTolerance}
+            className="proceed-btn"
+          >
+            → Proceed
+          </button>
         </footer>
       </div>
 
