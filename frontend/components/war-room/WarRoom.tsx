@@ -1450,6 +1450,17 @@ export function WarRoom() {
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/goals/${activeGoalId}`)
+        if (res.status === 401) {
+          // Session expired mid-poll — stop the loop and bounce to sign-in so the
+          // user doesn't sit in front of a silently-dead War Room.
+          clearInterval(interval)
+          setPollError('Your session expired. Redirecting to sign in…')
+          if (typeof window !== 'undefined') {
+            const next = encodeURIComponent(window.location.pathname + window.location.search)
+            window.location.href = `/login?next=${next}`
+          }
+          return
+        }
         if (!res.ok) {
           // 502/500/429 etc. — the goal is "live" but we can't reach the server.
           // Don't silently retry forever; surface a visible banner after a few misses.
