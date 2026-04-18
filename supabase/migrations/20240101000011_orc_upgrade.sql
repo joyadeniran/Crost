@@ -121,7 +121,7 @@ ALTER TABLE event_log ADD CONSTRAINT event_log_event_type_check
     'orc_escalation',
     'orc_stall_detected',
     'goal_closed',
-    'goal_post_mortem_written',
+    'goal_mission_report_written',
     'goal_received',
     'plan_drafted',
     'plan_approved',
