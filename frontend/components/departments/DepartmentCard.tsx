@@ -5,29 +5,7 @@ import { Department } from '@/types'
 import { PulseIndicator } from '@/components/ui/PulseIndicator'
 import { ActivationBadge } from '@/components/ui/ActivationBadge'
 import { SyncFailedBadge } from '@/components/ui/SyncFailedBadge'
-
-// Map legacy icon-name strings → emoji for departments created before the wizard change
-const ICON_MAP: Record<string, string> = {
-  'briefcase':   '💼',
-  'code':        '💻',
-  'code-2':      '💻',
-  'megaphone':   '📣',
-  'handshake':   '🤝',
-  'bar-chart-2': '📊',
-  'chart':       '📊',
-  'settings-2':  '⚙️',
-  'ops':         '⚙️',
-  'shield':      '🛡️',
-  'flask':       '🧪',
-  'globe':       '🌐',
-  'users':       '👥',
-  'zap':         '⚡',
-  'dollar-sign': '💰',
-}
-
-function resolveIcon(icon: string): string {
-  return ICON_MAP[icon] ?? icon
-}
+import { resolveIcon } from '@/lib/utils'
 
 interface Props {
   department: Department

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { Department } from '@/types'
+import { resolveIcon } from '@/lib/utils'
 
 // ─── Built-in tool catalogue shown for / prefix ───────────────────────────────
 

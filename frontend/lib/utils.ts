@@ -42,6 +42,33 @@ export function cleanLargePayload(payload: any, maxChars: number = 500): any {
   return cleaned;
 }
 
+// Map legacy icon-name strings → emoji for departments created before the wizard change
+export const ICON_MAP: Record<string, string> = {
+  'briefcase':   '💼',
+  'code':        '💻',
+  'code-2':      '💻',
+  'megaphone':   '📣',
+  'handshake':   '🤝',
+  'bar-chart-2': '📊',
+  'chart':       '📊',
+  'settings-2':  '⚙️',
+  'ops':         '⚙️',
+  'shield':      '🛡️',
+  'flask':       '🧪',
+  'globe':       '🌐',
+  'users':       '👥',
+  'zap':         '⚡',
+  'dollar-sign': '💰',
+}
+
+/**
+ * Resolves a stored icon string (slug or emoji) to a displayable emoji.
+ */
+export function resolveIcon(icon: string | null | undefined): string {
+  if (!icon) return '🏢';
+  return ICON_MAP[icon as string] ?? icon;
+}
+
 /**
  * Forcefully ensures a memo body doesn't exceed the storage threshold.
  */
