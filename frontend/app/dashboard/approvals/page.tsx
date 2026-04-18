@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ApprovalFeedItem } from '@/components/approvals/ApprovalFeedItem'
+import { ApprovalsLiveRefresh } from '@/components/approvals/ApprovalsLiveRefresh'
 import { ApprovalQueueItem } from '@/types'
 
 export default async function ApprovalsPage() {
@@ -24,6 +25,7 @@ export default async function ApprovalsPage() {
 
   return (
     <div>
+      <ApprovalsLiveRefresh />
       <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 700, fontSize: 20, color: 'var(--text)', marginBottom: 2 }}>

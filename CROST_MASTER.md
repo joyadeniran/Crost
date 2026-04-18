@@ -3,9 +3,49 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.6  
+**Current Version:** 9.7  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Ready to deploy — HITL approval hardened, Mission Report rename (v9.6). Pending PR merge.
+**Deployment Status:** 🚀 Ready to deploy — HITL approval UI hardened, inline ApprovalCard, live refresh (v9.7). Pending PR merge.
+
+---
+
+## Session v9.7 - HITL Approval UI: Inline ApprovalCard + Live Refresh
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Pending deploy  
+**Impact**: Raw `REQUEST_APPROVAL` JSON no longer shown; persistent inline Approve/Reject card replaces it; notification bell now updates via Realtime + 15s polling fallback; Approval Feed page auto-refreshes on new items.
+
+### Changes
+
+**1. `frontend/app/api/departments/[slug]/task/route.ts`**
+- Replaced broken non-greedy regex `*?` with brace-counting `extractJsonObject()` — correctly handles nested JSON payloads of any depth.
+- Approval response now returns clean structured fields (`action_label`, `action_type`, `context`, `risk_level`, `payload`, `department_name`) instead of raw `answer` containing the `REQUEST_APPROVAL:` block.
+- `answer` field set to human-readable string: `"Action paused for your approval: '<label>'"`.
+
+**2. `frontend/components/war-room/WarRoom.tsx`**
+- Extended `InlineMessage` type with approval state fields (`approvalPending`, `approvalDecision`, `approvalId`, `approvalActionLabel`, etc.).
+- Added `ApprovalCard` inline component: amber banner, action label, context, risk badge, collapsible payload, Approve/Reject buttons, outcome display.
+- `CommandThread` hides dismiss `×` while loading or approval pending; renders `ApprovalCard` instead of raw text.
+- `handleApprovalDecision` calls `PATCH /api/approvals/[id]` and updates message state.
+- `handleChatSubmit` checks `json.approval_requested` first; populates approval fields on the message instead of setting `response`.
+
+**3. `frontend/components/providers/LayoutStoreHydrator.tsx`**
+- Extracted `refreshCount` callback.
+- Added 15-second `setInterval` polling fallback alongside Realtime subscription — ensures bell count updates in environments where Supabase Realtime isn't configured.
+
+**4. `frontend/components/approvals/ApprovalsLiveRefresh.tsx`** _(new file)_
+- Client island that subscribes to `postgres_changes` on `approval_queue` and calls `router.refresh()` — Approval Feed page auto-refreshes when new approvals arrive.
+
+**5. `frontend/app/dashboard/approvals/page.tsx`**
+- Mounts `<ApprovalsLiveRefresh />` for live page updates.
+
+### Files Changed
+- `frontend/app/api/departments/[slug]/task/route.ts`
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/providers/LayoutStoreHydrator.tsx`
+- `frontend/components/approvals/ApprovalsLiveRefresh.tsx` (new)
+- `frontend/app/dashboard/approvals/page.tsx`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
@@ -879,6 +919,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.7 | Apr 18 2026 | HITL Approval UI: Inline `ApprovalCard` with Approve/Reject in War Room; brace-counting JSON extractor; clean approval response shape; 15s polling fallback in LayoutStoreHydrator; `ApprovalsLiveRefresh` client island. |
 | v9.6 | Apr 18 2026 | HITL Hardened: `created_by` fixed in approval_queue insert; HITL APPROVAL PROTOCOL added to buildFinalPrompt; extractApprovalRequest unified; RLS policy fixed; Mission Report replaces Post-mortem. CROST_SPEC v1.6 §11 rewritten. |
 | v9.5 | Apr 18 2026 | @dept / /tool Command Prefix: New `useInputParser` hook, `ChatCommandMenu` dropdown, `/api/tools/invoke` route, `CommandThread` inline replies, `handleChatSubmit` routing in WarRoom. CROST_SPEC v1.5 §17. |
 | v9.4 | Apr 18 2026 | HITL Approval Fix: Schema extended (`approval_queue_tool_calls` migration), insert corrected, error logging added. ArtifactCard Output: label restored. KB upload success banner. Orc KB awareness via buildFinalPrompt(). |

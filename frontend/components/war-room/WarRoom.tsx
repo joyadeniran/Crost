@@ -236,71 +236,271 @@ type InlineMessage = {
   input: string
   response?: string
   isLoading: boolean
+  // Approval state — set when dept returns approval_requested: true
+  approvalPending?: boolean
+  approvalDecision?: 'approved' | 'rejected'
+  approvalId?: string
+  approvalActionLabel?: string
+  approvalActionType?: string
+  approvalContext?: string
+  approvalRiskLevel?: string
+  approvalPayload?: Record<string, any>
+  approvalDeptName?: string
 }
 
-function CommandThread({ messages, onDismiss }: { messages: InlineMessage[]; onDismiss: (id: string) => void }) {
+// Inline approve/reject card — shown instead of raw JSON when approval_requested
+function ApprovalCard({
+  msg,
+  onDecide,
+}: {
+  msg: InlineMessage
+  onDecide: (msgId: string, decision: 'approved' | 'rejected') => Promise<void>
+}) {
+  const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null)
+  const [expanded, setExpanded] = useState(false)
+
+  const handle = async (decision: 'approved' | 'rejected') => {
+    if (deciding) return
+    setDeciding(decision)
+    await onDecide(msg.id, decision)
+    setDeciding(null)
+  }
+
+  const riskColour = msg.approvalRiskLevel === 'critical' ? '#f87171'
+    : msg.approvalRiskLevel === 'high' ? '#fb923c'
+    : msg.approvalRiskLevel === 'medium' ? '#facc15'
+    : '#4ade80'
+
+  if (msg.approvalDecision) {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <span style={{
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontSize: 11,
+          fontWeight: 700,
+          color: msg.approvalDecision === 'approved' ? '#4ade80' : '#f87171',
+          letterSpacing: '0.06em',
+        }}>
+          {msg.approvalDecision === 'approved' ? '✓ APPROVED — ACTION EXECUTING' : '✗ REJECTED'}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      marginTop: 8,
+      background: 'rgba(250,204,21,0.05)',
+      border: '1px solid rgba(250,204,21,0.2)',
+      borderRadius: 8,
+      padding: '12px 14px',
+    }}>
+      {/* Status banner */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 14 }}>⏸</span>
+        <span style={{
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontSize: 10,
+          color: '#facc15',
+          letterSpacing: '0.08em',
+          fontWeight: 700,
+        }}>
+          AWAITING YOUR APPROVAL
+        </span>
+        {msg.approvalRiskLevel && (
+          <span style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 9,
+            color: riskColour,
+            background: `${riskColour}18`,
+            border: `1px solid ${riskColour}44`,
+            borderRadius: 4,
+            padding: '1px 6px',
+            textTransform: 'uppercase',
+          }}>
+            {msg.approvalRiskLevel}
+          </span>
+        )}
+      </div>
+
+      {/* Action description */}
+      <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>
+        {msg.approvalActionLabel}
+      </div>
+
+      {msg.approvalContext && (
+        <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5, marginBottom: 8, fontStyle: 'italic' }}>
+          &quot;{msg.approvalContext}&quot;
+        </div>
+      )}
+
+      {/* Payload toggle */}
+      {msg.approvalPayload && Object.keys(msg.approvalPayload).length > 0 && (
+        <>
+          <button
+            onClick={() => setExpanded(e => !e)}
+            style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-3)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              marginBottom: 6,
+            }}
+          >
+            {expanded ? '▲ hide details' : '▼ show details'}
+          </button>
+          {expanded && (
+            <pre style={{
+              fontSize: 10,
+              background: 'var(--bg-3)',
+              color: 'var(--text-2)',
+              borderRadius: 4,
+              padding: '8px 10px',
+              marginBottom: 10,
+              overflow: 'auto',
+              maxHeight: 120,
+              fontFamily: 'var(--font-dm-mono, monospace)',
+            }}>
+              {JSON.stringify(msg.approvalPayload, null, 2)}
+            </pre>
+          )}
+        </>
+      )}
+
+      {/* Approve / Reject */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button
+          onClick={() => handle('approved')}
+          disabled={!!deciding}
+          style={{
+            flex: 1,
+            background: deciding === 'approved' ? 'rgba(74,222,128,0.25)' : 'rgba(74,222,128,0.12)',
+            color: '#4ade80',
+            border: '1px solid rgba(74,222,128,0.35)',
+            borderRadius: 6,
+            padding: '7px 0',
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 11,
+            cursor: deciding ? 'not-allowed' : 'pointer',
+            letterSpacing: '0.04em',
+            opacity: deciding && deciding !== 'approved' ? 0.4 : 1,
+          }}
+        >
+          {deciding === 'approved' ? 'Approving…' : '✓ Approve'}
+        </button>
+        <button
+          onClick={() => handle('rejected')}
+          disabled={!!deciding}
+          style={{
+            flex: 1,
+            background: deciding === 'rejected' ? 'rgba(248,113,113,0.25)' : 'rgba(248,113,113,0.08)',
+            color: '#f87171',
+            border: '1px solid rgba(248,113,113,0.3)',
+            borderRadius: 6,
+            padding: '7px 0',
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 11,
+            cursor: deciding ? 'not-allowed' : 'pointer',
+            letterSpacing: '0.04em',
+            opacity: deciding && deciding !== 'rejected' ? 0.4 : 1,
+          }}
+        >
+          {deciding === 'rejected' ? 'Rejecting…' : '✗ Reject'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CommandThread({
+  messages,
+  onDismiss,
+  onApprovalDecision,
+}: {
+  messages: InlineMessage[]
+  onDismiss: (id: string) => void
+  onApprovalDecision: (msgId: string, decision: 'approved' | 'rejected') => Promise<void>
+}) {
   if (messages.length === 0) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-      {messages.map(msg => (
-        <div key={msg.id} style={{
-          background: 'var(--bg-2)',
-          border: '1px solid var(--border)',
-          borderLeft: `3px solid ${msg.type === 'dept' ? '#00D4AA' : '#a78bfa'}`,
-          borderRadius: 'var(--radius)',
-          padding: '12px 16px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
-              fontSize: 10,
-              fontWeight: 700,
-              color: msg.type === 'dept' ? '#00D4AA' : '#a78bfa',
-              letterSpacing: '0.06em',
-            }}>
-              {msg.type === 'dept' ? '@' : '/'}{msg.label}
-            </span>
-            {msg.isLoading && (
-              <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
-                working…
+      {messages.map(msg => {
+        const accentColor = msg.type === 'dept' ? '#00D4AA' : '#a78bfa'
+        const canDismiss = !msg.isLoading && !msg.approvalPending
+        return (
+          <div key={msg.id} style={{
+            background: 'var(--bg-2)',
+            border: `1px solid ${msg.approvalPending ? 'rgba(250,204,21,0.3)' : 'var(--border)'}`,
+            borderLeft: `3px solid ${msg.approvalPending ? '#facc15' : accentColor}`,
+            borderRadius: 'var(--radius)',
+            padding: '12px 16px',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontSize: 10,
+                fontWeight: 700,
+                color: accentColor,
+                letterSpacing: '0.06em',
+              }}>
+                {msg.type === 'dept' ? '@' : '/'}{msg.label}
               </span>
+              {msg.isLoading && (
+                <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                  working…
+                </span>
+              )}
+              {canDismiss && (
+                <button
+                  onClick={() => onDismiss(msg.id)}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* Input echo */}
+            {msg.input && (
+              <div style={{
+                fontSize: 11,
+                color: 'var(--text-3)',
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                marginBottom: 6,
+                opacity: 0.7,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {msg.input}
+              </div>
             )}
-            {!msg.isLoading && (
-              <button
-                onClick={() => onDismiss(msg.id)}
-                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
-              >
-                ×
-              </button>
+
+            {/* Approval card (persistent, non-dismissible) */}
+            {(msg.approvalPending || msg.approvalDecision) && (
+              <ApprovalCard msg={msg} onDecide={onApprovalDecision} />
+            )}
+
+            {/* Regular text response */}
+            {!msg.approvalPending && !msg.approvalDecision && msg.response && (
+              <div style={{
+                fontFamily: 'var(--font-dm-sans, sans-serif)',
+                fontSize: 13,
+                color: 'var(--text)',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {msg.response}
+              </div>
             )}
           </div>
-          {msg.input && (
-            <div style={{
-              fontSize: 11,
-              color: 'var(--text-3)',
-              fontFamily: 'var(--font-dm-mono, monospace)',
-              marginBottom: msg.response ? 8 : 0,
-              opacity: 0.7,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}>
-              {msg.input}
-            </div>
-          )}
-          {msg.response && (
-            <div style={{
-              fontFamily: 'var(--font-dm-sans, sans-serif)',
-              fontSize: 13,
-              color: 'var(--text)',
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}>
-              {msg.response}
-            </div>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1175,6 +1375,25 @@ export function WarRoom() {
     }
   }, [setActiveGoal, setIsSubmittingGoal])
 
+  const handleApprovalDecision = useCallback(async (msgId: string, decision: 'approved' | 'rejected') => {
+    const msg = commandMessages.find(m => m.id === msgId)
+    if (!msg?.approvalId) return
+    try {
+      const res = await fetch(`/api/approvals/${msg.approvalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      })
+      if (res.ok) {
+        setCommandMessages(msgs => msgs.map(m =>
+          m.id === msgId ? { ...m, approvalPending: false, approvalDecision: decision } : m
+        ))
+      }
+    } catch (err: any) {
+      console.error('[handleApprovalDecision]', err)
+    }
+  }, [commandMessages])
+
   const handleChatSubmit = useCallback(async (rawInput: string) => {
     const parsed = parseInput(rawInput)
 
@@ -1188,8 +1407,24 @@ export function WarRoom() {
           body: JSON.stringify({ task: parsed.message }),
         })
         const json = await res.json()
-        const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${json.error}` : JSON.stringify(json))
-        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+        if (json.approval_requested) {
+          // Show human-readable approval card — never display the raw block
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
+            ...m,
+            isLoading: false,
+            approvalPending: true,
+            approvalId: json.approval_id,
+            approvalActionLabel: json.action_label,
+            approvalActionType: json.action_type,
+            approvalContext: json.context,
+            approvalRiskLevel: json.risk_level,
+            approvalPayload: json.payload,
+            approvalDeptName: json.department_name,
+          } : m))
+        } else {
+          const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${json.error}` : JSON.stringify(json))
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+        }
       } catch (err: any) {
         setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
       }
@@ -1207,17 +1442,29 @@ export function WarRoom() {
           body: JSON.stringify({ service: parsed.service, action: parsed.action, params: parsed.params ? { text: parsed.params } : {} }),
         })
         const json = await res.json()
-        let response: string
         if (json.requires_approval) {
-          response = `⏸ Paused for approval (ID: ${json.approval_id})`
-        } else if (json.missing_connection) {
-          response = `⚠ No connection for "${json.service}". Connect it in Settings → Integrations.`
-        } else if (!json.success) {
-          response = `Error: ${json.error}`
+          // Tool gateway approval — also show approval card
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
+            ...m,
+            isLoading: false,
+            approvalPending: true,
+            approvalId: json.approval_id,
+            approvalActionLabel: toolLabel,
+            approvalActionType: 'tool_call',
+            approvalContext: `Direct tool invocation: ${toolLabel}`,
+            approvalRiskLevel: 'high',
+          } : m))
         } else {
-          response = typeof json.result === 'string' ? json.result : JSON.stringify(json.result, null, 2)
+          let response: string
+          if (json.missing_connection) {
+            response = `⚠ No connection for "${json.service}". Connect it in Settings → Integrations.`
+          } else if (!json.success) {
+            response = `Error: ${json.error}`
+          } else {
+            response = typeof json.result === 'string' ? json.result : JSON.stringify(json.result, null, 2)
+          }
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
         }
-        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
       } catch (err: any) {
         setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
       }
@@ -1375,6 +1622,7 @@ export function WarRoom() {
       <CommandThread
         messages={commandMessages}
         onDismiss={id => setCommandMessages(msgs => msgs.filter(m => m.id !== id))}
+        onApprovalDecision={handleApprovalDecision}
       />
 
       {isPlanning && <PlanningIndicator />}
