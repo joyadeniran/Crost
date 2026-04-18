@@ -1,8 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist, StorageValue } from 'zustand/middleware'
-import { getSupabaseClient } from './supabase-browser'
+import { persist } from 'zustand/middleware'
 
 export interface OnboardingState {
   // Screen 1: Identity
@@ -33,52 +32,25 @@ export interface OnboardingState {
   reset: () => void
 }
 
-// Custom storage that scopes localStorage to current user
-const createUserScopedStorage = () => {
-  return {
-    getItem: (name: string): StorageValue | null => {
-      try {
-        // Try to get user ID from Supabase
-        const supabase = getSupabaseClient()
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          const userId = session?.user?.id
-          const key = userId ? `${name}-${userId}` : name
-          const item = localStorage.getItem(key)
-          return item ? JSON.parse(item) : null
-        })
-      } catch {
-        // Fallback to unscoped key if auth not ready
-        const item = localStorage.getItem(name)
-        return item ? JSON.parse(item) : null
-      }
-      return null
-    },
-    setItem: (name: string, value: StorageValue) => {
-      try {
-        const supabase = getSupabaseClient()
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          const userId = session?.user?.id
-          const key = userId ? `${name}-${userId}` : name
-          localStorage.setItem(key, JSON.stringify(value))
-        })
-      } catch {
-        // Fallback to unscoped key if auth not ready
-        localStorage.setItem(name, JSON.stringify(value))
-      }
-    },
-    removeItem: (name: string) => {
-      try {
-        const supabase = getSupabaseClient()
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          const userId = session?.user?.id
-          const key = userId ? `${name}-${userId}` : name
-          localStorage.removeItem(key)
-        })
-      } catch {
-        localStorage.removeItem(name)
-      }
-    },
+// Get user ID from localStorage where it's set by auth layout
+const getUserId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const sessionData = localStorage.getItem('sb-auth-session')
+    if (sessionData) {
+      const session = JSON.parse(sessionData)
+      return session?.user?.id || null
+    }
+  } catch {
+    return null
   }
+  return null
+}
+
+// Storage key scoped to user to prevent data bleed between users
+const getStorageKey = (): string => {
+  const userId = getUserId()
+  return userId ? `crost-onboarding-storage-${userId}` : 'crost-onboarding-storage'
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -124,8 +96,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         }),
     }),
     {
-      name: 'crost-onboarding-storage',
-      storage: createUserScopedStorage(),
+      name: getStorageKey(),
     }
   )
 )
