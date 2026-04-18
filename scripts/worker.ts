@@ -11,7 +11,7 @@
 // Responsibilities:
 //   1. Polling supervisor — watchdog sync, dependency unblocking, goal closure, pending dispatch.
 //   2. In-memory stall detection (Watchdog Timers).
-//   3. Goal closure and post-mortem generation.
+//   3. Goal closure and Mission Report generation.
 //   4. Multi-tenant context preservation.
 
 import { createClient } from '@supabase/supabase-js'
@@ -88,9 +88,9 @@ async function writeEvent(
   })
 }
 
-// ─── Post-mortem memo ──────────────────────────────────────────────────────────
+// ─── Mission Report memo ───────────────────────────────────────────────────────
 
-async function writePostMortemMemo(
+async function writeMissionReportMemo(
   goalId: string,
   founderInput: string,
   tasks: any[]
@@ -108,7 +108,7 @@ async function writePostMortemMemo(
     failed.length > 0    ? `Failed:\n${failed.map((t: any) => `  - [${t.dept_slug}] ${t.label}`).join('\n')}` : '',
     rejected.length > 0  ? `Rejected by founder:\n${rejected.map((t: any) => `  - [${t.dept_slug}] ${t.label}`).join('\n')}` : '',
     '',
-    `Post-mortem written by Orc at ${new Date().toISOString()}.`,
+    `Mission Report written by Orc at ${new Date().toISOString()}.`,
   ].filter((l: string) => l !== '').join('\n')
 
   const { data: goal } = await supabase.from('goals').select('created_by').eq('id', goalId).single()
@@ -116,16 +116,16 @@ async function writePostMortemMemo(
   await supabase.from('company_memos').insert({
     goal_id: goalId,
     from_department: 'orchestrator',
-    title: `[Post-Mortem] ${founderInput.slice(0, 80)}`,
+    title: `[Mission Report] ${founderInput.slice(0, 80)}`,
     body,
-    tags: ['post-mortem', 'orc', 'goal'],
+    tags: ['mission-report', 'orc', 'goal'],
     priority: failed.length > 0 ? 'high' : 'normal',
     source_type: 'orchestrator',
     confidence: 1.0,
     created_by: goal?.created_by
   })
 
-  await writeEvent('goal_post_mortem_written', `Post-mortem written for goal "${founderInput.slice(0, 60)}"`, goalId)
+  await writeEvent('goal_mission_report_written', `Mission Report written for goal "${founderInput.slice(0, 60)}"`, goalId)
 }
 
 // ─── Stall logic (The Watchdog) ───────────────────────────────────────────────
@@ -251,7 +251,7 @@ async function tryCloseGoal(goalId: string) {
     ? 'All tasks completed successfully.' 
     : `${tasks.filter(t => t.status === 'failed').length} failed, ${tasks.filter(t => t.status === 'completed').length} completed.`
 
-  await writePostMortemMemo(goalId, goal.founder_input, tasks)
+  await writeMissionReportMemo(goalId, goal.founder_input, tasks)
   await supabase.from('goals').update({ status: 'completed', outcome }).eq('id', goalId)
   log(`Goal closed: ${goalId}`)
 }
