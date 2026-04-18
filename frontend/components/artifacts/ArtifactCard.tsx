@@ -290,6 +290,15 @@ export function ArtifactCard({ artifact }: Props) {
             </span>
             <ExtBadge ext={ext} />
           </div>
+          {artifact.title && (
+            <div style={{
+              fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif',
+              marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              <span style={{ color: 'var(--text-4)', marginRight: 4 }}>Output:</span>
+              {artifact.title}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
               {artifact.department_slug}

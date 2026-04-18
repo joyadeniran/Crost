@@ -121,23 +121,24 @@ export async function executeToolCall(options: ExecuteOptions) {
   if (execErr || !executionLog) throw new Error("Failed to track tool execution");
 
   if (requiresApproval) {
-    // Generate an approval request
-    await supabase.from("approval_queue").insert({
+    // Generate an approval request — column names must match approval_queue schema
+    const { error: aqErr } = await supabase.from("approval_queue").insert({
       goal_id: goalId,
       task_id: taskId,
-      requested_by: departmentId,
       user_id: userId,
-      type: "content_review",
+      tool_execution_id: executionLog.id,
+      department_slug: departmentId,
+      action_type: "tool_call",
+      action_label: `${service}.${action}`,
+      payload: { service, action, params },
+      context: toolCall.reasoning || `HITL approval required for ${fullyQualifiedTool}`,
+      risk_level: risk || "high",
       status: "pending",
-      context: {
-        tool_execution_id: executionLog.id,
-        service,
-        action,
-        params,
-        reasoning: toolCall.reasoning || `Security protocol: HITL approval required for ${fullyQualifiedTool}`,
-        is_tool_call: true
-      }
     });
+
+    if (aqErr) {
+      console.error("[HITL] Failed to insert approval_queue row:", aqErr.message, aqErr.details);
+    }
 
     // Write a system memo so there's a paper trail
     await supabase.from("company_memos").insert({
