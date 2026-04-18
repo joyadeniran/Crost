@@ -59,6 +59,7 @@ export default function KnowledgePage() {
   const [uploadCategory, setUploadCategory] = useState('custom');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasFetched, setHasFetched] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -102,11 +103,12 @@ export default function KnowledgePage() {
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || 'Upload failed');
-      setUploadProgress('Uploaded! Extracting text in background...');
       setPendingFile(null);
       setUploadTitle('');
       setUploadCategory('custom');
-      setTimeout(() => { setUploadProgress(''); fetchFiles(); }, 2000);
+      setUploadProgress('');
+      setSuccessMessage('File uploaded. Text extraction is running in the background — it will appear as "Ready" shortly.');
+      setTimeout(() => { setSuccessMessage(''); fetchFiles(); }, 6000);
     } catch (err: any) {
       setUploadProgress(`Error: ${err.message}`);
     } finally {
@@ -194,6 +196,24 @@ export default function KnowledgePage() {
           </div>
         )}
       </div>
+
+      {/* Upload success banner */}
+      {successMessage && (
+        <div style={{
+          background: 'rgba(0, 212, 170, 0.12)',
+          border: '1px solid rgba(0, 212, 170, 0.35)',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          color: '#00D4AA',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}>
+          <span>✓</span>
+          <span>{successMessage}</span>
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="kb-toolbar">
