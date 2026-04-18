@@ -12,7 +12,7 @@ interface ControlStyleCardProps {
 export function ControlStyleCard({ id, title, description, details, selected, onClick }: ControlStyleCardProps) {
   return (
     <div 
-      className={`control-card ${selected ? 'selected' : ''}`}
+      className={`control-card glass-panel ${selected ? 'selected' : ''}`}
       onClick={onClick}
     >
       <div className="card-selection-marker">
