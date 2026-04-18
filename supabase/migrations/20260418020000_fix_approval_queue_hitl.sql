@@ -59,7 +59,7 @@ BEGIN
     ALTER TABLE event_log ADD CONSTRAINT event_log_event_type_check CHECK (event_type IN (
       'task_started', 'task_completed', 'task_failed', 'task_rejected', 'task_held',
       'goal_created', 'goal_planning', 'goal_completed', 'goal_failed', 'goal_cancelled',
-      'goal_post_mortem_written', 'goal_mission_report_written',
+      'goal_mission_report_written', 'goal_mission_report_written',
       'approval_requested', 'approval_approved', 'approval_rejected', 'approval_expired',
       'department_created', 'department_activated', 'department_updated', 'department_deactivated',
       'tool_executed', 'tool_blocked', 'tool_failed',

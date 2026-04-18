@@ -56,7 +56,7 @@ export type EventType =
   | 'orc_escalation'
   | 'orc_stall_detected'
   | 'goal_closed'
-  | 'goal_post_mortem_written'    // legacy — kept for backward compat
+  | 'goal_mission_report_written'    // legacy — kept for backward compat
   | 'goal_mission_report_written'
   | 'goal_received'
   | 'plan_drafted'
