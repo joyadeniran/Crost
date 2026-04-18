@@ -3,9 +3,57 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.5  
+**Current Version:** 9.6  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Ready to deploy — @dept / /tool command prefix UX (v9.5). Pending PR merge.
+**Deployment Status:** 🚀 Ready to deploy — HITL approval hardened, Mission Report rename (v9.6). Pending PR merge.
+
+---
+
+## Session v9.6 - HITL Approval Hardened + Mission Report Rename
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Pending deploy  
+**Impact**: HITL approval flow end-to-end reliable; notification bell chimes on every approval; Mission Report replaces Post-mortem
+
+### Root Cause Analysis
+
+**Issue 1 — Notification bell never chimed**
+`execute-tool-call.ts` inserted approval_queue rows without `created_by`. Both `dashboard/layout.tsx` (initial SSR count via `.eq('created_by', user.id)`) and the original RLS policy (`USING (created_by = auth.uid())`) rely on this column. Rows were invisible — count stayed 0, bell stayed silent.
+
+**Issue 2 — Approval insert silently failed in many cases**
+The previous migration (`20260418010000`) made department columns nullable but the `action_type` CHECK constraint in some environments still didn't include `'tool_call'`. Insert also lacked `created_by`. Both caused silent failures absorbed by `if (aqErr) console.error(...)` without blocking the rest of the flow.
+
+**Issue 3 — Broken RLS policy**
+The `20260418010000` migration created: `USING (user_id = auth.uid() OR auth.uid() IS NOT NULL)`. Since `auth.uid() IS NOT NULL` is always true for logged-in users, ALL approval rows were exposed to ALL users — a security leak.
+
+**Issue 4 — Department LLMs never requested approval**
+`buildFinalPrompt()` had no instruction telling departments WHEN or HOW to request approval. Departments responded to "send email" tasks with plain prose ("I'll send the email") — no structured JSON block was emitted, so `extractApprovalRequest` never matched, no approval_queue row was created, and the task completed immediately. This caused Orc to write a Mission Report as if the goal was done, while the email was never sent.
+
+**Issue 5 — extractApprovalRequest only handled legacy JSON block format**
+The function only matched ` ```json { "request_approval": true } ``` ` (legacy). The new HITL protocol teaches `REQUEST_APPROVAL: { ... }` format. Both parsers needed to handle both formats.
+
+### Patch Details
+
+1. **`execute-tool-call.ts`** — Added `created_by: userId` to approval_queue insert. Now satisfies RLS and layout pending count query.
+
+2. **`llm-client.ts` `buildFinalPrompt()`** — Added `## HITL APPROVAL PROTOCOL` section for all non-orchestrator departments. Instructs LLMs exactly when to output `REQUEST_APPROVAL: { ... }` and tells them to stop after the block.
+
+3. **`/api/departments/[slug]/task/route.ts` `extractApprovalRequest()`** — Handles both `REQUEST_APPROVAL:` format (primary) and legacy ` ```json ``` ` format (fallback). Unified parsing across both department task route and Orc dispatch path.
+
+4. **Migration `20260418020000_fix_approval_queue_hitl.sql`** — Fixes RLS policy (`created_by = auth.uid() OR user_id = auth.uid()`), rebuilds action_type CHECK idempotently, ensures nullable columns, adds `goal_mission_report_written` to event_log CHECK.
+
+5. **Mission Report rename** — `scripts/worker.ts`: `writePostMortemMemo` → `writeMissionReportMemo`, title `[Post-Mortem]` → `[Mission Report]`, tags updated, event `goal_mission_report_written`. `types/index.ts`: new event type added (old kept for backward compat). `utils.ts` comment updated. `CROST_ONBOARDING_SPEC.md` updated. `CROST_SPEC.md` §11 HITL section fully rewritten to document approval protocol.
+
+### Files Modified
+1. `frontend/lib/tools/execute-tool-call.ts` — created_by added to approval_queue insert
+2. `frontend/lib/llm-client.ts` — HITL APPROVAL PROTOCOL section in buildFinalPrompt
+3. `frontend/app/api/departments/[slug]/task/route.ts` — extractApprovalRequest unified parser
+4. `supabase/migrations/20260418020000_fix_approval_queue_hitl.sql` — new
+5. `scripts/worker.ts` — Mission Report rename
+6. `frontend/types/index.ts` — goal_mission_report_written added
+7. `frontend/lib/utils.ts` — comment updated
+8. `CROST_ONBOARDING_SPEC.md` — Mission Report reference
+9. `CROST_SPEC.md` — v1.6, §11 HITL fully rewritten
 
 ---
 
@@ -831,6 +879,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.6 | Apr 18 2026 | HITL Hardened: `created_by` fixed in approval_queue insert; HITL APPROVAL PROTOCOL added to buildFinalPrompt; extractApprovalRequest unified; RLS policy fixed; Mission Report replaces Post-mortem. CROST_SPEC v1.6 §11 rewritten. |
 | v9.5 | Apr 18 2026 | @dept / /tool Command Prefix: New `useInputParser` hook, `ChatCommandMenu` dropdown, `/api/tools/invoke` route, `CommandThread` inline replies, `handleChatSubmit` routing in WarRoom. CROST_SPEC v1.5 §17. |
 | v9.4 | Apr 18 2026 | HITL Approval Fix: Schema extended (`approval_queue_tool_calls` migration), insert corrected, error logging added. ArtifactCard Output: label restored. KB upload success banner. Orc KB awareness via buildFinalPrompt(). |
 | v9.3 | Apr 17 2026 | KB Upload Fix: Provisioned missing `knowledge-base` storage bucket (new migration). Fixed redundant storagePath prefix. Added CROST_SPEC §16 (Founder Knowledge Base). |

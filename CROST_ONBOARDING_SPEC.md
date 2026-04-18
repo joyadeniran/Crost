@@ -13,7 +13,7 @@
 - Dynamic department routing (no hardcoded Sales/Marketing/Ops)
 - Coherence blocks for workers
 - Founder overrides on task labels/reasoning
-- Post-mortem Orc Report on goal completion
+- Mission Report (Orc Report) on goal completion
 - Migrations 1–14 applied including `dialogue_mode` and `orc_upgrade`
 
 ### Active constraints for this build
