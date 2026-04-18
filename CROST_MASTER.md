@@ -3,9 +3,55 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.7  
+**Current Version:** 9.8  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Ready to deploy — HITL approval UI hardened, inline ApprovalCard, live refresh (v9.7). Pending PR merge.
+**Deployment Status:** 🚀 Live — Onboarding E2E verified and working (v9.8). All stages accessible.
+
+---
+
+## Session v9.8 - Onboarding E2E Verification & Middleware Team Step Fix
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Full onboarding flow now accessible (Identity → Control → Team → Activate); Proceed button on Control stage successfully routes to Team; middleware recognizes 'team' onboarding step.
+
+### Root Cause Analysis
+
+**Issue**: Control stage "Proceed" button redirected users back to Identity page instead of advancing to Team stage.
+
+**Finding**: Middleware in `frontend/middleware.ts` lacked routing logic for the `'team'` onboarding step. The middleware recognized `'identity'`, `'control'`, and `'activated'` as valid steps but had no conditional branch for `'team'`. When the Control page set `onboarding_step: 'team'` via the API, the middleware saw an unrecognized step and redirected to the default `'/onboarding/identity'`.
+
+### Patch Details
+
+1. **`frontend/middleware.ts`** — Added `else if (step === 'team') target = '/onboarding/team'` in two locations:
+   - Line 54: Within the dashboard protection block (handles users already authenticated trying to access `/dashboard`)
+   - Line 74: Within the login/onboarding protection block (handles authenticated users on auth pages)
+
+2. **Verification** — After Render deployment picked up the changes (confirmed via network chunk hash change in browser console), the complete onboarding flow now works:
+   - Identity page: Load with pre-filled profile data (founder name, company, location, business description, stage)
+   - Control page: Display risk tolerance options (Careful/Balanced/Aggressive); Proceed button enabled after selection
+   - Team page: Display department selection cards; "Start with these" button enabled after selecting 2+ departments
+   - Activate page: Display goal/task input and activation controls
+   - Successful sign-off shows "Your team is ready" with next steps
+
+### Files Modified
+1. `frontend/middleware.ts` — Added 'team' step routing (2 locations)
+
+### Testing Performed
+- ✅ Created test user and verified signup flow
+- ✅ Identity stage: loaded with pre-filled data from onboarding store
+- ✅ Control stage: selected risk tolerance, Proceed button enabled and clicked
+- ✅ Verified navigation from Control → Team (previously failed; now works)
+- ✅ Team stage: selected 2 departments (Engineering + Operations), "Start with these" enabled
+- ✅ Activate stage: loaded final goal/task setup
+- ✅ Confirmed Render deployment live with updated chunk hashes
+
+### Deployment Ready
+- ✅ Code syntax valid
+- ✅ No breaking changes
+- ✅ Minimal change (2-line addition to middleware)
+- ✅ Already deployed to Render and verified live
+- ✅ Ready for continued feature testing
 
 ---
 
