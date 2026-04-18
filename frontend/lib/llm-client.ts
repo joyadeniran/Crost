@@ -274,6 +274,7 @@ export async function buildFinalPrompt(
     `### INTERNAL TOOLS (Always Available)`,
     `- COMPANY_MEMOS: Fetch recent company communications. Args: { "limit": number }`,
     `- SUPABASE_QUERY: Execute read-only SQL queries against the database schema. Args: { "query": "SELECT ..." }`,
+    `- KNOWLEDGE_BASE_SEARCH: Search the founder's uploaded knowledge base (documents, reports, handbooks, pitch decks, etc.). Use this whenever the founder references an uploaded file, asks about company documents, or when grounding the response in founder-provided context would help. Args: { "service": "internal", "action": "knowledge_base_search", "query": "<search terms>", "category": "<optional: company_profile|pitch_deck|financial_report|handbook|meeting_notes|research|legal|marketing|sales|product|operations>", "limit": 5 }`,
     ...(tools ?? []).map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
   ].join('\n')
 
