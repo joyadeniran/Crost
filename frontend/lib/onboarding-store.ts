@@ -32,27 +32,6 @@ export interface OnboardingState {
   reset: () => void
 }
 
-// Get user ID from localStorage where it's set by auth layout
-const getUserId = (): string | null => {
-  if (typeof window === 'undefined') return null
-  try {
-    const sessionData = localStorage.getItem('sb-auth-session')
-    if (sessionData) {
-      const session = JSON.parse(sessionData)
-      return session?.user?.id || null
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
-// Storage key scoped to user to prevent data bleed between users
-const getStorageKey = (): string => {
-  const userId = getUserId()
-  return userId ? `crost-onboarding-storage-${userId}` : 'crost-onboarding-storage'
-}
-
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set) => ({
@@ -96,7 +75,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         }),
     }),
     {
-      name: getStorageKey(),
+      name: 'crost-onboarding-storage',
     }
   )
 )
