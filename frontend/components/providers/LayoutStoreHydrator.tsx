@@ -22,17 +22,25 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     setEnvMode(envMode)
   }, [pendingCount, envMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep pending count live on every page (not just the dashboard)
+  const refreshCount = useCallback(async () => {
+    const { data } = await supabaseClient.from('approval_queue').select('id').eq('status', 'pending')
+    setPendingApprovalCount(data?.length ?? 0)
+  }, [setPendingApprovalCount])
+
+  // Realtime subscription for instant bell updates
   useEffect(() => {
     const channel = supabaseClient
       .channel('layout-approvals-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_queue' }, async () => {
-        const { data } = await supabaseClient.from('approval_queue').select('id').eq('status', 'pending')
-        setPendingApprovalCount(data?.length ?? 0)
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_queue' }, refreshCount)
       .subscribe()
     return () => { supabaseClient.removeChannel(channel) }
-  }, [setPendingApprovalCount])
+  }, [refreshCount])
+
+  // 15-second polling fallback — covers environments where Realtime isn't enabled
+  useEffect(() => {
+    const poll = setInterval(refreshCount, 15_000)
+    return () => clearInterval(poll)
+  }, [refreshCount])
 
   return null
 }

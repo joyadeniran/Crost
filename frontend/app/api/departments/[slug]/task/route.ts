@@ -41,33 +41,51 @@ interface ApprovalRequest {
   risk_level?: RiskLevel
 }
 
+// Extract nested JSON safely by counting opening/closing braces
+function extractJsonObject(text: string, fromIndex: number): string | null {
+  const start = text.indexOf('{', fromIndex)
+  if (start === -1) return null
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++
+    else if (text[i] === '}') { depth--; if (depth === 0) return text.slice(start, i + 1) }
+  }
+  return null
+}
+
 function extractApprovalRequest(text: string): ApprovalRequest | null {
-  // Format 1: REQUEST_APPROVAL: { ... }  (used by the HITL protocol in buildFinalPrompt)
-  const raMatch = text.match(/REQUEST_APPROVAL\s*:\s*(\{[\s\S]*?\})\s*$/)
-  if (raMatch) {
-    try {
-      const parsed = JSON.parse(raMatch[1])
-      if (!parsed.action_type || !parsed.action_label) return null
-      return {
-        request_approval: true,
-        action_type: parsed.action_type,
-        action_label: parsed.action_label,
-        payload: parsed.payload ?? {},
-        context: parsed.context ?? parsed.reasoning ?? '',
-        risk_level: parsed.risk_level,
-      } as ApprovalRequest
-    } catch { /* fall through to format 2 */ }
+  // Format 1: REQUEST_APPROVAL: { ... }  (taught by HITL APPROVAL PROTOCOL in buildFinalPrompt)
+  const raIdx = text.indexOf('REQUEST_APPROVAL:')
+  if (raIdx !== -1) {
+    const raw = extractJsonObject(text, raIdx)
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (!parsed.action_type || !parsed.action_label) return null
+        return {
+          request_approval: true as const,
+          action_type: parsed.action_type,
+          action_label: parsed.action_label,
+          payload: parsed.payload ?? {},
+          context: parsed.context ?? parsed.reasoning ?? '',
+          risk_level: parsed.risk_level,
+        }
+      } catch { /* fall through */ }
+    }
   }
 
-  // Format 2: ```json { "request_approval": true, ... }``` (legacy JSON block)
-  const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?"request_approval"[\s\S]*?\})\s*```/)
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[1])
-      if (parsed.request_approval !== true) return null
-      if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
-      return parsed as ApprovalRequest
-    } catch { return null }
+  // Format 2: ```json { "request_approval": true, ... }```  (legacy JSON block)
+  const fenceMatch = text.match(/```(?:json)?\s*\{/)
+  if (fenceMatch && fenceMatch.index !== undefined) {
+    const raw = extractJsonObject(text, fenceMatch.index)
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed.request_approval !== true) return null
+        if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
+        return parsed as ApprovalRequest
+      } catch { /* fall through */ }
+    }
   }
 
   return null
@@ -301,9 +319,16 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
 
       return NextResponse.json({
-        answer,
+        // Clean human-readable answer — raw REQUEST_APPROVAL block intentionally excluded
+        answer: `Action paused for your approval: "${approvalReq.action_label}"`,
         approval_requested: true,
         approval_id: approval?.id,
+        action_label: approvalReq.action_label,
+        action_type: approvalReq.action_type,
+        context: approvalReq.context ?? body.task.slice(0, 200),
+        risk_level: approvalReq.risk_level ?? 'medium',
+        payload: approvalReq.payload,
+        department_name: dept.name,
       })
     }
 
