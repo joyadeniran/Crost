@@ -33,11 +33,14 @@ export default function ControlPage() {
     founderName, companyName, city, country, businessCategory, stage
   } = useOnboardingStore()
 
+  const [localRisk, setLocalRisk] = useState<'careful' | 'balanced' | 'aggressive'>(riskTolerance || 'balanced')
+
   const handleSelect = (id: 'careful' | 'balanced' | 'aggressive') => {
-    setRiskTolerance(id)
+    setLocalRisk(id)
   }
 
   const handleProceed = async () => {
+    setRiskTolerance(localRisk)
     await fetch('/api/onboarding/set-step', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,10 +50,10 @@ export default function ControlPage() {
   }
 
   return (
-    <div className="onboarding-content">
+    <div className="onboarding-content animate-fade-in">
       <div className="main-flow">
         <button onClick={() => router.push('/onboarding/identity')} className="back-link">
-          ← Back to Identity
+          ← Back
         </button>
         <header className="step-header">
           <span className="time-remaining">~2 min left</span>
@@ -66,27 +69,27 @@ export default function ControlPage() {
             <ControlStyleCard 
               key={opt.id}
               {...opt}
-              selected={riskTolerance === opt.id}
+              selected={localRisk === opt.id}
               onClick={() => handleSelect(opt.id)}
             />
           ))}
         </section>
 
-        <footer className="footer-note">
-          <p>You can change this anytime in Settings → Control Style.</p>
+        <div className="action-row animate-fade-in" style={{ marginTop: '40px', justifyContent: 'center' }}>
           <button
             onClick={handleProceed}
-            disabled={!riskTolerance}
-            className="proceed-btn"
+            className="primary-btn-crost lg"
           >
-            → Proceed
+            Confirm & Build Team <span>→</span>
           </button>
+        </div>
+
+        <footer className="footer-note">
+          <p>You can change this anytime in Settings → Control Style.</p>
         </footer>
       </div>
 
       <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
-
-
     </div>
   )
 }
