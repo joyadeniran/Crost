@@ -23,8 +23,21 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
   }, [pendingCount, envMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshCount = useCallback(async () => {
-    const { data } = await supabaseClient.from('approval_queue').select('id').eq('status', 'pending')
-    setPendingApprovalCount(data?.length ?? 0)
+    // Get session to filter by user ID (prevents wide scans and timeouts)
+    const { data: { session } } = await supabaseClient.auth.getSession()
+    if (!session?.user) return
+
+    const { data, error } = await supabaseClient
+      .from('approval_queue')
+      .select('id')
+      .eq('status', 'pending')
+      .or(`created_by.eq.${session.user.id},user_id.eq.${session.user.id}`)
+
+    if (!error) {
+      setPendingApprovalCount(data?.length ?? 0)
+    } else {
+      console.error('[LayoutStoreHydrator] Refresh failed:', error.message)
+    }
   }, [setPendingApprovalCount])
 
   // Realtime subscription for instant bell updates
