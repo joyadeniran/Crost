@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ControlStyleCard } from '@/components/onboarding/ControlStyleCard'
@@ -52,19 +53,19 @@ export default function ControlPage() {
   return (
     <div className="onboarding-content animate-fade-in">
       <div className="main-flow">
-        <button onClick={() => router.push('/onboarding/identity')} className="back-link">
+        <button onClick={() => router.push('/onboarding/identity')} className="back-link" style={{ marginBottom: '40px', display: 'block', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '14px' }}>
           ← Back
         </button>
         <header className="step-header">
           <span className="time-remaining">~2 min left</span>
           <h1>How do you want to operate?</h1>
-          <p className="subtitle">
+          <p className="subtitle" style={{ color: 'rgba(255,255,255,0.5)', marginTop: '16px', fontSize: '18px', maxWidth: '600px' }}>
             This sets your risk tolerance. Your team operates under the Crost Constitution — 
             agents never act without your sign-off on anything irreversible.
           </p>
         </header>
 
-        <section className="control-grid">
+        <section className="control-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', margin: '40px 0' }}>
           {OPTIONS.map(opt => (
             <ControlStyleCard 
               key={opt.id}
@@ -75,7 +76,7 @@ export default function ControlPage() {
           ))}
         </section>
 
-        <div className="action-row animate-fade-in" style={{ marginTop: '40px', justifyContent: 'center' }}>
+        <div className="action-row animate-fade-in" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
           <button
             onClick={handleProceed}
             className="primary-btn-crost lg"
@@ -84,12 +85,14 @@ export default function ControlPage() {
           </button>
         </div>
 
-        <footer className="footer-note">
+        <footer className="footer-note" style={{ marginTop: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
           <p>You can change this anytime in Settings → Control Style.</p>
         </footer>
       </div>
 
-      <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
+      <div className="profile-summary-container">
+        <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
+      </div>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { ProgressLine } from '@/components/onboarding/ProgressLine'
+import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
 
 const PLACEHOLDERS: Record<string, string[]> = {
@@ -16,7 +17,7 @@ const PLACEHOLDERS: Record<string, string[]> = {
 export default function ActivatePage() {
   const router = useRouter()
   const { 
-    selectedDepartments, businessCategory, founderName,
+    selectedDepartments, businessCategory, founderName, companyName, city, country, stage,
     setFirstGoal, setOrcPlan 
   } = useOnboardingStore()
 
@@ -75,7 +76,6 @@ export default function ActivatePage() {
       console.error('Session refresh failed (non-fatal):', err)
     }
     // Hard redirect so the browser re-validates session cookies with the server
-    // router.push() uses client cache and may still see the old session state
     window.location.href = '/dashboard'
   }
 
@@ -98,14 +98,10 @@ export default function ActivatePage() {
         setFirstGoal(goal)
       }
 
-      // Hand the goal ID to the War Room via localStorage.
-      // The hard redirect clears React state, so the War Room reads this key on mount
-      // and loads the pending goal so the founder sees the plan immediately.
       if (data.goal_id) {
         try { localStorage.setItem('crost-pending-goal-id', data.goal_id) } catch {}
       }
 
-      // Successfully got plan, finalize progress
       setProgress(4)
       setTimeout(finalizeAndRedirect, 2000)
     } catch (err) {
@@ -118,7 +114,6 @@ export default function ActivatePage() {
   const handleSkip = async () => {
     setLoading(true)
     try {
-      // Even on skip, we need to mark the user as 'complete' so they can reach the dashboard
       await fetch('/api/onboarding/complete-final', { method: 'POST' })
       await finalizeAndRedirect()
     } catch (err) {
@@ -127,100 +122,121 @@ export default function ActivatePage() {
   }
 
   return (
-    <div className="onboarding-container">
-      <div className="activation-shell glass-panel">
-        {phase === 1 && (
-          <div className="phase-vignette animate-fade-in">
-             <header className="activation-header">
-               <h1>Initialising your team...</h1>
-               <p>Setting up context for {selectedDepartments.join(' & ')}</p>
-             </header>
+    <div className="onboarding-content animate-fade-in">
+      <div className="main-flow">
+        <div className="activation-shell glass-panel" style={{ padding: '60px', width: '100%', borderRadius: '24px' }}>
+          {phase === 1 && (
+            <div className="phase-vignette animate-fade-in">
+               <header className="activation-header" style={{ marginBottom: '40px' }}>
+                 <h1 style={{ fontSize: '32px', marginBottom: '12px' }}>Initialising your team...</h1>
+                 <p style={{ color: 'rgba(255,255,255,0.5)' }}>Setting up context for {selectedDepartments.join(' & ')}</p>
+               </header>
 
-             <div className="progress-stack">
-               {selectedDepartments.map((slug, idx) => (
+               <div className="progress-stack">
+                 {selectedDepartments.map((slug, idx) => (
+                   <ProgressLine 
+                     key={slug}
+                     label={slug.toUpperCase()}
+                     status={completeCount > idx ? "Ready" : "Loading business brief"}
+                     duration={2000 + (idx * 1500)}
+                     onComplete={() => setCompleteCount(prev => prev + 1)}
+                   />
+                 ))}
                  <ProgressLine 
-                   key={slug}
-                   label={slug.toUpperCase()}
-                   status={completeCount > idx ? "Ready" : "Loading business brief"}
-                   duration={2000 + (idx * 1500)}
+                   label="ORC"
+                   status={completeCount > selectedDepartments.length ? "Operational" : "Synchronizing system..."}
+                   duration={7000}
                    onComplete={() => setCompleteCount(prev => prev + 1)}
                  />
-               ))}
-               <ProgressLine 
-                 label="ORC"
-                 status={completeCount > selectedDepartments.length ? "Operational" : "Synchronizing system..."}
-                 duration={7000}
-                 onComplete={() => setCompleteCount(prev => prev + 1)}
-               />
-             </div>
-          </div>
-        )}
+               </div>
+            </div>
+          )}
 
-        {phase === 2 && (
-          <div className="phase-vignette animate-fade-in">
-            <header className="activation-header">
-               <h1>Your team is ready.</h1>
-               <p>What&apos;s the first thing you want to get done?</p>
-             </header>
+          {phase === 2 && (
+            <div className="phase-vignette animate-fade-in">
+              <header className="activation-header" style={{ marginBottom: '40px' }}>
+                 <h1 style={{ fontSize: '32px', marginBottom: '12px' }}>Your team is ready.</h1>
+                 <p style={{ color: 'rgba(255,255,255,0.5)' }}>What&apos;s the first thing you want to get done?</p>
+               </header>
 
-             <form onSubmit={handleGoalSubmit} className="goal-input-area">
-                <textarea 
-                  className="goal-textarea"
-                  placeholder={placeholder}
-                  value={goal}
-                  onChange={e => setGoal(e.target.value)}
-                  autoFocus
-                />
-                <div className="action-row">
-                  <button type="button" onClick={handleSkip} className="skip-btn">Skip for now</button>
-                  <button type="submit" className="activate-btn" disabled={!goal || loading}>
-                    {loading ? 'Processing...' : 'Activate Orc →'}
-                  </button>
+               <form onSubmit={handleGoalSubmit} className="goal-input-area" style={{ position: 'relative' }}>
+                  <textarea 
+                    className="goal-textarea glass-panel"
+                    style={{ width: '100%', minHeight: '160px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', borderRadius: '16px', color: '#fff', fontSize: '18px', resize: 'none' }}
+                    placeholder={placeholder}
+                    value={goal}
+                    onChange={e => setGoal(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="action-row" style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button type="button" onClick={handleSkip} className="skip-btn" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '14px' }}>Skip for now</button>
+                    <button type="submit" className="primary-btn-crost lg" disabled={!goal || loading}>
+                      {loading ? 'Processing...' : 'Activate Orc →'}
+                    </button>
+                  </div>
+               </form>
+            </div>
+          )}
+
+          {phase === 3 && (
+            <div className="phase-vignette animate-fade-in">
+              <header className="activation-header" style={{ marginBottom: '40px', textAlign: 'center' }}>
+                 <h1 style={{ fontSize: '32px' }}>Orc is breaking this down...</h1>
+              </header>
+
+              <div className="orc-status-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className={`orc-status-item ${progress === 1 ? 'running' : progress > 1 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 1 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                  {progress === 1 && <div className="spinner"></div>}
+                  {progress > 1 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
+                  <span>Querying your team&apos;s capabilities</span>
                 </div>
-             </form>
-          </div>
-        )}
-
-        {phase === 3 && (
-          <div className="phase-vignette animate-fade-in">
-            <header className="activation-header">
-               <h1>Orc is breaking this down...</h1>
-            </header>
-
-            <div className="orc-status-list">
-              <div className={`orc-status-item ${progress === 1 ? 'running' : progress > 1 ? 'complete' : 'pending'}`}>
-                {progress === 1 && <div className="spinner"></div>}
-                {progress > 1 && <span className="check">✓</span>}
-                <span>Querying your team&apos;s capabilities</span>
+                <div className={`orc-status-item ${progress === 2 ? 'running' : progress > 2 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 2 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                  {progress === 2 && <div className="spinner"></div>}
+                  {progress > 2 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
+                  <span>Drafting the plan</span>
+                </div>
+                <div className={`orc-status-item ${progress === 3 ? 'running' : progress > 3 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 3 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                  {progress === 3 && <div className="spinner"></div>}
+                  {progress > 3 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
+                  <span>Preparing your first approvals</span>
+                </div>
               </div>
-              <div className={`orc-status-item ${progress === 2 ? 'running' : progress > 2 ? 'complete' : 'pending'}`}>
-                {progress === 2 && <div className="spinner"></div>}
-                {progress > 2 && <span className="check">✓</span>}
-                <span>Drafting the plan</span>
-              </div>
-              <div className={`orc-status-item ${progress === 3 ? 'running' : progress > 3 ? 'complete' : 'pending'}`}>
-                {progress === 3 && <div className="spinner"></div>}
-                {progress > 3 && <span className="check">✓</span>}
-                <span>Preparing your first approvals</span>
-              </div>
-            </div>
-            
-            <div className="activation-footer" style={{ marginTop: '32px', textAlign: 'center' }}>
-              <p className="redirect-note" style={{ opacity: 0.6 }}>Preparing your dashboard...</p>
               
-              {showRedirect && (
-                <button 
-                  onClick={() => router.push('/dashboard')}
-                  className="secondary-button"
-                  style={{ marginTop: '20px', animation: 'fade-in 0.5s ease' }}
-                >
-                  Taking too long? Go to Dashboard →
-                </button>
-              )}
+              <div className="activation-footer" style={{ marginTop: '48px', textAlign: 'center' }}>
+                <p className="redirect-note" style={{ opacity: 0.6, fontSize: '14px' }}>Preparing your dashboard...</p>
+                
+                {showRedirect && (
+                  <button 
+                    onClick={() => router.push('/dashboard')}
+                    className="secondary-button"
+                    style={{ marginTop: '24px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '12px 24px', borderRadius: '100px', cursor: 'pointer' }}
+                  >
+                    Taking too long? Go to Dashboard →
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      <div className="profile-summary-container">
+        <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
+      </div>
+
+      <style jsx>{`
+        .spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(0, 212, 170, 0.2);
+          border-top-color: var(--accent);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
