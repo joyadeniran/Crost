@@ -14,6 +14,28 @@ const DecisionSchema = z.object({
   decided_by: z.string().optional(),
 })
 
+export async function GET(_req: NextRequest, { params }: Params) {
+  try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+      .from('approval_queue')
+      .select('*')
+      .eq('id', params.id)
+      .eq('created_by', user.id)
+      .maybeSingle()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ data })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message ?? 'Failed' }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const authClient = await createSupabaseServerComponentClient()
@@ -78,15 +100,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // ─── AGENT EXECUTION LOOP ────────────────────────────────────────────────
     // If approved, execute the tool call.
+    let executionError: string | null = null
+    let executionFinalStatus: 'executed' | 'failed' | null = null
     if (decision === 'approved') {
       const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
-      
-      const normalizedAction = approval.action_type.toLowerCase()
-      const isComposioAction = process.env.COMPOSIO_API_KEY && (
-        SUPPORTED_TOOLKITS.some(kit => normalizedAction.startsWith(kit + '_')) || 
-        (approval.action_type.includes('_') && approval.action_type === approval.action_type.toUpperCase())
+
+      // When action_type was normalised to 'tool_call' during enqueue, the real
+      // composio action name is stashed in payload.__tool_action.
+      const rawComposioAction: string | null =
+        (approval.payload as any)?.__tool_action
+        ?? (approval.action_type !== 'tool_call' ? approval.action_type : null)
+      const composioActionForCall = rawComposioAction ?? approval.action_type
+      const normalizedAction = (composioActionForCall || '').toLowerCase()
+      // Derive the composio toolkit slug from the action (e.g. GMAIL_SEND_EMAIL → gmail)
+      const composioService = SUPPORTED_TOOLKITS.find(kit => normalizedAction.startsWith(kit + '_'))
+        ?? ((approval.payload as any)?.__service ?? null)
+      const isComposioAction = !!process.env.COMPOSIO_API_KEY && (
+        !!composioService ||
+        (composioActionForCall.includes('_') && composioActionForCall === composioActionForCall.toUpperCase())
       )
-      
+
       const isInternalTool = ['supabase_query', 'company_memos', 'save_document', 'get_sales_data'].includes(normalizedAction)
 
       if (isComposioAction || isInternalTool) {
@@ -94,11 +127,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           let result: any;
 
           if (isComposioAction) {
-            console.log(`[Approval Execution] Executing Composio action "${approval.action_type}" for user ${user.id}`)
+            // Pre-flight: verify the user has a connected account for this service
+            const serviceSlug = composioService
+              ?? (approval.action_type.split('_')[0] ?? '').toLowerCase()
+            if (serviceSlug) {
+              const { data: connRow } = await supabase
+                .from('connections')
+                .select('status')
+                .eq('user_id', user.id)
+                .eq('tool_slug', serviceSlug)
+                .maybeSingle()
+              if (!connRow || connRow.status !== 'connected') {
+                throw new Error(`${serviceSlug.toUpperCase()} is not connected. Connect it in Settings → Integrations, then re-run this action.`)
+              }
+            }
+
+            console.log(`[Approval Execution] Executing Composio action "${composioActionForCall}" for user ${user.id}`)
             const { Composio } = await import("@composio/core")
             const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
             const entity = await composio.create(user.id)
-            result = await (entity as any).executeAction(approval.action_type, approval.payload)
+            // Strip internal metadata keys before sending to composio
+            const execPayload = { ...(approval.payload as any) }
+            delete execPayload.__tool_action
+            delete execPayload.__service
+            result = await (entity as any).executeAction(composioActionForCall, execPayload)
           } else {
             console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)
             // Call our own internal tool execution endpoint
@@ -139,15 +191,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             status: 'executed',
             execution_result: result as any
           }).eq('id', params.id)
+          executionFinalStatus = 'executed'
 
-          await supabase.from('event_log').insert({
+          // Note: event_type 'tool_executed' is whitelisted in event_log CHECK constraint
+          const { error: logErr } = await supabase.from('event_log').insert({
             department_slug: approval.department_slug,
             goal_id: approval.goal_id,
-            event_type: 'action_executed',
+            event_type: 'tool_executed',
             description: `Executed approved action: ${approval.action_label}`,
             metadata: { result: cleanLargePayload(result), tool: normalizedAction },
             created_by: user.id
           })
+          if (logErr) console.error('[Approval Execution] event_log insert failed', logErr.message)
 
           // ─── TASK COMPLETION & CHAIN REACTION ──────────────────────────────
           // If the approval was tied to a specific task, mark it completed.
@@ -174,15 +229,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           
         } catch (execErr: any) {
           console.error(`[Approval Execution Failure]`, execErr)
+          executionError = execErr?.message ?? 'Unknown execution failure'
+          executionFinalStatus = 'failed'
           await supabase.from('approval_queue').update({
             status: 'failed',
-            execution_result: { error: execErr.message }
+            execution_result: { error: executionError }
           }).eq('id', params.id)
+          await supabase.from('event_log').insert({
+            department_slug: approval.department_slug,
+            goal_id: approval.goal_id,
+            event_type: 'tool_failed',
+            description: `Execution failed: ${approval.action_label}`,
+            metadata: { error: executionError, tool: normalizedAction },
+            created_by: user.id
+          })
         }
       }
     }
 
-    return NextResponse.json({ data: updated })
+    return NextResponse.json({
+      data: updated,
+      execution_status: executionFinalStatus,
+      execution_error: executionError,
+    })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
