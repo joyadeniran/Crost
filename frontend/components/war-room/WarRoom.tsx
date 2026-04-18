@@ -246,15 +246,21 @@ type InlineMessage = {
   approvalRiskLevel?: string
   approvalPayload?: Record<string, any>
   approvalDeptName?: string
+  approvalError?: string
+  approvalExecutionError?: string
 }
+
+const COMMAND_MESSAGES_STORAGE_KEY = 'crost-war-room-pending-approvals'
 
 // Inline approve/reject card — shown instead of raw JSON when approval_requested
 function ApprovalCard({
   msg,
   onDecide,
+  onSkip,
 }: {
   msg: InlineMessage
   onDecide: (msgId: string, decision: 'approved' | 'rejected') => Promise<void>
+  onSkip: (msgId: string) => void
 }) {
   const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -272,17 +278,27 @@ function ApprovalCard({
     : '#4ade80'
 
   if (msg.approvalDecision) {
+    const isFailed = !!msg.approvalExecutionError
     return (
       <div style={{ marginTop: 8 }}>
         <span style={{
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 11,
           fontWeight: 700,
-          color: msg.approvalDecision === 'approved' ? '#4ade80' : '#f87171',
+          color: msg.approvalDecision === 'approved'
+            ? (isFailed ? '#f87171' : '#4ade80')
+            : '#f87171',
           letterSpacing: '0.06em',
         }}>
-          {msg.approvalDecision === 'approved' ? '✓ APPROVED — ACTION EXECUTING' : '✗ REJECTED'}
+          {msg.approvalDecision === 'approved'
+            ? (isFailed ? '✗ EXECUTION FAILED' : '✓ APPROVED — ACTION EXECUTING')
+            : '✗ REJECTED'}
         </span>
+        {isFailed && (
+          <div style={{ fontSize: 11, color: '#f87171', opacity: 0.85, marginTop: 6, lineHeight: 1.45 }}>
+            {msg.approvalExecutionError}
+          </div>
+        )}
       </div>
     )
   }
@@ -371,6 +387,21 @@ function ApprovalCard({
         </>
       )}
 
+      {msg.approvalError && (
+        <div style={{
+          fontSize: 11,
+          color: '#f87171',
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.25)',
+          borderRadius: 4,
+          padding: '6px 8px',
+          marginBottom: 8,
+          lineHeight: 1.45,
+        }}>
+          {msg.approvalError}
+        </div>
+      )}
+
       {/* Approve / Reject */}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button
@@ -412,6 +443,29 @@ function ApprovalCard({
           {deciding === 'rejected' ? 'Rejecting…' : '✗ Reject'}
         </button>
       </div>
+
+      {/* Skip — escape hatch that dismisses the task without hitting the backend.
+          Only lets the founder escape; does not consume the pending approval row. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <button
+          onClick={() => onSkip(msg.id)}
+          disabled={!!deciding}
+          style={{
+            background: 'transparent',
+            color: 'var(--text-3)',
+            border: 'none',
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 10,
+            cursor: deciding ? 'not-allowed' : 'pointer',
+            padding: 0,
+            textDecoration: 'underline',
+            opacity: deciding ? 0.4 : 0.7,
+          }}
+          title="Dismiss this card — the approval stays in the Inbox until you decide"
+        >
+          Skip for now
+        </button>
+      </div>
     </div>
   )
 }
@@ -420,10 +474,12 @@ function CommandThread({
   messages,
   onDismiss,
   onApprovalDecision,
+  onApprovalSkip,
 }: {
   messages: InlineMessage[]
   onDismiss: (id: string) => void
   onApprovalDecision: (msgId: string, decision: 'approved' | 'rejected') => Promise<void>
+  onApprovalSkip: (msgId: string) => void
 }) {
   if (messages.length === 0) return null
   return (
@@ -482,7 +538,7 @@ function CommandThread({
 
             {/* Approval card (persistent, non-dismissible) */}
             {(msg.approvalPending || msg.approvalDecision) && (
-              <ApprovalCard msg={msg} onDecide={onApprovalDecision} />
+              <ApprovalCard msg={msg} onDecide={onApprovalDecision} onSkip={onApprovalSkip} />
             )}
 
             {/* Regular text response */}
@@ -1305,6 +1361,60 @@ export function WarRoom() {
   const [reportDismissed, setReportDismissed] = useState(false)
   const [decisions, setDecisions] = useState<Record<string, TaskDecision>>({})
   const [commandMessages, setCommandMessages] = useState<InlineMessage[]>([])
+  const [messagesHydrated, setMessagesHydrated] = useState(false)
+
+  // Rehydrate pending-approval cards from localStorage on mount and reconcile
+  // with server state — if the approval has already been decided elsewhere
+  // (e.g. /dashboard/approvals), reflect that here instead of showing a stale card.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COMMAND_MESSAGES_STORAGE_KEY)
+      if (!raw) { setMessagesHydrated(true); return }
+      const parsed = JSON.parse(raw) as InlineMessage[]
+      if (!Array.isArray(parsed) || parsed.length === 0) { setMessagesHydrated(true); return }
+      setCommandMessages(parsed)
+      // Reconcile each approval's status with the server
+      ;(async () => {
+        const updates = await Promise.all(parsed.map(async (msg) => {
+          if (!msg.approvalId) return msg
+          try {
+            const res = await fetch(`/api/approvals/${msg.approvalId}`)
+            if (!res.ok) return msg
+            const json = await res.json()
+            const status = json?.data?.status
+            if (!status || status === 'pending') return msg
+            if (status === 'approved' || status === 'executed') {
+              return { ...msg, approvalPending: false, approvalDecision: 'approved' as const }
+            }
+            if (status === 'rejected') {
+              return { ...msg, approvalPending: false, approvalDecision: 'rejected' as const }
+            }
+            if (status === 'failed') {
+              return { ...msg, approvalPending: false, approvalDecision: 'approved' as const, approvalExecutionError: json?.data?.execution_result?.error ?? 'Execution failed' }
+            }
+            return msg
+          } catch { return msg }
+        }))
+        setCommandMessages(updates)
+        setMessagesHydrated(true)
+      })()
+    } catch {
+      setMessagesHydrated(true)
+    }
+  }, [])
+
+  // Persist only messages with active approval state (pending or recently decided)
+  useEffect(() => {
+    if (!messagesHydrated) return
+    try {
+      const toPersist = commandMessages.filter(m => m.approvalPending || m.approvalDecision)
+      if (toPersist.length === 0) {
+        localStorage.removeItem(COMMAND_MESSAGES_STORAGE_KEY)
+      } else {
+        localStorage.setItem(COMMAND_MESSAGES_STORAGE_KEY, JSON.stringify(toPersist))
+      }
+    } catch { /* quota / SSR — ignore */ }
+  }, [commandMessages, messagesHydrated])
 
   // Clear decisions when a new goal is set
   useEffect(() => {
@@ -1377,27 +1487,85 @@ export function WarRoom() {
 
   const handleApprovalDecision = useCallback(async (msgId: string, decision: 'approved' | 'rejected') => {
     const msg = commandMessages.find(m => m.id === msgId)
-    if (!msg?.approvalId) return
+    if (!msg?.approvalId) {
+      setCommandMessages(msgs => msgs.map(m =>
+        m.id === msgId
+          ? { ...m, approvalError: 'This approval is missing its ID — it was not saved correctly. Retry the task from scratch.' }
+          : m
+      ))
+      return
+    }
+    // Clear any prior error before attempting
+    setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, approvalError: undefined } : m))
     try {
       const res = await fetch(`/api/approvals/${msg.approvalId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),
       })
-      if (res.ok) {
+      let json: any = {}
+      try { json = await res.json() } catch { /* non-JSON body */ }
+      if (!res.ok) {
+        const errText = json?.error ?? `Request failed (${res.status})`
         setCommandMessages(msgs => msgs.map(m =>
-          m.id === msgId ? { ...m, approvalPending: false, approvalDecision: decision } : m
+          m.id === msgId ? { ...m, approvalError: errText } : m
         ))
+        return
       }
+      // Surface any execution error from the server (e.g. missing composio connection)
+      const execError: string | null = json?.execution_error ?? null
+      setCommandMessages(msgs => msgs.map(m =>
+        m.id === msgId
+          ? {
+              ...m,
+              approvalPending: false,
+              approvalDecision: decision,
+              approvalExecutionError: execError ?? undefined,
+            }
+          : m
+      ))
     } catch (err: any) {
       console.error('[handleApprovalDecision]', err)
+      setCommandMessages(msgs => msgs.map(m =>
+        m.id === msgId
+          ? { ...m, approvalError: `Network error: ${err?.message ?? 'could not reach server'}` }
+          : m
+      ))
     }
   }, [commandMessages])
+
+  // Skip / dismiss — removes the card from the inline thread but leaves the
+  // underlying approval_queue row pending so it still shows up in the Inbox /
+  // bell notifications. Founder can decide later there.
+  const handleApprovalSkip = useCallback((msgId: string) => {
+    setCommandMessages(msgs => msgs.filter(m => m.id !== msgId))
+  }, [])
 
   const handleChatSubmit = useCallback(async (rawInput: string) => {
     const parsed = parseInput(rawInput)
 
     if (parsed.type === 'department') {
+      // Gate: refuse @dept references that don't correspond to an active department
+      // the founder has set up. This prevents silent failures where the user types
+      // @marketing but no such dept exists (or it's still in draft).
+      const dept = departments.find(d => d.slug.toLowerCase() === parsed.slug.toLowerCase())
+      if (!dept) {
+        const msgId = `dept-${Date.now()}`
+        setCommandMessages(msgs => [...msgs, {
+          id: msgId, type: 'dept', label: parsed.slug, input: parsed.message, isLoading: false,
+          response: `⚠ No department named "@${parsed.slug}" is set up. Create it in Departments first.`,
+        }])
+        return
+      }
+      if (dept.activation_stage !== 'active') {
+        const msgId = `dept-${Date.now()}`
+        setCommandMessages(msgs => [...msgs, {
+          id: msgId, type: 'dept', label: parsed.slug, input: parsed.message, isLoading: false,
+          response: `⚠ @${parsed.slug} is in "${dept.activation_stage}" stage — activate it in Departments before dispatching tasks.`,
+        }])
+        return
+      }
+
       const msgId = `dept-${Date.now()}`
       setCommandMessages(msgs => [...msgs, { id: msgId, type: 'dept', label: parsed.slug, input: parsed.message, isLoading: true }])
       try {
@@ -1407,6 +1575,23 @@ export function WarRoom() {
           body: JSON.stringify({ task: parsed.message }),
         })
         const json = await res.json()
+        // Surface missing-connection cleanly — user must connect the tool first
+        if (!res.ok && json?.missing_connection) {
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
+            ...m,
+            isLoading: false,
+            response: `⚠ ${json.service?.toUpperCase?.() ?? 'This tool'} is not connected. Open Settings → Integrations and connect it, then retry.`,
+          } : m))
+          return
+        }
+        if (!res.ok) {
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
+            ...m,
+            isLoading: false,
+            response: `Error: ${json?.error ?? `Request failed (${res.status})`}`,
+          } : m))
+          return
+        }
         if (json.approval_requested) {
           // Show human-readable approval card — never display the raw block
           setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
@@ -1623,6 +1808,7 @@ export function WarRoom() {
         messages={commandMessages}
         onDismiss={id => setCommandMessages(msgs => msgs.filter(m => m.id !== id))}
         onApprovalDecision={handleApprovalDecision}
+        onApprovalSkip={handleApprovalSkip}
       />
 
       {isPlanning && <PlanningIndicator />}
