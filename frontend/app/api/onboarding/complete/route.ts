@@ -153,28 +153,41 @@ Never claim the founder's personal identity as your own.`
     if (selectedDepartments && selectedDepartments.length > 0) {
       for (const slug of selectedDepartments) {
         // Check if user already has this department
-        const { data: existing } = await supabase
+        const { data: existing, error: existingErr } = await supabase
           .from('departments')
           .select('id')
           .eq('slug', slug)
           .eq('created_by', user.id)
           .maybeSingle()
 
+        if (existingErr) {
+          console.error(`Error checking existing department ${slug}:`, existingErr)
+          continue
+        }
+
         if (existing) {
           // Already exists — just activate
-          await supabase.from('departments').update({ activation_stage: 'active' }).eq('id', existing.id)
+          const { error: updateErr } = await supabase.from('departments').update({ activation_stage: 'active' }).eq('id', existing.id)
+          if (updateErr) {
+            console.error(`Error updating department ${slug}:`, updateErr)
+          }
         } else {
           // Clone from global template
-          const { data: template } = await supabase
+          const { data: template, error: templateErr } = await supabase
             .from('departments')
             .select('*')
             .eq('slug', slug)
             .is('created_by', null)
             .maybeSingle()
 
+          if (templateErr) {
+            console.error(`Error fetching template for ${slug}:`, templateErr)
+            continue
+          }
+
           if (template) {
             // Clone template: copy all fields except ID/timestamps, add user context
-            await supabase.from('departments').insert({
+            const { error: insertErr } = await supabase.from('departments').insert({
               name: template.name,
               slug: template.slug,
               persona_prompt: template.persona_prompt,
@@ -192,6 +205,11 @@ Never claim the founder's personal identity as your own.`
               activation_stage: 'active',
               status: 'idle',
             })
+            if (insertErr) {
+              console.error(`Error cloning department ${slug}:`, insertErr)
+            }
+          } else {
+            console.warn(`Template not found for department: ${slug}`)
           }
         }
       }

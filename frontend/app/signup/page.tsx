@@ -7,12 +7,15 @@ import { toast } from '@/components/ui/toaster'
 import Link from 'next/link'
 
 export default function SignUpPage() {
-  const [email, setEmail] = useState('')
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const emailParam = searchParams?.get('email') || ''
+
+  const [email, setEmail] = useState(emailParam)
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [showOtp, setShowOtp] = useState(false)
-
+...
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)

@@ -106,11 +106,11 @@ export default function TeamPage() {
 
         <footer className="footer-actions">
            <button 
-             className="start-btn" 
+             className="primary-btn-crost" 
              disabled={selectedDepartments.length < 2 || submitting}
              onClick={handleStart}
            >
-             {submitting ? 'Preparing agents...' : 'Start with these'}
+             {submitting ? 'Preparing agents...' : 'Start with these'} <span>→</span>
            </button>
            <span className="selection-count">
              {selectedDepartments.length} {selectedDepartments.length === 1 ? 'department' : 'departments'} selected

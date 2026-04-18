@@ -128,7 +128,7 @@ export default function ActivatePage() {
 
   return (
     <div className="onboarding-container">
-      <div className="activation-shell">
+      <div className="activation-shell glass-panel">
         {phase === 1 && (
           <div className="phase-vignette animate-fade-in">
              <header className="activation-header">

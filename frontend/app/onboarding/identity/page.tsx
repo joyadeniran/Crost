@@ -9,7 +9,6 @@ import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 function IdentityContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const email = searchParams.get('email')
 
   const { 
     founderName, companyName, city, country, businessDescription, businessCategory, stage,
@@ -22,6 +21,7 @@ function IdentityContent() {
   const [inputCompany, setInputCompany] = useState(companyName || '')
   const [inputLocation, setInputLocation] = useState(city && country ? `${city}, ${country}` : '')
   const [inputDesc, setInputDesc] = useState(businessDescription || '')
+  const [selectedStage, setSelectedStage] = useState<'starting' | 'mvp' | 'traction' | 'scaling' | null>(null)
 
   // Reflection states
   const [nameReflection, setNameReflection] = useState('')
@@ -35,7 +35,7 @@ function IdentityContent() {
     }
     if (founderName && city && businessDescription) {
       currentStep = 3
-      setDescReflection(`${businessCategory}. Noted.`)
+      setDescReflection(`${businessCategory || 'Business model'}. Noted.`)
     }
     setStep(currentStep)
   }, [founderName, companyName, city, businessDescription, businessCategory])
@@ -76,7 +76,7 @@ function IdentityContent() {
     } catch (err) {
       setIdentity({ 
         businessDescription: inputDesc, 
-        businessCategory: inputDesc 
+        businessCategory: 'Custom Business'
       })
       setDescReflection(`Got it — I'll learn more as we work.`)
       setStep(3)
@@ -85,7 +85,8 @@ function IdentityContent() {
     }
   }
 
-  const handleStageSelect = async (selectedStage: 'starting' | 'mvp' | 'traction' | 'scaling') => {
+  const handleStageSelect = async () => {
+    if (!selectedStage) return
     setIdentity({ stage: selectedStage })
     // Update onboarding step in Supabase to allow middleware to let user pass
     await fetch('/api/onboarding/set-step', {
@@ -109,7 +110,7 @@ function IdentityContent() {
           <div className={`question-block ${step === 1 ? 'visible' : ''}`}>
             <p className="prompt">What&apos;s your name, and where are you building?</p>
             {step === 1 ? (
-              <form onSubmit={handleIdentitySubmit} className="identity-form animate-fade-in">
+              <form onSubmit={handleIdentitySubmit} className="identity-form animate-fade-in glass-panel">
                 <div className="input-row">
                   <input
                     type="text"
@@ -134,7 +135,9 @@ function IdentityContent() {
                     required
                   />
                 </div>
-                <button type="submit" className="submit-btn">→</button>
+                <button type="submit" className="submit-btn-text">
+                  Next <span>→</span>
+                </button>
               </form>
             ) : (
               <ReflectionBlock text={nameReflection} onEdit={() => setStep(1)} />
@@ -148,14 +151,15 @@ function IdentityContent() {
               {step === 2 ? (
                 <form onSubmit={handleBusinessSubmit} className="business-form animate-fade-in">
                   <textarea
+                    className="glass-panel"
                     placeholder="We help small retailers buy goods on credit..."
                     value={inputDesc}
                     onChange={e => setInputDesc(e.target.value)}
                     required
                     autoFocus
                   />
-                  <button type="submit" className="submit-btn" disabled={loading}>
-                    {loading ? '...' : '→'}
+                  <button type="submit" className="submit-btn-text" disabled={loading} style={{ position: 'absolute', right: '16px', bottom: '16px' }}>
+                    {loading ? 'Thinking...' : 'Continue'} <span>→</span>
                   </button>
                 </form>
               ) : (
@@ -169,22 +173,32 @@ function IdentityContent() {
             <div className={`question-block ${step === 3 ? 'visible' : ''}`}>
               <p className="prompt">What stage are you at?</p>
               <div className="pill-container">
-                {['starting', 'mvp', 'traction', 'scaling'].map((s) => (
+                {(['starting', 'mvp', 'traction', 'scaling'] as const).map((s) => (
                   <button
                     key={s}
-                    className="pill-btn"
-                    onClick={() => handleStageSelect(s as any)}
+                    className={`pill-btn ${selectedStage === s || (stage === s && !selectedStage) ? 'active' : ''}`}
+                    onClick={() => setSelectedStage(s)}
                   >
                     {s === 'starting' ? 'Just starting' : s === 'mvp' ? 'Early MVP' : s === 'traction' ? 'Getting traction' : 'Scaling'}
                   </button>
                 ))}
+              </div>
+              
+              <div className="action-row animate-fade-in" style={{ marginTop: '32px' }}>
+                <button 
+                  className="primary-btn-crost" 
+                  onClick={handleStageSelect}
+                  disabled={!selectedStage && !stage}
+                >
+                  Confirm Stage & Proceed <span>→</span>
+                </button>
               </div>
             </div>
           )}
         </section>
       </div>
 
-      <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
+      <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage: selectedStage || stage }} />
     </div>
   )
 }

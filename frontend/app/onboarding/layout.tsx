@@ -10,8 +10,7 @@ export default function OnboardingLayout({
 }) {
   return (
     <div
-      className="onboarding-wrapper"
-      style={{ position: 'relative', ['--font-fraunces' as string]: 'var(--font-syne)' }}
+      className="onboarding-wrapper relative"
     >
       <div className="onboarding-top-bar">
         <OnboardingLogoutButton />

@@ -50,8 +50,8 @@ export async function middleware(request: NextRequest) {
       const step = user.user_metadata?.onboarding_step
       let target = '/onboarding/identity'
       if (step === 'activated') target = '/onboarding/activate'
-      else if (step === 'control') target = '/onboarding/control'
       else if (step === 'team') target = '/onboarding/team'
+      else if (step === 'control') target = '/onboarding/control'
       
       if (pathname !== target) {
         return NextResponse.redirect(new URL(target, request.url))
@@ -70,8 +70,8 @@ export async function middleware(request: NextRequest) {
        const step = user.user_metadata?.onboarding_step
        let target = '/onboarding/identity'
        if (step === 'activated') target = '/onboarding/activate'
-       else if (step === 'control') target = '/onboarding/control'
        else if (step === 'team') target = '/onboarding/team'
+       else if (step === 'control') target = '/onboarding/control'
 
        if (pathname.startsWith('/onboarding') && pathname !== target) {
          return NextResponse.redirect(new URL(target, request.url))
