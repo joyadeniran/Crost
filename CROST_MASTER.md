@@ -3,9 +3,57 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.8  
+**Current Version:** 9.9  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Live — Onboarding E2E verified and working (v9.8). All stages accessible.
+**Deployment Status:** 🚀 Live — Onboarding UX/UI & Protection Hardened (v9.9). Glassmorphism applied.
+
+---
+
+## Session v9.9 - Onboarding UX/UI & Protection Hardening
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Onboarding flow is now visually premium, intuitive, and robustly protected. "Missing button" issues resolved; refresh loops eliminated; signup friction reduced.
+
+### Changes
+
+**1. `frontend/app/onboarding/identity/page.tsx`**
+- **Explicit UX**: Replaced cryptic `→` submit buttons with labeled `Next <span>→</span>` and `Continue <span>→</span>` buttons.
+- **Stage Selection**: Step 3 (Stage) now requires an explicit "Confirm Stage & Proceed" button click instead of immediate redirect on pill selection.
+- **State Hydration**: Fixed lag where form fields appeared empty on mount; local state now correctly syncs from `OnboardingStore` values.
+- **Glassmorphism**: Applied `.glass-panel` class to all form containers.
+
+**2. `frontend/app/onboarding/control/page.tsx`**
+- **Selection UX**: Added an explicit "Confirm & Build Team" primary button; users can now toggle between Careful/Balanced/Aggressive before committing.
+- **Aesthetics**: Applied glassmorphism and premium layout spacing.
+- **Step Tracking**: Calls `api/onboarding/set-step` to persist progress to Supabase.
+
+**3. `frontend/app/globals.css`**
+- **New Classes**: Added `.glass-panel` (premium blur + border), `.submit-btn-text` (inline labeled buttons), and `.primary-btn-crost` (large high-intent action buttons).
+- **Typography**: Removed forced `Syne` override for `Fraunces` in headers. Headers now correctly use the editorial serif face or fallback.
+- **Micro-interactions**: Enhanced hover states and transitions for all onboarding elements.
+
+**4. `frontend/app/signup/page.tsx`**
+- **Frictionless Signup**: Pre-fills the email field from the `?email=` query parameter (Auth Bridge support).
+- **Hardened Verification**: OTP verification now hard-redirects to `/onboarding/identity`, ensuring new users start exactly where they should.
+
+**5. `frontend/middleware.ts`**
+- **Robust Routing**: Added the `'team'` step to the routing logic in both dashboard protection and onboarding redirection blocks.
+- **Loop Prevention**: Cleaned up duplicate logic and ensured users are strictly routed to their current `onboarding_step` from metadata.
+
+**6. `frontend/app/onboarding/team/page.tsx` & `activate/page.tsx`**
+- **Visual Polish**: Updated buttons to use the new `.primary-btn-crost` standard and wrapped activation shell in a `.glass-panel`.
+
+### Files Changed
+- `frontend/app/onboarding/identity/page.tsx`
+- `frontend/app/onboarding/control/page.tsx`
+- `frontend/app/onboarding/team/page.tsx`
+- `frontend/app/onboarding/activate/page.tsx`
+- `frontend/app/onboarding/layout.tsx`
+- `frontend/app/signup/page.tsx`
+- `frontend/middleware.ts`
+- `frontend/app/globals.css`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
@@ -699,7 +747,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - ✅ **Constitution Page** — Always renders editor with 8 core clauses; shows fallback when no DB row exists (v5.9)
 - ✅ **Memos Filtering** — Founder clarification dialogues excluded from memo feed (v5.9)
 - ✅ **Artifacts Filtering** — TOOL EXECUTION FAILED entries filtered client-side (v5.9)
-- ✅ **Settings Identity Persistence** — Company profile fallback query added to pre-populate founder data from onboarding (v5.9)
+- ✅ **Settings Identity Persistence** — company_profile fallback query added to pre-populate founder data from onboarding (v5.9)
 - ✅ **Onboarding Department Selection** — Global templates now returned alongside user departments; cloning logic fixed (v5.9)
 - ✅ **API Keys Encrypted** — AES-256-GCM at rest (`lib/crypto.ts`), requires `USER_API_ENCRYPTION_KEY` in Render env
 - ⚠️ **No GPU Support** — LiteLLM runs on standard Render containers (no acceleration)
@@ -745,6 +793,14 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
   - Unified Next.js build pipeline
   - Note: Current auth bridge makes this optional; can stay as-is indefinitely
 
+**COMPLETED FIXES (v9.9)**
+- [x] **Onboarding UX Explicit Buttons** — Replaced circular `→` buttons with labeled `Next` and `Continue` buttons in Identity stage. Added "Confirm Stage" and "Confirm & Build Team" buttons.
+- [x] **Premium Glassmorphism** — Added `.glass-panel` and `.primary-btn-crost` classes for a high-fidelity aesthetic. Applied blur, borders, and shadows globally to onboarding flow.
+- [x] **Onboarding Refresh Protection** — Middleware hardened to include `team` and `control` steps. Persisted `onboarding_step` to user metadata at every transition to eliminate refresh-to-start loops.
+- [x] **Signup Email Pre-fill** — `SignUpPage` now reads `?email=` from URL to eliminate re-entry friction for landing page referrals.
+- [x] **Typography Cleanup** — Removed forced `Syne` override for `Fraunces` in layout. Restored editorial typography hierarchy.
+- [x] **OTP-Protected Onboarding** — Verification now hard-redirects to `/onboarding/identity`, ensuring only verified sessions enter the identity flow.
+
 **COMPLETED FIXES (v8.6)**
 - [x] **Browser/Social Cookie Options** — Correctly configured `cookieOptions` in `createBrowserClient` and `signInWithOAuth` for the `.crosthq.com` domain.
 
@@ -771,7 +827,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - [x] **Template-First New Department UX** — “New Department” now offers existing department templates before the blank custom wizard
 - [x] **Constitution Seeding + Fallback** — User constitution rows are seeded at onboarding and the constitution page falls back to the global template safely
 - [x] **Memo/Artifact Separation for Tool Outputs** — Large tool outputs now create artifacts while memos keep concise readable references
-- [x] **Onboarding Build Font Fix** — Replaced `next/font/google` in onboarding with the local font system so production builds succeed in restricted environments
+- [x] **Onboarding Build Safety** — Removed live Google Fonts dependency from onboarding layout; build now uses the existing local font system and succeeds in restricted environments
 
 **COMPLETED FIXES (v6.6)**
 - [x] **Goal Cleanup Utility** — `scripts/clear_stuck_goals.ts` implements automated detection and cancellation of goals stuck in `executing` state due to placeholder dependency IDs.
@@ -826,7 +882,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - [x] **Goal Cancel Endpoint** — Already in `/api/goals/[id]` PATCH handler; sets status='cancelled'
 - [x] **Cancel Button in War Room (PlanCard)** — Already implemented; visible in plan header when executing/awaiting_approval
 - [x] **Retry + Skip Buttons** — Already implemented; appear in TaskApprovalItem for failed tasks
-- [x] **Orchestrator Cancellation** — "Cancel Goal" button now in OrcDialogue during clarification phase (v6.1)
+- [x] **Orchestrator Cancellation** — "Cancel Goal" button now in OrcDialogue clarification phase (v6.1)
 
 **COMPLETED FIXES (v5.9)**
 - [x] **Health Check** — HTML response rejection added
@@ -868,7 +924,7 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 | **Event-Driven Worker (Zero Poll)** | Realtime subscriptions + in-memory watchdog timers replace periodic heartbeats (lower egress, faster response) | `scripts/worker.ts` |
 | **No Direct Provider API Calls** | Frontend credential-agnostic; all requests via LiteLLM proxy (v5.6 fix) | `7d42cdc` |
 | **Force-Dynamic All API Routes** | Next.js static pre-rendering breaks Supabase client at module load; dynamic rendering prevents build-time errors | All 35 routes |
-| **Local Font Files** | Zero external network requests during build/runtime; full 14 weights (Syne, DM Mono, DM Sans) | `53c1d84` |
+| **Local Font System** | Zero external network requests during build/runtime; full 14 weights (Syne, DM Mono, DM Sans) | `53c1d84` |
 | **Lazy Singleton Browser Client** | `lib/supabase-browser.ts` instantiated only at runtime (never at module load); prevents build-time Supabase initialization error | `lib/supabase-browser.ts` |
 | **Health Check via /health/liveliness** | Groq/Gemini direct checks removed (v5.6); only verify LiteLLM gateway (delegating provider health to proxy) | `7d42cdc`, `20dbb4e` |
 | **Key Passthrough via body.api_key** | User BYOK passed to LiteLLM in request body (not header, not extra_body); master key always in Authorization header simultaneously | `51e26ba` |
@@ -965,6 +1021,8 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.9 | Apr 18 2026 | Onboarding UX/UI & Protection Hardened: Explicit labeled buttons (Next/Continue), global glassmorphism aesthetics, refresh-loop protection in middleware, signup email pre-fill, typography cleanup, and OTP-protected onboarding. |
+| v9.8 | Apr 18 2026 | Onboarding E2E Verification & Middleware Team Step Fix: Verified full Identity → Control → Team → Activate flow; middleware recognizes 'team' step. |
 | v9.7 | Apr 18 2026 | HITL Approval UI: Inline `ApprovalCard` with Approve/Reject in War Room; brace-counting JSON extractor; clean approval response shape; 15s polling fallback in LayoutStoreHydrator; `ApprovalsLiveRefresh` client island. |
 | v9.6 | Apr 18 2026 | HITL Hardened: `created_by` fixed in approval_queue insert; HITL APPROVAL PROTOCOL added to buildFinalPrompt; extractApprovalRequest unified; RLS policy fixed; Mission Report replaces Post-mortem. CROST_SPEC v1.6 §11 rewritten. |
 | v9.5 | Apr 18 2026 | @dept / /tool Command Prefix: New `useInputParser` hook, `ChatCommandMenu` dropdown, `/api/tools/invoke` route, `CommandThread` inline replies, `handleChatSubmit` routing in WarRoom. CROST_SPEC v1.5 §17. |
