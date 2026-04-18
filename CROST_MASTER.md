@@ -3,9 +3,43 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.4  
+**Current Version:** 9.5  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Ready to deploy — HITL approval, Artifacts, KB UX & Orc KB awareness fixes (v9.4). Pending PR merge.
+**Deployment Status:** 🚀 Ready to deploy — @dept / /tool command prefix UX (v9.5). Pending PR merge.
+
+---
+
+## Session v9.5 - Interactive Command Syntax (@dept · /tool prefix)
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Pending deploy  
+**Impact**: Founders can now address departments directly or invoke tools inline from the War Room chat input
+
+### Feature Description
+
+Added `@slug` and `/service.action` prefix support to the War Room input, matching Claude's UI convention. The system parses the prefix, routes accordingly, and displays responses inline — without disrupting the main Orc goal flow.
+
+### Implementation
+
+1. **`frontend/lib/hooks/useInputParser.ts`** — New hook. Exports `parseInput(raw)` (classifies input as `orc | department | tool`) and `getActivePrefix(value, cursorPos)` (detects live `@`/`/` trigger for dropdown timing).
+
+2. **`frontend/components/chat/ChatCommandMenu.tsx`** — New floating dropdown component. `@` mode lists filtered active departments; `/` mode lists TOOL_CATALOGUE entries. ↑↓ navigation, ↵ select, Esc dismiss.
+
+3. **`frontend/app/api/tools/invoke/route.ts`** — New API route. `POST /api/tools/invoke` calls `executeToolCall()` with `departmentId: 'executive'`. Normalises all gateway outcomes: success, requires_approval, missing_connection, permission_denied, error.
+
+4. **`frontend/components/war-room/WarRoom.tsx`** — Enhanced:
+   - `GoalInput` extended with `departments` prop, `getActivePrefix()` on each keystroke, `ChatCommandMenu` dropdown, ↑↓ Enter Esc keyboard nav, and "@ dept · / tool" hint in the header.
+   - `InlineMessage` type + `CommandThread` component: teal-bordered cards for `@dept` replies, violet-bordered for `/tool` replies, each with dismiss button.
+   - `handleChatSubmit()` callback: routes `department` → `POST /api/departments/[slug]/task`, `tool` → `POST /api/tools/invoke`, `orc` → existing `handleGoalSubmit()`. All tool gateway outcomes handled including paused-for-approval.
+
+5. **`CROST_SPEC.md` v1.5** — Section 17 added (Interactive Command Syntax). Non-Goals renumbered to §19.
+
+### Files Modified
+1. `frontend/lib/hooks/useInputParser.ts` — new
+2. `frontend/components/chat/ChatCommandMenu.tsx` — new
+3. `frontend/app/api/tools/invoke/route.ts` — new
+4. `frontend/components/war-room/WarRoom.tsx` — GoalInput + CommandThread + handleChatSubmit
+5. `CROST_SPEC.md` — v1.5 with §17 Interactive Command Syntax
 
 ---
 
@@ -797,6 +831,8 @@ The file-system UI redesign (v8.1) only showed the filename derived from the sto
 - ❌ Replacing task IDs without remapping `depends_on` — always update both in `parseOrchestratorResponse` (two-pass: ID map first, remap second)
 
 ### Version History
+| v9.5 | Apr 18 2026 | @dept / /tool Command Prefix: New `useInputParser` hook, `ChatCommandMenu` dropdown, `/api/tools/invoke` route, `CommandThread` inline replies, `handleChatSubmit` routing in WarRoom. CROST_SPEC v1.5 §17. |
+| v9.4 | Apr 18 2026 | HITL Approval Fix: Schema extended (`approval_queue_tool_calls` migration), insert corrected, error logging added. ArtifactCard Output: label restored. KB upload success banner. Orc KB awareness via buildFinalPrompt(). |
 | v9.3 | Apr 17 2026 | KB Upload Fix: Provisioned missing `knowledge-base` storage bucket (new migration). Fixed redundant storagePath prefix. Added CROST_SPEC §16 (Founder Knowledge Base). |
 | v9.2 | Apr 17 2026 | HITL Hotfix: Patched `execute-tool-call.ts` pipeline bug silencing approvals for critical risk toolsets. Patched dashboard layouts injecting the Knowledge Base app suite. |
 | v9.1 | Apr 17 2026 | Knowledge Base: Deployed a hybrid local+LLM text extractor bound to new Supabase schema preventing prompt bloats. Created `/dashboard/knowledge` and bound extraction layers directly into the local `executeToolCall` gateway enabling agent queries on founder documents. |

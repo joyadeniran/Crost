@@ -4,9 +4,11 @@
 // The War Room: goal input + live plan card + per-task approve/reject.
 // This is the core of the founder→orchestrator→worker loop.
 import { supabaseClient } from '@/lib/supabase-browser'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
 import type { Goal, OrchestratorTask, RiskLevel, Department } from '@/types'
+import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
+import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
@@ -50,13 +52,18 @@ function GoalInput({
   onSubmit,
   isLoading,
   hasActiveGoal,
+  departments,
 }: {
   onSubmit: (goal: string) => void
   isLoading: boolean
   hasActiveGoal: boolean
+  departments: Department[]
 }) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [menuPrefix, setMenuPrefix] = useState<'@' | '/' | null>(null)
+  const [menuQuery, setMenuQuery] = useState('')
+  const [menuIndex, setMenuIndex] = useState(0)
 
   useEffect(() => {
     try {
@@ -70,14 +77,52 @@ function GoalInput({
     else localStorage.removeItem('crost-draft-goal')
   }, [value])
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newVal = e.target.value
+    setValue(newVal)
+    const { prefix, query } = getActivePrefix(newVal, e.target.selectionStart ?? newVal.length)
+    setMenuPrefix(prefix)
+    setMenuQuery(query)
+    setMenuIndex(0)
+  }
+
+  const handleMenuSelect = (completion: string) => {
+    const cursorPos = inputRef.current?.selectionStart ?? value.length
+    const before = value.slice(0, cursorPos)
+    const after = value.slice(cursorPos)
+    const triggerMatch = before.match(/(^|\s)([@/][a-zA-Z0-9_.-]*)$/)
+    if (triggerMatch) {
+      const triggerStart = before.length - triggerMatch[2].length
+      const newVal = before.slice(0, triggerStart) + completion + after
+      setValue(newVal)
+      setTimeout(() => {
+        if (inputRef.current) {
+          const pos = triggerStart + completion.length
+          inputRef.current.setSelectionRange(pos, pos)
+          inputRef.current.focus()
+        }
+      }, 0)
+    } else {
+      setValue(value + completion)
+    }
+    setMenuPrefix(null)
+    setMenuQuery('')
+  }
+
   const handleSubmit = () => {
     const trimmed = value.trim()
     if (!trimmed || isLoading) return
     onSubmit(trimmed)
     setValue('')
+    setMenuPrefix(null)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuPrefix) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMenuIndex(i => i + 1); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setMenuIndex(i => Math.max(0, i - 1)); return }
+      if (e.key === 'Escape')    { e.preventDefault(); setMenuPrefix(null); return }
+    }
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       handleSubmit()
@@ -91,6 +136,7 @@ function GoalInput({
       borderRadius: 'var(--radius)',
       padding: '14px 16px',
       marginBottom: 20,
+      position: 'relative',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{
@@ -109,15 +155,38 @@ function GoalInput({
         }}>
           {isLoading ? 'ORCHESTRATOR PLANNING…' : 'WAR ROOM'}
         </span>
+        {!isLoading && (
+          <span style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontSize: 9,
+            color: 'var(--text-4)',
+            opacity: 0.45,
+            letterSpacing: '0.06em',
+          }}>
+            @ dept · / tool
+          </span>
+        )}
       </div>
+
+      {menuPrefix && (
+        <ChatCommandMenu
+          prefix={menuPrefix}
+          query={menuQuery}
+          departments={departments}
+          selectedIndex={menuIndex}
+          onSelect={handleMenuSelect}
+          onClose={() => setMenuPrefix(null)}
+        />
+      )}
 
       <textarea
         ref={inputRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={isLoading}
-        placeholder="Tell your company what to do… (⌘↵ to send)"
+        placeholder="Tell your company what to do… (@dept · /tool · ⌘↵ to send)"
         rows={2}
         style={{
           width: '100%',
@@ -154,6 +223,84 @@ function GoalInput({
           {isLoading ? 'PLANNING…' : hasActiveGoal ? 'NEW GOAL' : 'DISPATCH'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── CommandThread ─────────────────────────────────────────────────────────────
+
+type InlineMessage = {
+  id: string
+  type: 'dept' | 'tool'
+  label: string
+  input: string
+  response?: string
+  isLoading: boolean
+}
+
+function CommandThread({ messages, onDismiss }: { messages: InlineMessage[]; onDismiss: (id: string) => void }) {
+  if (messages.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+      {messages.map(msg => (
+        <div key={msg.id} style={{
+          background: 'var(--bg-2)',
+          border: '1px solid var(--border)',
+          borderLeft: `3px solid ${msg.type === 'dept' ? '#00D4AA' : '#a78bfa'}`,
+          borderRadius: 'var(--radius)',
+          padding: '12px 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              fontWeight: 700,
+              color: msg.type === 'dept' ? '#00D4AA' : '#a78bfa',
+              letterSpacing: '0.06em',
+            }}>
+              {msg.type === 'dept' ? '@' : '/'}{msg.label}
+            </span>
+            {msg.isLoading && (
+              <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                working…
+              </span>
+            )}
+            {!msg.isLoading && (
+              <button
+                onClick={() => onDismiss(msg.id)}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-4)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {msg.input && (
+            <div style={{
+              fontSize: 11,
+              color: 'var(--text-3)',
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              marginBottom: msg.response ? 8 : 0,
+              opacity: 0.7,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {msg.input}
+            </div>
+          )}
+          {msg.response && (
+            <div style={{
+              fontFamily: 'var(--font-dm-sans, sans-serif)',
+              fontSize: 13,
+              color: 'var(--text)',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {msg.response}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -957,6 +1104,7 @@ export function WarRoom() {
   } = useCrostStore()
   const [reportDismissed, setReportDismissed] = useState(false)
   const [decisions, setDecisions] = useState<Record<string, TaskDecision>>({})
+  const [commandMessages, setCommandMessages] = useState<InlineMessage[]>([])
 
   // Clear decisions when a new goal is set
   useEffect(() => {
@@ -1026,6 +1174,59 @@ export function WarRoom() {
       setIsSubmittingGoal(false)
     }
   }, [setActiveGoal, setIsSubmittingGoal])
+
+  const handleChatSubmit = useCallback(async (rawInput: string) => {
+    const parsed = parseInput(rawInput)
+
+    if (parsed.type === 'department') {
+      const msgId = `dept-${Date.now()}`
+      setCommandMessages(msgs => [...msgs, { id: msgId, type: 'dept', label: parsed.slug, input: parsed.message, isLoading: true }])
+      try {
+        const res = await fetch(`/api/departments/${parsed.slug}/task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task: parsed.message }),
+        })
+        const json = await res.json()
+        const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${json.error}` : JSON.stringify(json))
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+      } catch (err: any) {
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
+      }
+      return
+    }
+
+    if (parsed.type === 'tool') {
+      const toolLabel = parsed.action !== parsed.service ? `${parsed.service}.${parsed.action}` : parsed.service
+      const msgId = `tool-${Date.now()}`
+      setCommandMessages(msgs => [...msgs, { id: msgId, type: 'tool', label: toolLabel, input: parsed.params, isLoading: true }])
+      try {
+        const res = await fetch('/api/tools/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ service: parsed.service, action: parsed.action, params: parsed.params ? { text: parsed.params } : {} }),
+        })
+        const json = await res.json()
+        let response: string
+        if (json.requires_approval) {
+          response = `⏸ Paused for approval (ID: ${json.approval_id})`
+        } else if (json.missing_connection) {
+          response = `⚠ No connection for "${json.service}". Connect it in Settings → Integrations.`
+        } else if (!json.success) {
+          response = `Error: ${json.error}`
+        } else {
+          response = typeof json.result === 'string' ? json.result : JSON.stringify(json.result, null, 2)
+        }
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+      } catch (err: any) {
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
+      }
+      return
+    }
+
+    // Regular Orc goal
+    handleGoalSubmit(rawInput)
+  }, [handleGoalSubmit])
 
   const handleDialogueResponse = useCallback(async (message?: string, skip?: boolean) => {
     if (!activeGoal) return
@@ -1165,9 +1366,15 @@ export function WarRoom() {
   return (
     <div style={{ marginBottom: 24 }}>
       <GoalInput
-        onSubmit={handleGoalSubmit}
+        onSubmit={handleChatSubmit}
         isLoading={isSubmittingGoal || !!isPlanning}
         hasActiveGoal={!!activeGoal}
+        departments={departments}
+      />
+
+      <CommandThread
+        messages={commandMessages}
+        onDismiss={id => setCommandMessages(msgs => msgs.filter(m => m.id !== id))}
       />
 
       {isPlanning && <PlanningIndicator />}
