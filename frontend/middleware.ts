@@ -51,6 +51,7 @@ export async function middleware(request: NextRequest) {
       let target = '/onboarding/identity'
       if (step === 'activated') target = '/onboarding/activate'
       else if (step === 'control') target = '/onboarding/control'
+      else if (step === 'team') target = '/onboarding/team'
       
       if (pathname !== target) {
         return NextResponse.redirect(new URL(target, request.url))
@@ -70,6 +71,7 @@ export async function middleware(request: NextRequest) {
        let target = '/onboarding/identity'
        if (step === 'activated') target = '/onboarding/activate'
        else if (step === 'control') target = '/onboarding/control'
+       else if (step === 'team') target = '/onboarding/team'
 
        if (pathname.startsWith('/onboarding') && pathname !== target) {
          return NextResponse.redirect(new URL(target, request.url))
