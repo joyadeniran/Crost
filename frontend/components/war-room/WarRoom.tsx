@@ -1839,6 +1839,29 @@ export function WarRoom() {
         onApprovalSkip={handleApprovalSkip}
       />
 
+      {pollError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: 'var(--radius)',
+          padding: '10px 14px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <span style={{ color: '#f87171', fontSize: 14 }}>⚠</span>
+          <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 12, color: '#f87171', lineHeight: 1.45, flex: 1 }}>
+            {pollError}
+          </span>
+          <button
+            onClick={() => setPollError(null)}
+            style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 16, padding: 0 }}
+            title="Dismiss"
+          >×</button>
+        </div>
+      )}
+
       {isPlanning && <PlanningIndicator />}
 
       {isClarifying && (
