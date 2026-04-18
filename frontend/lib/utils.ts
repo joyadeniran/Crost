@@ -66,7 +66,10 @@ export const ICON_MAP: Record<string, string> = {
  */
 export function resolveIcon(icon: string | null | undefined): string {
   if (!icon) return '🏢';
-  return ICON_MAP[icon as string] ?? icon;
+  // If the input is in our map, return the mapped emoji
+  if (ICON_MAP[icon]) return ICON_MAP[icon];
+  // If not, return the icon as is (assuming it's already an emoji)
+  return icon;
 }
 
 /**
