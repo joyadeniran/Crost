@@ -1362,6 +1362,7 @@ export function WarRoom() {
   const [decisions, setDecisions] = useState<Record<string, TaskDecision>>({})
   const [commandMessages, setCommandMessages] = useState<InlineMessage[]>([])
   const [messagesHydrated, setMessagesHydrated] = useState(false)
+  const [pollError, setPollError] = useState<string | null>(null)
 
   // Rehydrate pending-approval cards from localStorage on mount and reconcile
   // with server state — if the approval has already been decided elsewhere
@@ -1445,20 +1446,47 @@ export function WarRoom() {
   const activeGoalStatus = activeGoal?.status
   useEffect(() => {
     if (!activeGoalId || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
+    let consecutiveFailures = 0
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/goals/${activeGoalId}`)
-        const json = await res.json()
+        if (!res.ok) {
+          // 502/500/429 etc. — the goal is "live" but we can't reach the server.
+          // Don't silently retry forever; surface a visible banner after a few misses.
+          consecutiveFailures++
+          if (consecutiveFailures >= 3) {
+            setPollError(`Can't reach the server (HTTP ${res.status}). Your goal is still running — retrying…`)
+          }
+          return
+        }
+        const text = await res.text()
+        let json: any
+        try { json = JSON.parse(text) } catch {
+          consecutiveFailures++
+          if (consecutiveFailures >= 3) {
+            setPollError(`Server returned a non-JSON response (likely a gateway error). Still retrying…`)
+          }
+          return
+        }
         if (json.success && json.data) {
+          consecutiveFailures = 0
+          setPollError(null)
           updateActiveGoal(json.data)
-          // Stop polling if goal reaches a terminal state
           if (['completed', 'failed', 'cancelled', 'synthesis_done'].includes(json.data.status)) {
             clearInterval(interval)
             setIsSubmittingGoal(false)
           }
+        } else {
+          consecutiveFailures++
+          if (consecutiveFailures >= 3) {
+            setPollError(json?.error ?? 'Goal poll returned an unexpected response.')
+          }
         }
-      } catch {
-        // non-fatal, keep polling
+      } catch (err: any) {
+        consecutiveFailures++
+        if (consecutiveFailures >= 3) {
+          setPollError(`Network error while polling goal: ${err?.message ?? 'unknown'}`)
+        }
       }
     }, 2000)
     return () => clearInterval(interval)
