@@ -3,9 +3,47 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 9.3  
-**Last Updated:** April 17, 2026  
-**Deployment Status:** 🚀 Live — Knowledge Base Upload Fix (v9.3). Storage bucket provisioned; upload pipeline unblocked.
+**Current Version:** 9.4  
+**Last Updated:** April 18, 2026  
+**Deployment Status:** 🚀 Ready to deploy — HITL approval, Artifacts, KB UX & Orc KB awareness fixes (v9.4). Pending PR merge.
+
+---
+
+## Session v9.4 - HITL Approval Fix, Artifacts Output Label, KB UX & Orc Awareness
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Pending deploy  
+**Impact**: HITL gateway fully operational; Artifacts page restored; KB fully wired into Orc
+
+### Root Cause Analysis
+
+**Issue 1 — HITL approval silently dropped every tool-call approval request**  
+The `approval_queue` insert in `execute-tool-call.ts` used column names that don't exist in the schema (`type`, `requested_by`, `user_id`, `goal_id`, `task_id`). The original schema requires NOT NULL on `department_id`, `department_name`, `department_slug`, `action_label`, and `payload` — none of which were provided. Postgres rejected every row; no error handling existed, so failures were invisible.  
+The v9.2 "HITL fix" wired the conditional logic correctly but never corrected the insert itself.
+
+**Issue 2 — ArtifactCard "Output:" label removed in redesign**  
+The file-system UI redesign (v8.1) only showed the filename derived from the storage URL (e.g. `tool-abc123-1620000000.json`), dropping the human-readable `artifact.title` ("Tool Output: gmail.send_email"). The title row was never re-added to the card view.
+
+**Issue 3 — KB upload showed no success message**  
+`setPendingFile(null)` collapsed the upload form before `uploadProgress` could render. The success string was set but immediately hidden.
+
+**Issue 4 — Orc and departments unaware of Knowledge Base**  
+`KNOWLEDGE_BASE_SEARCH` was never added to the hardcoded `INTERNAL TOOLS` block in `buildFinalPrompt()`. The gateway and search endpoint were fully wired, but Orc never knew the tool existed so never called it.
+
+### Patch Details
+
+1. **`approval_queue` Schema Extended** — New migration `20260418010000_approval_queue_tool_calls.sql`: makes `department_id/name/slug`, `action_label`, `payload` nullable; adds `goal_id`, `task_id`, `user_id`, `tool_execution_id`; extends `action_type` CHECK to include `'tool_call'`; enables RLS with user-scoped policy.
+2. **HITL Insert Fixed** — `execute-tool-call.ts` now uses correct column names (`action_type: "tool_call"`, `action_label`, `payload`, `department_slug`). Error is explicitly logged instead of swallowed.
+3. **ArtifactCard "Output:" restored** — `artifact.title` rendered as `Output: <title>` above the department/date row in the card list view.
+4. **KB upload success banner** — Added `successMessage` state independent of the form's `pendingFile` state. Green banner persists 6 seconds after upload, then file list refreshes.
+5. **Orc KB awareness** — `KNOWLEDGE_BASE_SEARCH` added to `toolDefinitions` in `buildFinalPrompt()` with full args spec and usage guidance. Orc now knows when and how to call it.
+
+### Files Modified
+1. `supabase/migrations/20260418010000_approval_queue_tool_calls.sql` — new
+2. `frontend/lib/tools/execute-tool-call.ts` — HITL insert corrected
+3. `frontend/components/artifacts/ArtifactCard.tsx` — Output: label restored
+4. `frontend/app/dashboard/knowledge/page.tsx` — success banner added
+5. `frontend/lib/llm-client.ts` — KNOWLEDGE_BASE_SEARCH added to tool definitions
 
 ---
 
