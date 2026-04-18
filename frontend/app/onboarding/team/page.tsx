@@ -74,23 +74,23 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="onboarding-content">
+    <div className="onboarding-content animate-fade-in">
       <div className="main-flow">
-        <button onClick={() => router.push('/onboarding/control')} className="back-link">
-          ← Back to Control Style
+        <button onClick={() => router.push('/onboarding/control')} className="back-link" style={{ marginBottom: '40px', display: 'block', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '14px' }}>
+          ← Back
         </button>
         <header className="step-header">
           <span className="time-remaining">~90 sec left</span>
           <h1>Pick your starting team.</h1>
-          <p className="subtitle">
+          <p className="subtitle" style={{ color: 'rgba(255,255,255,0.5)', marginTop: '16px', fontSize: '18px', maxWidth: '600px' }}>
             Choose 2–3 departments to get your company running. You can always activate more later.
           </p>
         </header>
 
         {loading ? (
-          <div className="loading-state">Finding suitable agents...</div>
+          <div className="loading-state" style={{ padding: '80px 0', textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>Finding suitable agents...</div>
         ) : (
-          <section className="dept-grid">
+          <section className="dept-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', margin: '40px 0' }}>
             {departments.map((dept) => (
               <DepartmentCard 
                 key={dept.id}
@@ -104,23 +104,23 @@ export default function TeamPage() {
           </section>
         )}
 
-        <footer className="footer-actions">
+        <footer className="footer-actions" style={{ marginTop: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
            <button 
-             className="primary-btn-crost" 
+             className="primary-btn-crost lg" 
              disabled={selectedDepartments.length < 2 || submitting}
              onClick={handleStart}
            >
              {submitting ? 'Preparing agents...' : 'Start with these'} <span>→</span>
            </button>
-           <span className="selection-count">
+           <span className="selection-count" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
              {selectedDepartments.length} {selectedDepartments.length === 1 ? 'department' : 'departments'} selected
            </span>
         </footer>
       </div>
 
-      <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
-
-
+      <div className="profile-summary-container">
+        <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage }} />
+      </div>
     </div>
   )
 }

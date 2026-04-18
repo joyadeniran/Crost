@@ -100,56 +100,55 @@ function IdentityContent() {
   return (
     <div className="onboarding-content">
       <div className="main-flow">
-        <header className="step-header">
-          <span className="time-remaining">~3 min left</span>
-          <h1>Nice to meet you.</h1>
-        </header>
+        {step === 1 && (
+          <header className="step-header animate-fade-in">
+            <span className="time-remaining">~3 min left</span>
+            <h1>Nice to meet you.</h1>
+          </header>
+        )}
 
         <section className="interaction-area">
           {/* Question 1 */}
-          <div className={`question-block ${step === 1 ? 'visible' : ''}`}>
+          <div className={`question-block ${step === 1 ? 'visible' : 'completed'}`}>
             <p className="prompt">What&apos;s your name, and where are you building?</p>
-            {step === 1 ? (
-              <form onSubmit={handleIdentitySubmit} className="identity-form animate-fade-in glass-panel">
-                <div className="input-row">
-                  <input
-                    type="text"
-                    placeholder="Name"
-                    value={inputName}
-                    onChange={e => setInputName(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                  <input
-                    type="text"
-                    placeholder="Company Name"
-                    value={inputCompany}
-                    onChange={e => setInputCompany(e.target.value)}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="City, Country"
-                    value={inputLocation}
-                    onChange={e => setInputLocation(e.target.value)}
-                    required
-                  />
-                </div>
-                <button type="submit" className="submit-btn-text">
-                  Next <span>→</span>
-                </button>
-              </form>
-            ) : (
-              <ReflectionBlock text={nameReflection} onEdit={() => setStep(1)} />
-            )}
+            <form onSubmit={handleIdentitySubmit} className="identity-form glass-panel">
+              <div className="input-row">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={inputName}
+                  onChange={e => setInputName(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  placeholder="Company Name"
+                  value={inputCompany}
+                  onChange={e => setInputCompany(e.target.value)}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="City, Country"
+                  value={inputLocation}
+                  onChange={e => setInputLocation(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="submit-btn-text">
+                Next <span>→</span>
+              </button>
+            </form>
           </div>
 
           {/* Question 2 */}
-          {step >= 2 && (
-            <div className={`question-block ${step === 2 ? 'visible' : ''}`}>
-              <p className="prompt">What does your company do?</p>
-              {step === 2 ? (
-                <form onSubmit={handleBusinessSubmit} className="business-form animate-fade-in">
+          <div className={`question-block ${step === 2 ? 'visible' : step > 2 ? 'completed' : ''}`}>
+            {step > 1 && <ReflectionBlock text={nameReflection} onEdit={() => setStep(1)} />}
+            {step === 2 && (
+              <div style={{ marginTop: '40px' }}>
+                <p className="prompt">What does your company do?</p>
+                <form onSubmit={handleBusinessSubmit} className="business-form">
                   <textarea
                     className="glass-panel"
                     placeholder="We help small retailers buy goods on credit..."
@@ -162,43 +161,46 @@ function IdentityContent() {
                     {loading ? 'Thinking...' : 'Continue'} <span>→</span>
                   </button>
                 </form>
-              ) : (
-                <ReflectionBlock text={descReflection} onEdit={() => setStep(2)} />
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
           {/* Question 3 */}
-          {step >= 3 && (
-            <div className={`question-block ${step === 3 ? 'visible' : ''}`}>
-              <p className="prompt">What stage are you at?</p>
-              <div className="pill-container">
-                {(['starting', 'mvp', 'traction', 'scaling'] as const).map((s) => (
-                  <button
-                    key={s}
-                    className={`pill-btn ${selectedStage === s || (stage === s && !selectedStage) ? 'active' : ''}`}
-                    onClick={() => setSelectedStage(s)}
+          <div className={`question-block ${step === 3 ? 'visible' : ''}`}>
+            {step > 2 && <ReflectionBlock text={descReflection} onEdit={() => setStep(2)} />}
+            {step === 3 && (
+              <div style={{ marginTop: '40px' }}>
+                <p className="prompt">What stage are you at?</p>
+                <div className="pill-container">
+                  {(['starting', 'mvp', 'traction', 'scaling'] as const).map((s) => (
+                    <button
+                      key={s}
+                      className={`pill-btn ${selectedStage === s || (stage === s && !selectedStage) ? 'active' : ''}`}
+                      onClick={() => setSelectedStage(s)}
+                    >
+                      {s === 'starting' ? 'Just starting' : s === 'mvp' ? 'Early MVP' : s === 'traction' ? 'Getting traction' : 'Scaling'}
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="action-row animate-fade-in" style={{ marginTop: '32px' }}>
+                  <button 
+                    className="primary-btn-crost" 
+                    onClick={handleStageSelect}
+                    disabled={!selectedStage && !stage}
                   >
-                    {s === 'starting' ? 'Just starting' : s === 'mvp' ? 'Early MVP' : s === 'traction' ? 'Getting traction' : 'Scaling'}
+                    Confirm Stage & Proceed <span>→</span>
                   </button>
-                ))}
+                </div>
               </div>
-              
-              <div className="action-row animate-fade-in" style={{ marginTop: '32px' }}>
-                <button 
-                  className="primary-btn-crost" 
-                  onClick={handleStageSelect}
-                  disabled={!selectedStage && !stage}
-                >
-                  Confirm Stage & Proceed <span>→</span>
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </section>
       </div>
 
-      <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage: selectedStage || stage }} />
+      <div className="profile-summary-container">
+        <ProfileSummary state={{ founderName, companyName, city, country, businessCategory, stage: selectedStage || stage }} />
+      </div>
     </div>
   )
 }
