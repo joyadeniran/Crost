@@ -1,8 +1,9 @@
-CROST SPEC — (v1.4)
+CROST SPEC — (v1.5)
 
 > This is the source of truth for Crost architecture.
 > Do not modify without founder approval.
 > Updated April 17, 2026: Founder Knowledge Base (Section 16) added. Sections renumbered accordingly.
+> Updated April 18, 2026: Interactive Command Syntax §17 (@dept / /tool prefix UX). Non-Goals renumbered to §19.
 
 🧠 0. Core Philosophy
 
@@ -523,7 +524,52 @@ Route:    /dashboard/knowledge
 Features: drag-and-drop upload, category tagging, processing status badges,
           detail inspection sliding drawer
 
-🔮 17. FUTURE FEATURES (DO NOT BUILD NOW)
+💬 17. Interactive Command Syntax (@dept · /tool)
+
+Founders can address departments directly or invoke tools inline from the War
+Room chat input using a prefix syntax modelled on Claude's UI convention.
+
+17.1 Syntax
+
+  @<slug> <message>           Direct message to a department
+  /<service>.<action> [text]  Invoke a specific tool via the gateway
+  (no prefix)                 Standard Orc goal / planning flow
+
+17.2 Auto-complete Menu
+
+Typing @ or / opens a floating ChatCommandMenu dropdown above the input:
+- @ mode lists active departments (filtered by slug/name)
+- / mode lists the built-in TOOL_CATALOGUE entries
+- ↑↓ arrows navigate, ↵ selects and fills, Esc dismisses
+- Hint "@ dept · / tool" shown in input header when idle
+
+17.3 Routing Logic (handleChatSubmit)
+
+parseInput() classifies each submission:
+- department  → POST /api/departments/[slug]/task  { task: message }
+- tool        → POST /api/tools/invoke  { service, action, params }
+- orc         → existing handleGoalSubmit() flow (unchanged)
+
+Tool responses handle all gateway outcomes: success, requires_approval
+(⏸ paused), missing_connection (⚠ connect in Settings), and errors.
+
+17.4 CommandThread
+
+Inline `@dept` and `/tool` responses render in a CommandThread component
+below GoalInput, each card showing:
+- Colour-coded prefix label (teal for @dept, violet for /tool)
+- Raw input echoed in monospace beneath the label
+- Response text (streamed in once resolved)
+- × dismiss button (available when not loading)
+
+17.5 API Route
+
+POST /api/tools/invoke  — Direct tool invocation from the chat UI.
+Calls executeToolCall() with departmentId: 'executive'.
+Returns: { success, result } | { requires_approval, approval_id } |
+         { missing_connection, service } | { error }.
+
+🔮 18. FUTURE FEATURES (DO NOT BUILD NOW)
 
 ⚠️ These are strictly not MVP features, but system must be designed to support them.
 
@@ -549,7 +595,7 @@ Full parity with existing BYOK providers
 17.7 Full RAG (Phase 3)
 pgvector embeddings on knowledge_base_chunks
 True semantic similarity search across all KB files
-🚫 18. Explicit Non-Goals (MVP)
+🚫 19. Explicit Non-Goals (MVP)
 
 Do NOT build:
 
