@@ -1,7 +1,8 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, StorageValue } from 'zustand/middleware'
+import { getSupabaseClient } from './supabase-browser'
 
 export interface OnboardingState {
   // Screen 1: Identity
@@ -30,6 +31,54 @@ export interface OnboardingState {
   setFirstGoal: (goal: string) => void
   setOrcPlan: (plan: any) => void
   reset: () => void
+}
+
+// Custom storage that scopes localStorage to current user
+const createUserScopedStorage = () => {
+  return {
+    getItem: (name: string): StorageValue | null => {
+      try {
+        // Try to get user ID from Supabase
+        const supabase = getSupabaseClient()
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          const userId = session?.user?.id
+          const key = userId ? `${name}-${userId}` : name
+          const item = localStorage.getItem(key)
+          return item ? JSON.parse(item) : null
+        })
+      } catch {
+        // Fallback to unscoped key if auth not ready
+        const item = localStorage.getItem(name)
+        return item ? JSON.parse(item) : null
+      }
+      return null
+    },
+    setItem: (name: string, value: StorageValue) => {
+      try {
+        const supabase = getSupabaseClient()
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          const userId = session?.user?.id
+          const key = userId ? `${name}-${userId}` : name
+          localStorage.setItem(key, JSON.stringify(value))
+        })
+      } catch {
+        // Fallback to unscoped key if auth not ready
+        localStorage.setItem(name, JSON.stringify(value))
+      }
+    },
+    removeItem: (name: string) => {
+      try {
+        const supabase = getSupabaseClient()
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          const userId = session?.user?.id
+          const key = userId ? `${name}-${userId}` : name
+          localStorage.removeItem(key)
+        })
+      } catch {
+        localStorage.removeItem(name)
+      }
+    },
+  }
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -76,6 +125,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     }),
     {
       name: 'crost-onboarding-storage',
+      storage: createUserScopedStorage(),
     }
   )
 )

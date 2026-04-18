@@ -85,8 +85,14 @@ function IdentityContent() {
     }
   }
 
-  const handleStageSelect = (selectedStage: 'starting' | 'mvp' | 'traction' | 'scaling') => {
+  const handleStageSelect = async (selectedStage: 'starting' | 'mvp' | 'traction' | 'scaling') => {
     setIdentity({ stage: selectedStage })
+    // Update onboarding step in Supabase to allow middleware to let user pass
+    await fetch('/api/onboarding/set-step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 'control' })
+    }).catch(err => console.error('Failed to update onboarding step:', err))
     router.push('/onboarding/control')
   }
 
@@ -100,32 +106,32 @@ function IdentityContent() {
 
         <section className="interaction-area">
           {/* Question 1 */}
-          <div className={`question-block ${step >= 1 ? 'visible' : ''}`}>
+          <div className={`question-block ${step === 1 ? 'visible' : ''}`}>
             <p className="prompt">What&apos;s your name, and where are you building?</p>
             {step === 1 ? (
               <form onSubmit={handleIdentitySubmit} className="identity-form animate-fade-in">
                 <div className="input-row">
-                  <input 
-                    type="text" 
-                    placeholder="Name" 
-                    value={inputName} 
-                    onChange={e => setInputName(e.target.value)} 
-                    required 
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    value={inputName}
+                    onChange={e => setInputName(e.target.value)}
+                    required
                     autoFocus
                   />
-                  <input 
-                    type="text" 
-                    placeholder="Company Name" 
-                    value={inputCompany} 
-                    onChange={e => setInputCompany(e.target.value)} 
-                    required 
+                  <input
+                    type="text"
+                    placeholder="Company Name"
+                    value={inputCompany}
+                    onChange={e => setInputCompany(e.target.value)}
+                    required
                   />
-                  <input 
-                    type="text" 
-                    placeholder="City, Country" 
-                    value={inputLocation} 
-                    onChange={e => setInputLocation(e.target.value)} 
-                    required 
+                  <input
+                    type="text"
+                    placeholder="City, Country"
+                    value={inputLocation}
+                    onChange={e => setInputLocation(e.target.value)}
+                    required
                   />
                 </div>
                 <button type="submit" className="submit-btn">→</button>
@@ -137,12 +143,12 @@ function IdentityContent() {
 
           {/* Question 2 */}
           {step >= 2 && (
-            <div className={`question-block visible animate-fade-in`}>
+            <div className={`question-block ${step === 2 ? 'visible' : ''}`}>
               <p className="prompt">What does your company do?</p>
               {step === 2 ? (
-                <form onSubmit={handleBusinessSubmit} className="business-form">
-                  <textarea 
-                    placeholder="We help small retailers buy goods on credit..." 
+                <form onSubmit={handleBusinessSubmit} className="business-form animate-fade-in">
+                  <textarea
+                    placeholder="We help small retailers buy goods on credit..."
                     value={inputDesc}
                     onChange={e => setInputDesc(e.target.value)}
                     required
@@ -160,12 +166,12 @@ function IdentityContent() {
 
           {/* Question 3 */}
           {step >= 3 && (
-            <div className={`question-block visible animate-fade-in`}>
+            <div className={`question-block ${step === 3 ? 'visible' : ''}`}>
               <p className="prompt">What stage are you at?</p>
               <div className="pill-container">
                 {['starting', 'mvp', 'traction', 'scaling'].map((s) => (
-                  <button 
-                    key={s} 
+                  <button
+                    key={s}
                     className="pill-btn"
                     onClick={() => handleStageSelect(s as any)}
                   >
