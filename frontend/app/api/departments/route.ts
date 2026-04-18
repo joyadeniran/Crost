@@ -161,8 +161,9 @@ export async function POST(req: NextRequest) {
         .select()
         .single()
       if (cloneError) {
-        const message = cloneError.message?.includes('unique')
-          ? 'Department templates cannot be copied until the latest departments migration is applied in Supabase.'
+        const isUnique = cloneError.message?.includes('unique') || cloneError.code === '23505'
+        const message = isUnique
+          ? 'Department templates cannot be copied until the latest departments migration (v10.2) is applied in Supabase. Conflict on orc_persona_id or slug.'
           : cloneError.message
         return NextResponse.json({ success: false, error: message }, { status: 500 })
       }
