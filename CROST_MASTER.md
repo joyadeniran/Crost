@@ -3,9 +3,28 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 10.3  
+**Current Version:** 10.4  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Live — Premium Glassmorphism & High-Fidelity UX (v10.3).
+**Deployment Status:** 🚀 Live — Favicon Implemented (v10.4).
+
+---
+
+## Session v10.4 - Favicon Implementation
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Added branding consistency across browser tabs.
+
+### Changes
+1. **Icon Asset**: Used `Crost-icon256.png` as the source for the app icon.
+2. **Deployment**: Copied to `frontend/app/icon.png` and `frontend/public/icon.png`.
+3. **Metadata**: Updated root `layout.tsx` to explicitly reference the icon in the `metadata` object.
+
+### Files Changed
+- `frontend/app/icon.png` (new)
+- `frontend/public/icon.png` (new)
+- `frontend/app/layout.tsx`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
@@ -14,35 +33,5 @@
 **Date**: April 18, 2026  
 **Status**: ✅ COMPLETE — Verified live  
 **Impact**: Onboarding flow is now a high-fidelity visual experience. Every interactive element (cards, panels, backgrounds) adheres to a consistent premium design language.
-
-### Changes
-
-**1. `frontend/app/globals.css`**
-- **Ambient Texture**: Added a CSS-generated noise grain overlay (`::before`) to the onboarding background.
-- **Dynamic Gradients**: Upgraded the background to a multi-source radial gradient (Teal 0.04% / Indigo 0.04%) for a sense of depth.
-- **High-Fidelity Cards**: Refined `.control-card` and `.dept-card` with hover scaling (`1.01`), lift (`-4px`), and luminous inner borders.
-- **Selection Glow**: Active selections now feature a subtle accent-colored glow and shadow.
-
-**2. Card Upgrades**
-- **`ControlStyleCard.tsx`**: Injected `.glass-panel` class for consistent blur/border treatment.
-- **`DepartmentCard.tsx`**: Injected `.glass-panel` class; refined header spacing.
-
-**3. Global UI Consistency**
-- Enforced `Fraunces` serif for all editorial headers and card titles.
-- Standardized padding and gap metrics across the centered Typeform layout.
-
-### Files Changed
-- `frontend/app/globals.css`
-- `frontend/components/onboarding/ControlStyleCard.tsx`
-- `frontend/components/onboarding/DepartmentCard.tsx`
-- `CROST_MASTER.md` (this entry)
-
----
-
-## Session v10.2 - Department Cloning Fix & Approval Queue Optimization
-
-**Date**: April 18, 2026  
-**Status**: ✅ COMPLETE — Verified live  
-**Impact**: Resolved "Department templates cannot be copied" error by fixing global unique constraint leakage; eliminated `approval_queue` timeouts via performance indexing and query scoping.
 
 ... [rest of previous content]

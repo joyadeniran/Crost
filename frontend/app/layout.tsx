@@ -5,6 +5,9 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Crost — Your Agentic Office',
   description: 'The Agentic Operating System for solo founders',
+  icons: {
+    icon: '/icon.png',
+  },
 }
 
 import { Toaster } from '@/components/ui/toaster'
