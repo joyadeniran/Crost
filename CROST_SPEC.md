@@ -4,7 +4,7 @@ CROST SPEC — (v1.6)
 > Do not modify without founder approval.
 > Updated April 17, 2026: Founder Knowledge Base (Section 16) added. Sections renumbered accordingly.
 > Updated April 18, 2026: Interactive Command Syntax §17 (@dept / /tool prefix UX). Non-Goals renumbered to §19.
-> Updated April 18, 2026: HITL Approval Protocol hardened — departments instructed via buildFinalPrompt; approval_queue RLS fixed; Mission Report replaces Post-mortem throughout.
+> Updated April 18, 2026: HITL Approval Protocol hardened — departments instructed via buildFinalPrompt; approval_queue RLS fixed; Mission Report replaces Mission Report throughout.
 
 🧠 0. Core Philosophy
 
