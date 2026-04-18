@@ -11,7 +11,7 @@ interface DepartmentCardProps {
 export function DepartmentCard({ name, description, selected, onClick }: DepartmentCardProps) {
   return (
     <div 
-      className={`dept-card ${selected ? 'selected' : ''}`}
+      className={`dept-card glass-panel ${selected ? 'selected' : ''}`}
       onClick={onClick}
     >
       <div className="dept-header">
