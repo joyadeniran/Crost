@@ -15,7 +15,7 @@ export default function SignUpPage() {
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [showOtp, setShowOtp] = useState(false)
-...
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)

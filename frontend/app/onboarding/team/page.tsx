@@ -39,7 +39,8 @@ export default function TeamPage() {
   }, [])
 
   const handleStart = async () => {
-    if (selectedDepartments.length < 2) {
+    const currentState = useOnboardingStore.getState()
+    if (currentState.selectedDepartments.length < 2) {
       toast('Please select at least 2 departments to start.', 'error')
       return
     }
@@ -50,16 +51,16 @@ export default function TeamPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identity: { 
-            founderName: founderName,
-            companyName: useOnboardingStore.getState().companyName,
-            city, 
-            country, 
-            businessDescription: useOnboardingStore.getState().businessDescription,
-            businessCategory: businessCategory,
-            stage 
+            founderName: currentState.founderName,
+            companyName: currentState.companyName,
+            city: currentState.city, 
+            country: currentState.country, 
+            businessDescription: currentState.businessDescription,
+            businessCategory: currentState.businessCategory,
+            stage: currentState.stage 
           },
-          riskTolerance: useOnboardingStore.getState().riskTolerance,
-          selectedDepartments
+          riskTolerance: currentState.riskTolerance,
+          selectedDepartments: currentState.selectedDepartments
         })
       })
 

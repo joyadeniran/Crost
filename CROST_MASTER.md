@@ -3,9 +3,38 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 10.0  
+**Current Version:** 10.1  
 **Last Updated:** April 18, 2026  
-**Deployment Status:** 🚀 Live — Typeform-style Onboarding Flow (v10.0). Centered & Seamless.
+**Deployment Status:** 🚀 Live — Stability & Onboarding Persistence Fixes (v10.1). Build repaired.
+
+---
+
+## Session v10.1 - Build Repair & Onboarding State Resilience
+
+**Date**: April 18, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Fixed critical build failure on Render; resolved state loss issue during onboarding team selection; hardened department activation logic.
+
+### Changes
+
+**1. `frontend/app/signup/page.tsx`**
+- **Build Fix**: Removed accidental `...` syntax error that was blocking Render deployments.
+
+**2. `frontend/lib/onboarding-store.ts`**
+- **Persistence Fix**: Replaced dynamic user-scoped storage key with a static key `crost-onboarding-storage`. Dynamic keys caused state loss during hydration because the user ID wasn't always available at the exact moment of store initialization.
+
+**3. `frontend/app/onboarding/team/page.tsx`**
+- **Activation Hardening**: Updated `handleStart` to read from the store's current state directly (`useOnboardingStore.getState()`) instead of relying on closure variables from the component's initial render. This ensures the correct list of selected departments is sent to the API even if hydration completes after the component mounts.
+
+**4. Verification**
+- Verified that `selectedDepartments` array is correctly populated and sent to `/api/onboarding/complete`.
+- Verified that the backend correctly clones templates from `is('created_by', null)` templates to user-owned rows.
+
+### Files Changed
+- `frontend/app/signup/page.tsx`
+- `frontend/lib/onboarding-store.ts`
+- `frontend/app/onboarding/team/page.tsx`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
@@ -14,49 +43,5 @@
 **Date**: April 18, 2026  
 **Status**: ✅ COMPLETE — Verified live  
 **Impact**: Onboarding is now a sleek, centered, and premium "Typeform" experience. The "haphazard" multi-column layout is replaced by a focused, single-column flow with fluid transitions and floating context.
-
-### Changes
-
-**1. `frontend/app/globals.css`**
-- **Typeform Layout**: Rewrote `.onboarding-content` to be a centered, single-column container. 
-- **Vertical Focus**: interaction area now uses vertical centering and absolute/relative positioning to isolate current questions.
-- **Floating Summary**: Added `.profile-summary-container` as a fixed bottom-right element, providing constant profile context without taking up main-flow space.
-- **Enhanced Typography**: Increased `.prompt` size to 32px with editorial Fraunces serif.
-- **Transition Logic**: Added `completed` state styles for questions that slide up and fade out when done.
-
-**2. `frontend/app/onboarding/identity/page.tsx`**
-- **Focused Flow**: Questions now transition cleanly. Completed questions are hidden/collapsed using the new `.completed` class.
-- **Contextual Reflection**: Reflection blocks now appear above the *current* question to provide immediate feedback on what was just entered.
-- **Clean Start**: The "Nice to meet you" header now only appears on Step 1 to keep subsequent steps high-focus.
-
-**3. `frontend/app/onboarding/control/page.tsx` & `team/page.tsx`**
-- **Layout Alignment**: Updated to match the new single-column centered standard.
-- **Floating Summary**: Wrapped `ProfileSummary` in the new floating container.
-- **Visual Polish**: Used grid layouts for cards that adapt to the centered container.
-
-**4. `frontend/app/onboarding/activate/page.tsx`**
-- **Seamless Transition**: Activation shell now uses the same centered `.onboarding-content` logic.
-- **Polished UI**: Added explicit styling to phase-vignettes for a cohesive final step.
-
-**5. `frontend/components/onboarding/ProfileSummary.tsx`**
-- **Hydration Resilience**: Added a mount check to prevent SSR/CSR mismatches.
-- **Premium Styling**: Redesigned with internal `style jsx` for precise control over item opacity and typography.
-
-### Files Changed
-- `frontend/app/globals.css`
-- `frontend/app/onboarding/identity/page.tsx`
-- `frontend/app/onboarding/control/page.tsx`
-- `frontend/app/onboarding/team/page.tsx`
-- `frontend/app/onboarding/activate/page.tsx`
-- `frontend/components/onboarding/ProfileSummary.tsx`
-- `CROST_MASTER.md` (this entry)
-
----
-
-## Session v9.9 - Onboarding UX/UI & Protection Hardening
-
-**Date**: April 18, 2026  
-**Status**: ✅ COMPLETE — Verified live  
-**Impact**: Onboarding flow is now visually premium, intuitive, and robustly protected. "Missing button" issues resolved; refresh loops eliminated; signup friction reduced.
 
 ... [rest of previous content]
