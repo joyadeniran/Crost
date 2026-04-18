@@ -91,13 +91,21 @@ export async function executeToolCall(options: ExecuteOptions) {
     };
   }
 
-  // 3. Approval Routing Guard
-  let requiresApproval = toolCall.requiresApproval;
-  
+  // 3. Approval Routing Guard — HITL DEFAULT-DENY (CROST_SPEC §11).
+  // Per spec: "NOTHING executes without founder approval."
+  // Only tools explicitly on the read-only allowlist (LOW_RISK_READ_TOOLS) may
+  // auto-run. Every write/send/mutation — gmail.send_email, slack.post_message,
+  // github.create_pull_request, etc. — MUST be gated.
+  let requiresApproval: boolean
+  if (LOW_RISK_READ_TOOLS.includes(fullyQualifiedTool) && (risk === 'low' || risk === 'medium')) {
+    // Explicit read + low/medium risk: safe to auto-run
+    requiresApproval = toolCall.requiresApproval === true
+  } else {
+    // Everything else (writes, deletes, unknown tools, any high/critical risk) → approval required
+    requiresApproval = true
+  }
   if (CRITICAL_TOOLS.includes(fullyQualifiedTool)) {
-    requiresApproval = true;
-  } else if (!LOW_RISK_READ_TOOLS.includes(fullyQualifiedTool) && (risk === "high" || risk === "critical")) {
-    requiresApproval = true;
+    requiresApproval = true
   }
 
   // Write the execution skeleton to DB FIRST so it can be blocked if needed
