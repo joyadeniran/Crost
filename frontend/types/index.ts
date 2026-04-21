@@ -56,7 +56,6 @@ export type EventType =
   | 'orc_escalation'
   | 'orc_stall_detected'
   | 'goal_closed'
-  | 'goal_mission_report_written'    // legacy — kept for backward compat
   | 'goal_mission_report_written'
   | 'goal_received'
   | 'plan_drafted'
@@ -85,7 +84,6 @@ export interface Department {
   created_at: string
   updated_at: string
   created_by: string | null
-  is_orchestrator: boolean
 }
 
 export interface ApprovalQueueItem {
