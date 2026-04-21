@@ -1422,9 +1422,12 @@ export function WarRoom() {
     setDecisions({})
   }, [activeGoal?.id])
 
-  // On mount: pick up any pending goal left by the onboarding flow
+  // On mount: pick up any pending goal left by the onboarding flow.
+  // The handoff ALWAYS wins over any persisted activeGoal — a stale goal from a
+  // prior account/session lives in localStorage (see store.ts partialize) and
+  // would otherwise shadow the freshly-created onboarding goal, causing the
+  // poll loop to 404 forever on a dead id.
   useEffect(() => {
-    if (activeGoal) return // already have a goal in store
     try {
       const pendingId = localStorage.getItem('crost-pending-goal-id')
       if (!pendingId) return
@@ -1432,7 +1435,12 @@ export function WarRoom() {
       fetch(`/api/goals/${pendingId}`)
         .then(r => r.json())
         .then(json => {
-          if (json.success && json.data) setActiveGoal(json.data)
+          if (json.success && json.data) {
+            setActiveGoal(json.data)
+          } else {
+            // Onboarding goal went missing — drop any stale persisted goal too
+            setActiveGoal(null)
+          }
         })
         .catch(() => {})
     } catch {}
@@ -1459,6 +1467,16 @@ export function WarRoom() {
             const next = encodeURIComponent(window.location.pathname + window.location.search)
             window.location.href = `/login?next=${next}`
           }
+          return
+        }
+        if (res.status === 404) {
+          // The goal is gone (deleted, wrong tenant, or stale persisted id from
+          // a prior session). Retrying won't help — stop polling and clear the
+          // store so the War Room returns to its empty state.
+          clearInterval(interval)
+          setPollError(null)
+          setActiveGoal(null)
+          setIsSubmittingGoal(false)
           return
         }
         if (!res.ok) {
@@ -1501,7 +1519,7 @@ export function WarRoom() {
       }
     }, 2000)
     return () => clearInterval(interval)
-  }, [activeGoalId, activeGoalStatus, setIsSubmittingGoal, updateActiveGoal])
+  }, [activeGoalId, activeGoalStatus, setActiveGoal, setIsSubmittingGoal, updateActiveGoal])
 
   const handleGoalSubmit = useCallback(async (founderInput: string) => {
     setIsSubmittingGoal(true)
