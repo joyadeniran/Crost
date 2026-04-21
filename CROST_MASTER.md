@@ -3,9 +3,28 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.4  
+**Current Version:** 11.5  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — War Room Button Logic Fix (v11.4).
+**Deployment Status:** ✅ COMPLETE — Tool Connection Sync & Healing (v11.5).
+
+---
+
+## Session v11.5 - Tool Connection Sync & Healing
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Resolved issue where Orc failed to recognize connected tools (Gmail, Slack, etc.) despite successful Composio authentication.
+
+### Changes
+1. **Sync Route Schema Fix**: Corrected `api/connect/sync/route.ts` to use valid Supabase column names (`user_id`, `tool_slug`) and enforced the `status='connected'` constraint required by the execution engine.
+2. **Just-in-Time (JIT) Syncing**: Enhanced `executeToolCall.ts` with a reactive healing mechanism. If the database shows a tool as disconnected, the system now performs a real-time check against the Composio API.
+3. **Connection Auto-Healing**: If a JIT check confirms a tool is active in Composio, the system automatically "heals" the local database records (both `connections` and `available_tools`) before proceeding with the execution.
+4. **Improved Error Feedback**: Standardized "missing connection" messaging across the system to ensure Orc provides clear, actionable instructions to the founder.
+
+### Files Changed
+- `frontend/app/api/connect/sync/route.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 

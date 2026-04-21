@@ -97,11 +97,19 @@ export async function GET(req: Request) {
         await supabase
           .from('connections')
           .upsert({
-            created_by: user.id,
-            service_name: slug,
-            connection_id: toolkit.connection.connectedAccount?.id || 'managed',
+            user_id: user.id,
+            tool_slug: slug,
+            composio_connection_id: toolkit.connection.connectedAccount?.id || 'managed',
+            status: 'connected',
             updated_at: new Date().toISOString()
-          }, { onConflict: 'created_by, service_name' });
+          }, { onConflict: 'user_id, tool_slug' });
+      } else if (!isConnected) {
+        // Optional: Mark as revoked/expired if previously connected but now not
+        await supabase
+          .from('connections')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tool_slug', slug);
       }
     }
 
