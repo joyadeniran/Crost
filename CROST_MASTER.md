@@ -3,9 +3,27 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 10.8  
+**Current Version:** 10.9  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — UI Consistency and Aesthetic Enhancement (v10.8).
+**Deployment Status:** ✅ COMPLETE — Build fixes and UI optimization (v10.9).
+
+---
+
+## Session v10.9 - Build Fixes & Dependency Optimization
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Resolved Render build failure and fixed React hook dependency warnings.
+
+### Changes
+1. **ArtifactCard Fix**: Restored `downloadArtifact` and `deleteArtifact` functions that were inadvertently removed during refactoring, resolving the "Cannot find name 'downloadArtifact'" Type error.
+2. **React Hook Optimization**: Added missing `departments` dependency to the `handleChatSubmit` useCallback in `WarRoom.tsx`, fixing the ESLint `react-hooks/exhaustive-deps` warning.
+3. **Deployment Verified**: Confirmed build stability by addressing both hard type errors and secondary lint warnings.
+
+### Files Changed
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
