@@ -130,84 +130,134 @@ function GoalInput({
   }
 
   return (
-    <div className="goal-input-container">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{
-          width: 6, height: 6,
-          borderRadius: '50%',
-          background: isLoading ? 'var(--amber)' : 'var(--accent)',
-          boxShadow: isLoading ? '0 0 8px var(--amber)' : '0 0 8px var(--accent)',
-          flexShrink: 0,
-          animation: isLoading ? 'pulse 1s infinite' : undefined,
-        }} />
-        <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
-          fontSize: 10,
-          color: 'var(--text-3)',
-          letterSpacing: '0.08em',
-          fontWeight: 600,
-        }}>
-          {isLoading ? 'ORCHESTRATOR PLANNING…' : 'WAR ROOM'}
-        </span>
-        {!isLoading && (
+    <div className="goal-input-container" style={{ padding: '0', overflow: 'hidden' }}>
+      {/* Header Area */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 10, 
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--border)',
+        background: 'rgba(255,255,255,0.01)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
-            marginLeft: 'auto',
-            fontFamily: 'var(--font-dm-mono, monospace)',
-            fontSize: 9,
-            color: 'var(--text-4)',
-            letterSpacing: '0.06em',
+            width: 7, height: 7,
+            borderRadius: '50%',
+            background: isLoading ? 'var(--amber)' : 'var(--accent)',
+            boxShadow: isLoading ? '0 0 10px var(--amber)' : '0 0 10px var(--accent)',
+            flexShrink: 0,
+            animation: isLoading ? 'pulse 1.5s infinite' : undefined,
+          }} />
+          <span style={{
+            fontFamily: 'var(--font-syne, sans-serif)',
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--text)',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
           }}>
-            @dept · /tool · ⌘↵
+            {isLoading ? 'Orchestrator Planning' : 'War Room'}
           </span>
+        </div>
+
+        {!isLoading && (
+          <div style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-4)',
+              letterSpacing: '0.02em',
+              background: 'var(--bg-3)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>@</span> dept
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-4)',
+              letterSpacing: '0.02em',
+              background: 'var(--bg-3)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>/</span> tool
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 10,
+              color: 'var(--text-3)',
+              opacity: 0.8
+            }}>
+              ⌘ ↵
+            </span>
+          </div>
         )}
       </div>
 
-      {menuPrefix && (
-        <ChatCommandMenu
-          prefix={menuPrefix}
-          query={menuQuery}
-          departments={departments}
-          selectedIndex={menuIndex}
-          onSelect={handleMenuSelect}
-          onClose={() => setMenuPrefix(null)}
-        />
-      )}
+      <div style={{ padding: '16px' }}>
+        {menuPrefix && (
+          <ChatCommandMenu
+            prefix={menuPrefix}
+            query={menuQuery}
+            departments={departments}
+            selectedIndex={menuIndex}
+            onSelect={handleMenuSelect}
+            onClose={() => setMenuPrefix(null)}
+          />
+        )}
 
-      <textarea
-        ref={inputRef}
-        value={value}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        disabled={isLoading}
-        placeholder="Tell your company what to do…"
-        rows={2}
-        style={{
-          width: '100%',
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          color: 'var(--text)',
-          fontFamily: 'var(--font-dm-sans, sans-serif)',
-          fontSize: 14,
-          resize: 'none',
-          lineHeight: 1.5,
-          opacity: isLoading ? 0.5 : 1,
-          boxSizing: 'border-box',
-        }}
-      />
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-        <button
-          onClick={handleSubmit}
-          disabled={!value.trim() || isLoading}
-          className="btn-primary-crost"
-          style={{ 
-            opacity: value.trim() && !isLoading ? 1 : 0.4,
-            padding: '5px 14px'
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          disabled={isLoading}
+          placeholder="Tell your company what to do…"
+          rows={2}
+          style={{
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-dm-sans, sans-serif)',
+            fontSize: 15,
+            resize: 'none',
+            lineHeight: 1.6,
+            opacity: isLoading ? 0.5 : 1,
+            boxSizing: 'border-box',
+            padding: '0',
+            marginBottom: '12px'
           }}
-        >
-          {isLoading ? 'PLANNING…' : hasActiveGoal ? 'NEW GOAL' : 'DISPATCH'}
-        </button>
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={handleSubmit}
+            disabled={!value.trim() || isLoading}
+            className="btn-primary-crost"
+            style={{ 
+              opacity: value.trim() && !isLoading ? 1 : 0.4,
+              padding: '6px 18px',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              boxShadow: value.trim() && !isLoading ? '0 4px 15px rgba(0, 212, 170, 0.2)' : 'none'
+            }}
+          >
+            {isLoading ? 'PLANNING…' : (hasActiveGoal && !value.trim()) ? 'NEW GOAL' : 'DISPATCH'}
+          </button>
+        </div>
       </div>
     </div>
   )

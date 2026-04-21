@@ -3,9 +3,65 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.1  
+**Current Version:** 11.4  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — Live Events persistence + task approval state fixes (v11.1).
+**Deployment Status:** ✅ COMPLETE — War Room Button Logic Fix (v11.4).
+
+---
+
+## Session v11.4 - War Room Button Logic Fix
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Restored the intended interaction behavior where the primary action button dynamically updates its label based on user input.
+
+### Changes
+1. **Dynamic Button Labeling**: Fixed the logic in `WarRoom.tsx` to ensure the button flips from "NEW GOAL" to "DISPATCH" as soon as the user starts typing, providing clearer interactive feedback while preserving the state of the active mission when input is empty.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md` (this entry)
+
+---
+
+## Session v11.3 - War Room Input Polish
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Enhanced the primary user interface surface (War Room Goal Input) for better visual hierarchy and a more premium feel.
+
+### Changes
+1. **Structural Layout Overhaul**: Separated the Goal Input into a distinct header and input area using a cleaner, dashboard-style container.
+2. **Typography & Metadata**: Standardized metadata (shortcuts and interaction modes) using `var(--font-dm-mono)` with subtle pill-style backgrounds for better legibility and aesthetics.
+3. **Interactive Polish**: Updated the status indicator (indicator dot) with improved pulsing animations and consistent color tokens.
+4. **Input Optimization**: Increased font size and line height in the primary textarea for a more comfortable typing experience, aligning with the "Founder first" design principle.
+5. **Button Styling**: Refined the DISPATCH button with consistent weighting, letter-spacing, and shadow states to match the premium design system.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md` (this entry)
+
+---
+
+## Session v11.2 - Security Hardening & Dependency Audit
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Eliminated critical vulnerabilities and hardened the frontend dependency tree.
+
+### Changes
+1. **Critical Patch for Next.js**: Updated `next` from `14.2.5` to `14.2.35`, resolving multiple critical security advisories (Cache Poisoning, DoS, SSRF).
+2. **Supabase SSR Upgrade**: Upgraded `@supabase/ssr` to `0.10.2` to resolve vulnerable `cookie` dependencies.
+3. **Type Safety Fixes**: Resolved TypeScript errors in `lib/supabase-browser.ts` and `lib/supabase.ts` introduced by the `@supabase/ssr` upgrade (casted `sameSite` to strict `'lax'` literal).
+4. **Official SheetJS Distribution**: Migrated `xlsx` from the abandoned npm package to the official SheetJS registry (`https://cdn.sheetjs.com/`) to fix prototype pollution and ReDoS vulnerabilities.
+5. **Dev Tooling Update**: Updated `eslint-config-next` to `14.2.15` to reduce high-severity vulnerabilities in dev dependencies.
+6. **Build Verification**: Confirmed full production build stability with `npm run build` after dependency updates.
+
+### Files Changed
+- `frontend/package.json`
+- `frontend/lib/supabase-browser.ts`
+- `frontend/lib/supabase.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
