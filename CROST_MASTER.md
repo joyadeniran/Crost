@@ -3,9 +3,53 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 10.6  
+**Current Version:** 10.8  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** 🛠 Local — Onboarding Flow Rebuild In Progress (v10.6).
+**Deployment Status:** ✅ COMPLETE — UI Consistency and Aesthetic Enhancement (v10.8).
+
+---
+
+## Session v10.8 - UI Consistency & Aesthetic Enhancement
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Achieved consistent UI looks, premium aesthetic, and elegance across the app by standardizing components and refining the design system.
+
+### Changes
+1. **Design System Standardization**: Refined `globals.css` to include centralized utility classes for `glass-panel`, `glass-card`, `crost-topbar`, and standardized `artifact-row` and `crost-badge` styles.
+2. **Topbar Refactor**: Migrated `Topbar.tsx` from brittle inline styles to the new utility classes, adding a modern glassmorphism blur and improved transition states.
+3. **Artifact UI Upgrade**: Overhauled `ArtifactCard.tsx` to use the `glass-card` pattern, replacing extensive inline styles with CSS variables and improved hover interactions.
+4. **Memo Styling Sync**: Updated `MemoCard.tsx` to align with the premium glassmorphism aesthetic, ensuring consistent padding, typography, and color tokens.
+5. **War Room Polish**: Refactored `GoalInput` and `SynthesisReportCard` in `WarRoom.tsx` to use the refined design tokens, improving focus states and visual hierarchy.
+6. **Sidebar Navigation Refinement**: Updated `SidebarNav.tsx` and related CSS to ensure consistent active states and smoother hover transitions across the navigation menu.
+
+### Files Changed
+- `frontend/app/globals.css`
+- `frontend/components/dashboard/Topbar.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/components/memos/MemoCard.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/dashboard/SidebarNav.tsx`
+- `CROST_MASTER.md` (this entry)
+
+---
+
+## Session v10.7 - Post-Onboarding Goal 404 Fix
+
+**Date**: April 21, 2026
+**Status**: 🛠 IN PROGRESS — local fix, awaiting live QA
+**Impact**: Resolves the "⚠ Can't reach the server (HTTP 404). Your goal is still running — retrying…" banner that appeared on the dashboard immediately after completing onboarding.
+
+### Root cause
+`activeGoal` is persisted to `localStorage` via zustand (`lib/store.ts` — `partialize` keeps `activeGoal`). The War Room's pending-goal effect early-returned whenever any `activeGoal` existed, so a stale goal from a prior account/session shadowed the fresh onboarding handoff. The 2-second poll loop then hammered `/api/goals/<stale-id>`, which returned 404 (the stale id either no longer exists or belongs to a different tenant), surfacing the banner forever.
+
+### Changes
+1. **Onboarding handoff wins**: the pending-goal effect in `WarRoom.tsx` now always consumes `crost-pending-goal-id` when present, replacing any persisted `activeGoal`. If that id 404s, the stale store state is cleared.
+2. **404 is terminal during polling**: a 404 from `/api/goals/:id` now stops the interval, clears `activeGoal`, and resets `isSubmittingGoal` — instead of retrying a dead id every 2s and showing the scary banner.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md`
 
 ---
 

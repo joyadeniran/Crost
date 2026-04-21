@@ -89,16 +89,17 @@ export function SidebarNav({ pendingCount, identity }: Props) {
         <NavItem href="/dashboard/event-log" label="Event Log"    Icon={IconActivity} />
       </nav>
 
-      <div className="sidebar-bottom" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="sidebar-bottom">
         <div style={{
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 10,
-          color: 'var(--text-3)',
-          padding: '4px 10px 8px',
+          color: 'var(--text-4)',
+          padding: '4px 12px 10px',
           letterSpacing: '0.04em',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          textTransform: 'uppercase',
         }}>
           {identity}
         </div>
@@ -111,8 +112,8 @@ export function SidebarNav({ pendingCount, identity }: Props) {
             border: 'none', 
             width: '100%', 
             cursor: 'pointer',
-            marginTop: 0,
-            paddingBottom: 12
+            paddingTop: '8px',
+            paddingBottom: '8px',
           }}
         >
           <IconLogout />

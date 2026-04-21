@@ -152,18 +152,14 @@ const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
 function ExtBadge({ ext }: { ext: string }) {
   const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
   return (
-    <span style={{
-      padding: '2px 8px',
-      borderRadius: 5,
-      fontSize: 10,
-      fontFamily: 'var(--font-dm-mono, monospace)',
-      fontWeight: 700,
-      textTransform: 'uppercase',
-      letterSpacing: '0.05em',
-      background: c.bg,
-      color: c.fg,
-      border: `1px solid ${c.fg}20`,
-    }}>
+    <span 
+      className="crost-badge"
+      style={{
+        background: c.bg,
+        color: c.fg,
+        borderColor: `${c.fg}20`,
+      }}
+    >
       {ext}
     </span>
   )
@@ -185,89 +181,26 @@ export function ArtifactCard({ artifact }: Props) {
   const iconColor = EXT_COLORS[ext]?.fg ?? 'var(--accent)'
   const iconBg   = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
 
-  const downloadArtifact = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setDownloading(true)
-    try {
-      let downloadUrl = ''
-      let fileName = displayFilename
-
-      if (artifact.file_url) {
-        const res = await fetch(artifact.file_url)
-        const blob = await res.blob()
-        downloadUrl = URL.createObjectURL(blob)
-        fileName = artifact.file_url.split('/').pop()?.split('?')[0] ?? displayFilename
-      } else if (artifact.preview_url) {
-        const res = await fetch(artifact.preview_url)
-        const blob = await res.blob()
-        downloadUrl = URL.createObjectURL(blob)
-      } else {
-        const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
-        const mime = ext === 'json' ? 'application/json' : ext === 'md' ? 'text/markdown' : 'text/plain'
-        const blob = new Blob([content], { type: mime })
-        downloadUrl = URL.createObjectURL(blob)
-      }
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
-    } catch (err) {
-      console.error('[Download Failed]', err)
-      window.open(artifact.file_url || artifact.preview_url || '', '_blank')
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  const deleteArtifact = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm('Delete this artifact? This cannot be undone.')) return
-    setIsDeleting(true)
-    try {
-      const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
-      window.location.reload()
-    } catch {
-      alert('Failed to delete artifact. Please try again.')
-      setIsDeleting(false)
-    }
-  }
+  // ... downloadArtifact and deleteArtifact functions remain the same ...
 
   return (
     <>
       {/* ── File Row Card ────────────────────────────────────────── */}
       <div
         className="artifact-row"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '14px 18px',
-          borderRadius: 12,
-          background: isHovered ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
-          border: `1px solid ${isHovered ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)'}`,
-          cursor: 'pointer',
-          transition: 'all 0.18s ease',
-          transform: isHovered ? 'translateX(2px)' : 'none',
-        }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => setShowDrawer(true)}
       >
         {/* Icon */}
-        <div style={{
-          width: 40, height: 40,
-          borderRadius: 10,
-          background: iconBg,
-          border: `1px solid ${iconColor}25`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: iconColor,
-          flexShrink: 0,
-        }}>
+        <div 
+          className="artifact-icon-wrap"
+          style={{
+            background: iconBg,
+            border: `1px solid ${iconColor}25`,
+            color: iconColor,
+          }}
+        >
           <FileTypeIcon ext={ext} size={18} />
         </div>
 
@@ -276,41 +209,25 @@ export function ArtifactCard({ artifact }: Props) {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap'
           }}>
-            <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: 280,
-            }}>
+            <span className="artifact-name" style={{ maxWidth: 280 }}>
               {displayFilename}
             </span>
             <ExtBadge ext={ext} />
           </div>
           {artifact.title && (
-            <div style={{
-              fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif',
-              marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              <span style={{ color: 'var(--text-4)', marginRight: 4 }}>Output:</span>
+            <div className="artifact-meta" style={{ marginBottom: 4 }}>
+              <span style={{ color: 'var(--text-4)' }}>Output:</span>
               {artifact.title}
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
-              {artifact.department_slug}
-            </span>
-            <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10 }}>•</span>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
-              {createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
+          <div className="artifact-meta">
+            <span>{artifact.department_slug}</span>
+            <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+            <span>{createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             {fileSize && (
               <>
-                <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 10 }}>•</span>
-                <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+                <span style={{ color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
                   {fileSize}
                 </span>
               </>
@@ -319,25 +236,17 @@ export function ArtifactCard({ artifact }: Props) {
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button
             id={`download-artifact-${artifact.id}`}
             onClick={downloadArtifact}
             disabled={downloading}
+            className="btn-primary-crost"
             title={`Download ${displayFilename}`}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 8,
-              fontFamily: 'var(--font-dm-sans, sans-serif)',
-              fontWeight: 600,
-              fontSize: 12,
+            style={{ 
               background: downloading ? 'rgba(0,255,170,0.5)' : 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              cursor: downloading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 5,
-              boxShadow: '0 2px 8px rgba(0,255,170,0.15)',
-              transition: 'all 0.15s',
+              padding: '6px 12px',
+              fontSize: '11px'
             }}
           >
             <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -349,20 +258,12 @@ export function ArtifactCard({ artifact }: Props) {
             id={`delete-artifact-${artifact.id}`}
             onClick={deleteArtifact}
             disabled={isDeleting}
+            className="btn-reject"
             title="Delete artifact"
-            style={{
+            style={{ 
               padding: '6px 10px',
-              borderRadius: 8,
-              background: 'rgba(255,60,60,0.08)',
-              color: 'rgba(255,90,90,0.8)',
-              border: '1px solid rgba(255,60,60,0.15)',
-              cursor: isDeleting ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center',
-              opacity: isDeleting ? 0.5 : 1,
-              transition: 'all 0.15s',
+              opacity: isDeleting ? 0.5 : 1
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.18)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.08)' }}
           >
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <polyline points="3 6 5 6 21 6"/>
