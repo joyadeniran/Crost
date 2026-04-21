@@ -6,7 +6,7 @@
 import { supabaseClient } from '@/lib/supabase-browser'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
-import type { Goal, OrchestratorTask, RiskLevel, Department } from '@/types'
+import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus } from '@/types'
 import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 
@@ -642,8 +642,8 @@ function TaskApprovalItem({
 
   // Use DB status if it's more "advanced" than the local decision.
   // DB statuses that mean work is already in flight or done take priority over null local decision.
-  const DB_ACTIONED_STATUSES = ['running', 'completed', 'failed', 'dispatched', 'approved', 'rejected', 'expired']
-  const isDbActioned = DB_ACTIONED_STATUSES.includes(dbTask?.status || '')
+  const DB_ACTIONED_STATUSES: GoalTaskStatus[] = ['approved', 'running', 'completed', 'failed']
+  const isDbActioned = !!dbTask && DB_ACTIONED_STATUSES.includes(dbTask.status)
   const resolvedStatus = dbTask?.status || decision
   const statusLabel = decisionLabel[resolvedStatus || ''] || ''
   // A task is "actioned" if the founder made a local decision OR the DB already reflects work in progress/done.
@@ -1392,16 +1392,18 @@ export function WarRoom() {
   // This ensures that after navigation (which resets local state), tasks that are
   // already running/completed/failed in the DB are correctly reflected without
   // re-showing the Approve buttons.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!activeGoal?.goal_tasks || activeGoal.goal_tasks.length === 0) {
       setDecisions({})
       return
     }
-    const DB_ACTIONED = ['running', 'completed', 'failed', 'dispatched', 'approved', 'rejected', 'expired']
+    // Only statuses that are in GoalTaskStatus and mean "work is in flight or done"
+    const DB_ACTIONED: GoalTaskStatus[] = ['approved', 'running', 'completed', 'failed']
     const synced: Record<string, TaskDecision> = {}
     for (const dbTask of activeGoal.goal_tasks) {
       if (DB_ACTIONED.includes(dbTask.status)) {
-        synced[dbTask.task_id] = dbTask.status === 'rejected' ? 'rejected' : 'approved'
+        synced[dbTask.task_id] = 'approved'
       }
     }
     setDecisions(synced)
