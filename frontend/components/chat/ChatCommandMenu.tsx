@@ -92,9 +92,8 @@ export function ChatCommandMenu({
           .filter(
             d =>
               !d.is_orchestrator &&
-              // Only advertise departments the founder can actually dispatch to —
-              // drafts and paused depts would fail at the server and confuse the user.
-              d.activation_stage === 'active' &&
+              // Show departments that are active OR in draft (common during onboarding)
+              (d.activation_stage === 'active' || d.activation_stage === 'draft') &&
               (d.slug.toLowerCase().includes(query.toLowerCase()) ||
                 d.name.toLowerCase().includes(query.toLowerCase())),
           )

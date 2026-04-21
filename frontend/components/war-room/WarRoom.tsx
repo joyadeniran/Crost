@@ -130,7 +130,7 @@ function GoalInput({
   }
 
   return (
-    <div className="goal-input-container" style={{ padding: '0', overflow: 'hidden' }}>
+    <div className="goal-input-container" style={{ padding: '0', overflow: 'visible', position: 'relative' }}>
       {/* Header Area */}
       <div style={{ 
         display: 'flex', 
@@ -204,7 +204,7 @@ function GoalInput({
         )}
       </div>
 
-      <div style={{ padding: '16px' }}>
+      <div style={{ padding: '16px', position: 'relative' }}>
         {menuPrefix && (
           <ChatCommandMenu
             prefix={menuPrefix}
@@ -222,7 +222,7 @@ function GoalInput({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           disabled={isLoading}
-          placeholder="Tell your company what to do…"
+          placeholder="Tell your company what to do… (@ dept · / tool)"
           rows={2}
           style={{
             width: '100%',

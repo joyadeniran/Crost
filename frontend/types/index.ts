@@ -68,6 +68,7 @@ export interface Department {
   name: string
   slug: string
   activation_stage: ActivationStage
+  is_orchestrator: boolean
   persona_prompt: string
   tone_override: string | null
   capabilities: string[]

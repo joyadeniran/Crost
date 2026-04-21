@@ -3,9 +3,44 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.5  
+**Current Version:** 11.7  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — Tool Connection Sync & Healing (v11.5).
+**Deployment Status:** ✅ COMPLETE — ChatCommandMenu Positioning Fix (v11.7).
+
+---
+
+## Session v11.7 - ChatCommandMenu Positioning Fix
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Ensured the mention/tool menu is correctly positioned and visible when triggered.
+
+### Changes
+1. **Inner Container Positioning**: Added `position: relative` to the internal padding `div` of the `GoalInput`, ensuring that the absolute-positioned `ChatCommandMenu` is anchored correctly above the input area instead of floating relative to the entire outer container.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md` (this entry)
+
+---
+
+## Session v11.6 - Mention Menu & Placeholder Fixes
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Restored functionality for @ and / triggers in the War Room and improved user discovery through updated placeholders.
+
+### Changes
+1. **Container Visibility Fix**: Changed `GoalInput` container from `overflow: hidden` to `overflow: visible` and added `position: relative`, ensuring the absolute-positioned `ChatCommandMenu` is visible when triggered.
+2. **Type Safety Alignment**: Added missing `is_orchestrator` field to the `Department` interface in `types/index.ts`, preventing runtime issues in component logic.
+3. **Filter Relaxation**: Updated `ChatCommandMenu.tsx` to include departments in the `draft` stage, ensuring new users in onboarding can see and use their newly created departments.
+4. **Placeholder Enhancement**: Updated the War Room textarea placeholder to include explicit hints for `@ dept` and `/ tool` interaction modes.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/chat/ChatCommandMenu.tsx`
+- `frontend/types/index.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
