@@ -71,14 +71,52 @@ export async function executeToolCall(options: ExecuteOptions) {
     .select("*")
     .eq("user_id", userId)
     .eq("tool_slug", service)
-    .single();
+    .maybeSingle();
 
   if (connErr || !connection || connection.status !== "connected") {
-    return {
-      status: "missing_connection",
-      service,
-      message: `${service.toUpperCase()} is not connected. Orc must request connection.`
-    };
+    // JUST-IN-TIME SYNC: Before failing, check Composio directly in case DB is stale
+    // (e.g. user connected via onboarding or another tab but didn't visit settings)
+    try {
+      const { Composio } = await import("@composio/core");
+      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+      const session = await composio.create(userId);
+      const toolkitsResult = await session.toolkits();
+      const toolkits = (toolkitsResult as any).items || [];
+      
+      const toolkit = toolkits.find((t: any) => t.name.toLowerCase() === service.toLowerCase());
+      const isConnected = toolkit?.connection?.isActive ?? false;
+
+      if (isConnected) {
+        // Heal the DB record
+        await supabase.from("connections").upsert({
+          user_id: userId,
+          tool_slug: service,
+          composio_connection_id: toolkit.connection.connectedAccount?.id || 'managed',
+          status: 'connected',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id, tool_slug' });
+
+        // Update available_tools too
+        await supabase.from("available_tools").update({ is_configured: true })
+          .eq("user_id", userId)
+          .or(`id.eq.${service},id.like.${service}_%`);
+          
+        console.log(`[JIT Sync] Healed connection for ${service} for user ${userId}`);
+      } else {
+        return {
+          status: "missing_connection",
+          service,
+          message: `${service.toUpperCase()} is not connected. Open Settings → Integrations and connect it, then retry.`
+        };
+      }
+    } catch (jitErr) {
+      console.error("[JIT Sync Failed]", jitErr);
+      return {
+        status: "missing_connection",
+        service,
+        message: `${service.toUpperCase()} is not connected. Open Settings → Integrations and connect it, then retry.`
+      };
+    }
   }
 
   // 2. Department Permission Guard
