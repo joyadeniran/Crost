@@ -8,6 +8,14 @@ import { WarRoom } from '@/components/war-room/WarRoom'
 import { Department } from '@/types'
 import { redirect } from 'next/navigation'
 
+function getResumeRoute(step?: string | null) {
+  if (step === 'activated') return '/onboarding/activate'
+  if (step === 'team') return '/onboarding/team'
+  if (step === 'orc') return '/onboarding/orc'
+  if (step === 'control') return '/onboarding/control'
+  return '/onboarding/identity'
+}
+
 export default async function DashboardPage() {
   const authClient = await createSupabaseServerComponentClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -16,6 +24,8 @@ export default async function DashboardPage() {
     redirect('/login')
   }
   const currentUser = user
+  const onboardingStep = currentUser.user_metadata?.onboarding_step
+  const onboardingIncomplete = onboardingStep !== 'complete'
 
   const supabase = createServerSupabaseClient()
   async function cloneTemplatesForLegacyUser() {
@@ -190,6 +200,53 @@ export default async function DashboardPage() {
     >
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
+        {onboardingIncomplete && (
+          <div style={{
+            marginBottom: 18,
+            padding: '14px 16px',
+            borderRadius: 'var(--radius)',
+            border: '1px solid rgba(0,212,170,0.25)',
+            background: 'rgba(0,212,170,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontSize: 10,
+                color: 'var(--accent)',
+                letterSpacing: '0.08em',
+                marginBottom: 4,
+              }}>
+                RESUME SETUP
+              </div>
+              <div style={{ color: 'var(--text)', fontSize: 14 }}>
+                Your office is usable now. Finish setup whenever you&apos;re ready.
+              </div>
+            </div>
+            <a
+              href={getResumeRoute(onboardingStep)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 14px',
+                borderRadius: 999,
+                border: '1px solid rgba(0,212,170,0.35)',
+                color: 'var(--accent)',
+                textDecoration: 'none',
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontSize: 11,
+                letterSpacing: '0.06em',
+              }}
+            >
+              Continue onboarding →
+            </a>
+          </div>
+        )}
         <h1 style={{
           fontFamily: 'var(--font-syne, Syne)',
           fontWeight: 700,

@@ -89,14 +89,33 @@ Never claim the founder's personal identity as your own.`
       })
     }
 
-    // Insert foundational memos
+    // Insert or refresh foundational memos without duplicating them across partial setup resumes.
     for (const memo of foundationalMemos) {
-      const { error: memoErr } = await supabase
+      const { data: existingMemo } = await supabase
         .from('company_memos')
-        .insert(memo)
-      
-      if (memoErr) {
-        console.error('Error inserting foundational memo:', memoErr)
+        .select('id')
+        .eq('created_by', user.id)
+        .eq('title', memo.title)
+        .eq('is_foundational', true)
+        .maybeSingle()
+
+      if (existingMemo?.id) {
+        const { error: memoErr } = await supabase
+          .from('company_memos')
+          .update(memo)
+          .eq('id', existingMemo.id)
+
+        if (memoErr) {
+          console.error('Error updating foundational memo:', memoErr)
+        }
+      } else {
+        const { error: memoErr } = await supabase
+          .from('company_memos')
+          .insert(memo)
+
+        if (memoErr) {
+          console.error('Error inserting foundational memo:', memoErr)
+        }
       }
     }
 

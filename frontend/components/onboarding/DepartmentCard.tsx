@@ -4,11 +4,12 @@ interface DepartmentCardProps {
   name: string
   slug: string
   description: string
+  modelLabel: string
   selected: boolean
   onClick: () => void
 }
 
-export function DepartmentCard({ name, description, selected, onClick }: DepartmentCardProps) {
+export function DepartmentCard({ name, description, modelLabel, selected, onClick }: DepartmentCardProps) {
   return (
     <div 
       className={`dept-card glass-panel ${selected ? 'selected' : ''}`}
@@ -24,10 +25,9 @@ export function DepartmentCard({ name, description, selected, onClick }: Departm
       <p className="dept-desc">{description}</p>
       
       <div className="dept-footer">
-        <span className="model-badge">○ Cloud Optimizer</span>
+        <span className="model-badge">{modelLabel}</span>
+        <span className="dept-footer-secondary">{selected ? 'Selected' : 'Add later'}</span>
       </div>
-
-
     </div>
   )
 }

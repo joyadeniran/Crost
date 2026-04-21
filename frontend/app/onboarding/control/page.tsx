@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ControlStyleCard } from '@/components/onboarding/ControlStyleCard'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
+import { toast } from '@/components/ui/toaster'
 
 const OPTIONS = [
   {
@@ -31,23 +32,52 @@ export default function ControlPage() {
   const router = useRouter()
   const { 
     riskTolerance, setRiskTolerance,
-    founderName, companyName, city, country, businessCategory, stage
+    founderName, companyName, city, country, businessCategory, businessDescription, stage, selectedDepartments
   } = useOnboardingStore()
 
   const [localRisk, setLocalRisk] = useState<'careful' | 'balanced' | 'aggressive'>(riskTolerance || 'balanced')
+  const [skipping, setSkipping] = useState(false)
 
-  const handleSelect = (id: 'careful' | 'balanced' | 'aggressive') => {
+  const handleSelect = async (id: 'careful' | 'balanced' | 'aggressive') => {
     setLocalRisk(id)
-  }
-
-  const handleProceed = async () => {
-    setRiskTolerance(localRisk)
+    setRiskTolerance(id)
     await fetch('/api/onboarding/set-step', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ step: 'team' })
-    }).catch(err => console.error('Failed to update onboarding step:', err))
-    router.push('/onboarding/team')
+      body: JSON.stringify({ step: 'orc' })
+    }).catch((err) => console.error('Failed to update onboarding step:', err))
+    router.push('/onboarding/orc')
+  }
+
+  const handleSkip = async () => {
+    setSkipping(true)
+    try {
+      const res = await fetch('/api/onboarding/complete-final', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'orc',
+          identity: {
+            founderName,
+            companyName,
+            city,
+            country,
+            businessDescription,
+            businessCategory,
+            stage,
+          },
+          riskTolerance: localRisk,
+          selectedDepartments,
+        }),
+      })
+
+      if (!res.ok) throw new Error('Unable to save your setup')
+      window.location.href = '/dashboard'
+    } catch (err: any) {
+      toast(err.message || 'Unable to skip right now.', 'error')
+    } finally {
+      setSkipping(false)
+    }
   }
 
   return (
@@ -71,18 +101,21 @@ export default function ControlPage() {
               key={opt.id}
               {...opt}
               selected={localRisk === opt.id}
-              onClick={() => handleSelect(opt.id)}
+              onClick={() => void handleSelect(opt.id)}
             />
           ))}
         </section>
 
-        <div className="action-row animate-fade-in" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
+        <div className="stage-utility-row animate-fade-in">
           <button
-            onClick={handleProceed}
-            className="primary-btn-crost lg"
+            type="button"
+            className="skip-link"
+            onClick={() => void handleSkip()}
+            disabled={skipping}
           >
-            Confirm & Build Team <span>→</span>
+            {skipping ? 'Saving…' : 'Skip for now'}
           </button>
+          <span className="footer-note">Pick any card to continue to Meet Orc.</span>
         </div>
 
         <footer className="footer-note" style={{ marginTop: '32px', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>

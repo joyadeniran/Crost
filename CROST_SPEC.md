@@ -115,6 +115,7 @@ Beat-by-beat narrative against the founder simulation. Each beat is followed by 
 
 - Three cards: Careful, Balanced (pre-selected), Aggressive. One click advances. No "Next" button.
 - This sets `risk_tolerance` in `system_config`, which controls approval thresholds across departments.
+- From this screen onward, **"Skip for now"** is allowed. Skipping enters the partial dashboard state with a visible **Resume setup** banner; it does not strand the founder outside the product.
 
 ### Beat 5 — Department selection
 
@@ -144,6 +145,7 @@ Beat-by-beat narrative against the founder simulation. Each beat is followed by 
 - Orc has a small visual mark (the `Crost-icon256.png` already in the workspace works). Not a face. Not anthropomorphized further.
 - After department selection, Orc immediately proposes a **suggested first mission** based on the founder's interpreted business category. Examples: "Create a pitch deck", "Build an outreach plan", "Draft a go-to-market strategy", "Generate customer personas".
 - The founder can accept the suggestion, edit it, type their own goal, or skip ("Skip for now — go to dashboard"). Skip is always visible.
+- Suggested first missions should be rendered as **clickable chips beneath the goal composer**. Tapping a chip fills the composer, but the founder can still freely edit the text before submitting.
 
 ### Beat 7 — Mission approval and department activation
 
@@ -165,6 +167,7 @@ Beat-by-beat narrative against the founder simulation. Each beat is followed by 
 - The war room may show a "Orc is planning…" non-blocking banner, but the rest of the dashboard (Memo, Departments, Knowledge Base, Settings) is fully usable.
 - The Memo already contains the company profile from onboarding. The founder finding this on their own ("These are foundational truths") is a positive surprise. Do not hide it behind a tour.
 - Live events stream into a small "What Orc is doing" tray on the dashboard so the founder always sees motion.
+- Every onboarding stage after Identity includes a visible **Back** affordance so founders can revisit the immediately previous stage without relying on browser history.
 
 **Processing copy — canonical list (no edgy/weapons language):**
 
