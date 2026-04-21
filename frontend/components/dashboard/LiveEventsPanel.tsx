@@ -33,9 +33,10 @@ function timeAgo(dateStr: string) {
 
 interface Props {
   initial: EventLogEntry[]
+  isHidden?: boolean
 }
 
-export function LiveEventsPanel({ initial }: Props) {
+export function LiveEventsPanel({ initial, isHidden }: Props) {
   const [events, setEvents] = useState<EventLogEntry[]>(initial)
   const [newId, setNewId] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
@@ -58,7 +59,7 @@ export function LiveEventsPanel({ initial }: Props) {
   }, [])
 
   return (
-    <div className="events-panel">
+    <div className="events-panel" style={isHidden ? { display: 'none' } : undefined}>
       <div className="events-panel-header">
         <span className="events-panel-title">LIVE EVENTS</span>
         <span style={{

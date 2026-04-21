@@ -3,9 +3,66 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 10.9  
+**Current Version:** 11.1  
 **Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — Build fixes and UI optimization (v10.9).
+**Deployment Status:** ✅ COMPLETE — Live Events persistence + task approval state fixes (v11.1).
+
+---
+
+## Session v11.1 - Live Events Persistence & Task Approval State Fixes
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE  
+**Impact**: Resolved two related issues: (1) live events sidebar losing all events on navigation to hidden pages; (2) tasks showing Approve buttons again after navigating away and back, appearing stuck in "APPROVED — ACTION EXECUTING" indefinitely.
+
+### Root Causes
+
+**Problem 1 — Live Events Lost on Navigation**  
+`ContentWrapper.tsx` used conditional rendering (`{!isHidden && <LiveEventsPanel />}`) to hide the sidebar on certain pages (settings, knowledge, memos, approvals, artifacts). This caused the component to fully unmount, destroying the Supabase real-time subscription and all accumulated event state. On remounting, the panel received only the stale `initial` prop from the server layout's first render, missing all events that arrived while navigated away.
+
+**Problem 2 — Tasks Stuck in "APPROVED — ACTION EXECUTING"**  
+Two sub-bugs sharing the same root (local UI state not surviving navigation):
+
+- **2a**: `decisions` state (local to WarRoom) reset on component remount. `TaskApprovalItem` branched on `decision` (local) rather than checking DB task status, so already-running/completed tasks re-showed Approve buttons after navigation. The display condition `{decision ? status : buttons}` ignored `dbTask.status` entirely for this check.
+
+- **2b**: `ApprovalCard` showed "APPROVED — ACTION EXECUTING" permanently after a Composio tool was approved and executed. The API response includes `execution_status: 'executed'` but this was never reflected in the UI label.
+
+### Changes
+
+1. **ContentWrapper.tsx**: Always render `<LiveEventsPanel>` — removed the conditional and passed `isHidden` prop instead, so the panel hides via CSS (`display: none`) rather than unmounting. Subscription and event state now survive navigation.
+
+2. **LiveEventsPanel.tsx**: Added `isHidden?: boolean` prop; applies `style={{ display: 'none' }}` on the root div when hidden.
+
+3. **WarRoom.tsx — `InlineMessage` type**: Added `approvalExecuted?: boolean` field.
+
+4. **WarRoom.tsx — `ApprovalCard`**: Label now shows `'✓ ACTION EXECUTED'` when `msg.approvalExecuted === true`, falling back to `'✓ APPROVED — ACTION EXECUTING'` when execution is still async.
+
+5. **WarRoom.tsx — `handleApprovalDecision`**: Reads `json.execution_status === 'executed'` from the PATCH response and stores it as `approvalExecuted` on the message.
+
+6. **WarRoom.tsx — `TaskApprovalItem`**: Introduced `isDbActioned` (checks DB task status against a set of terminal/running statuses) and `isActioned = !!(decision) || isDbActioned`. The button/status branch now uses `isActioned` instead of `decision`, so running/completed DB tasks never re-show Approve buttons.
+
+7. **WarRoom.tsx — decisions initialization**: The `decisions` effect (previously `setDecisions({})` on goal ID change) now pre-populates decisions from `activeGoal.goal_tasks` DB state. Rejected DB tasks map to `'rejected'`; all other actioned statuses map to `'approved'`. This ensures `pendingCount` and `allDone` in PlanCard are accurate after navigation.
+
+### Files Changed
+- `frontend/components/dashboard/ContentWrapper.tsx`
+- `frontend/components/dashboard/LiveEventsPanel.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
+- `CROST_MASTER.md` (this entry)
+
+---
+
+## Session v11.0 - Chat Mention Icon Fix
+
+**Date**: April 21, 2026  
+**Status**: ✅ COMPLETE — Verified live  
+**Impact**: Resolved issue where @ mentions for departments showed raw icon slugs (e.g., 'marketing') instead of emojis.
+
+### Changes
+1. **ChatCommandMenu Fix**: Updated the department mapping logic in `ChatCommandMenu.tsx` to use the `resolveIcon` utility, ensuring legacy icon names are correctly transformed into emojis.
+
+### Files Changed
+- `frontend/components/chat/ChatCommandMenu.tsx`
+- `CROST_MASTER.md` (this entry)
 
 ---
 

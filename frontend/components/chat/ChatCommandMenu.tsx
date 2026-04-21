@@ -102,7 +102,7 @@ export function ChatCommandMenu({
             kind: 'dept' as const,
             slug: d.slug,
             name: d.name,
-            icon: d.icon || '🏢',
+            icon: resolveIcon(d.icon),
             color: d.color || '#6366f1',
           }))
       : TOOL_CATALOGUE.filter(

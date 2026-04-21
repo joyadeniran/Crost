@@ -234,6 +234,7 @@ type InlineMessage = {
   approvalDeptName?: string
   approvalError?: string
   approvalExecutionError?: string
+  approvalExecuted?: boolean
 }
 
 const COMMAND_MESSAGES_STORAGE_KEY = 'crost-war-room-pending-approvals'
@@ -277,7 +278,7 @@ function ApprovalCard({
           letterSpacing: '0.06em',
         }}>
           {msg.approvalDecision === 'approved'
-            ? (isFailed ? '✗ EXECUTION FAILED' : '✓ APPROVED — ACTION EXECUTING')
+            ? (isFailed ? '✗ EXECUTION FAILED' : msg.approvalExecuted ? '✓ ACTION EXECUTED' : '✓ APPROVED — ACTION EXECUTING')
             : '✗ REJECTED'}
         </span>
         {isFailed && (
@@ -639,9 +640,14 @@ function TaskApprovalItem({
     needs_data: '❓ BLOCKED',
   }
 
-  // Use DB status if it's more "advanced" than the local decision
+  // Use DB status if it's more "advanced" than the local decision.
+  // DB statuses that mean work is already in flight or done take priority over null local decision.
+  const DB_ACTIONED_STATUSES = ['running', 'completed', 'failed', 'dispatched', 'approved', 'rejected', 'expired']
+  const isDbActioned = DB_ACTIONED_STATUSES.includes(dbTask?.status || '')
   const resolvedStatus = dbTask?.status || decision
   const statusLabel = decisionLabel[resolvedStatus || ''] || ''
+  // A task is "actioned" if the founder made a local decision OR the DB already reflects work in progress/done.
+  const isActioned = !!(decision) || isDbActioned
 
   return (
     <div style={{
@@ -756,7 +762,7 @@ function TaskApprovalItem({
       )}
 
       {/* Action buttons or decision indicator */}
-      {decision ? (
+      {isActioned ? (
         <div>
           <div style={{
             fontFamily: 'var(--font-dm-mono, monospace)',
@@ -1382,9 +1388,23 @@ export function WarRoom() {
     } catch { /* quota / SSR — ignore */ }
   }, [commandMessages, messagesHydrated])
 
-  // Clear decisions when a new goal is set
+  // Sync decisions with existing DB task statuses when the active goal changes.
+  // This ensures that after navigation (which resets local state), tasks that are
+  // already running/completed/failed in the DB are correctly reflected without
+  // re-showing the Approve buttons.
   useEffect(() => {
-    setDecisions({})
+    if (!activeGoal?.goal_tasks || activeGoal.goal_tasks.length === 0) {
+      setDecisions({})
+      return
+    }
+    const DB_ACTIONED = ['running', 'completed', 'failed', 'dispatched', 'approved', 'rejected', 'expired']
+    const synced: Record<string, TaskDecision> = {}
+    for (const dbTask of activeGoal.goal_tasks) {
+      if (DB_ACTIONED.includes(dbTask.status)) {
+        synced[dbTask.task_id] = dbTask.status === 'rejected' ? 'rejected' : 'approved'
+      }
+    }
+    setDecisions(synced)
   }, [activeGoal?.id])
 
   // On mount: pick up any pending goal left by the onboarding flow.
@@ -1536,6 +1556,7 @@ export function WarRoom() {
       }
       // Surface any execution error from the server (e.g. missing composio connection)
       const execError: string | null = json?.execution_error ?? null
+      const execDone: boolean = json?.execution_status === 'executed'
       setCommandMessages(msgs => msgs.map(m =>
         m.id === msgId
           ? {
@@ -1543,6 +1564,7 @@ export function WarRoom() {
               approvalPending: false,
               approvalDecision: decision,
               approvalExecutionError: execError ?? undefined,
+              approvalExecuted: decision === 'approved' ? execDone : undefined,
             }
           : m
       ))

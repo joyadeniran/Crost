@@ -30,7 +30,7 @@ export function ContentWrapper({ children, initialEvents }: Props) {
       <div className="crost-page">
         {children}
       </div>
-      {!isHidden && <LiveEventsPanel initial={initialEvents} />}
+      <LiveEventsPanel initial={initialEvents} isHidden={isHidden} />
     </div>
   )
 }
