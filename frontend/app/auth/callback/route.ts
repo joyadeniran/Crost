@@ -3,6 +3,15 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
 export const dynamic = 'force-dynamic'
 
+function getOnboardingTarget(step?: string | null) {
+  if (step === 'complete') return '/dashboard'
+  if (step === 'activated') return '/onboarding/activate'
+  if (step === 'team') return '/onboarding/team'
+  if (step === 'orc') return '/onboarding/orc'
+  if (step === 'control') return '/onboarding/control'
+  return '/onboarding/identity'
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
@@ -46,10 +55,7 @@ export async function GET(request: Request) {
     
     if (!error && data.user) {
       const step = data.user.user_metadata?.onboarding_step
-      let target = '/onboarding/identity'
-      if (step === 'complete') target = '/dashboard'
-      else if (step === 'activated') target = '/onboarding/activate'
-      else if (step === 'control') target = '/onboarding/control'
+      const target = getOnboardingTarget(step)
 
       // Return a new redirect to the correct target, but we MUST keep the cookies from the previous response
       const finalResponse = NextResponse.redirect(`${baseUrl}${target}`)

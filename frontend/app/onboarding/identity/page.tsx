@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ReflectionBlock } from '@/components/onboarding/ReflectionBlock'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 
 function IdentityContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const { 
     founderName, companyName, city, country, businessDescription, businessCategory, stage,
@@ -85,9 +84,9 @@ function IdentityContent() {
     }
   }
 
-  const handleStageSelect = async () => {
-    if (!selectedStage) return
-    setIdentity({ stage: selectedStage })
+  const handleStageSelect = async (nextStage: 'starting' | 'mvp' | 'traction' | 'scaling') => {
+    setSelectedStage(nextStage)
+    setIdentity({ stage: nextStage })
     // Update onboarding step in Supabase to allow middleware to let user pass
     await fetch('/api/onboarding/set-step', {
       method: 'POST',
@@ -176,21 +175,11 @@ function IdentityContent() {
                     <button
                       key={s}
                       className={`pill-btn ${selectedStage === s || (stage === s && !selectedStage) ? 'active' : ''}`}
-                      onClick={() => setSelectedStage(s)}
+                      onClick={() => void handleStageSelect(s)}
                     >
                       {s === 'starting' ? 'Just starting' : s === 'mvp' ? 'Early MVP' : s === 'traction' ? 'Getting traction' : 'Scaling'}
                     </button>
                   ))}
-                </div>
-                
-                <div className="action-row animate-fade-in" style={{ marginTop: '32px' }}>
-                  <button 
-                    className="primary-btn-crost" 
-                    onClick={handleStageSelect}
-                    disabled={!selectedStage && !stage}
-                  >
-                    Confirm Stage & Proceed <span>→</span>
-                  </button>
                 </div>
               </div>
             )}

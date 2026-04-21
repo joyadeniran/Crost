@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { step } = body
 
-    if (!step || !['identity', 'control', 'team', 'activated', 'complete'].includes(step)) {
+    if (!step || !['identity', 'control', 'orc', 'team', 'activated', 'complete'].includes(step)) {
       return NextResponse.json({ error: 'Invalid onboarding step' }, { status: 400 })
     }
 

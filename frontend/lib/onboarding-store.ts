@@ -55,7 +55,9 @@ export const useOnboardingStore = create<OnboardingState>()(
         set((state) => ({
           selectedDepartments: state.selectedDepartments.includes(slug)
             ? state.selectedDepartments.filter((s) => s !== slug)
-            : [...state.selectedDepartments, slug],
+            : state.selectedDepartments.length >= 3
+              ? state.selectedDepartments
+              : [...state.selectedDepartments, slug],
         })),
       setFirstGoal: (firstGoal) => set({ firstGoal }),
       setOrcPlan: (orcPlan) => set({ orcPlan }),

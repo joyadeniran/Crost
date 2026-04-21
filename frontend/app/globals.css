@@ -934,45 +934,55 @@ body::before {
 .onboarding-content {
   flex: 1;
   width: 100%;
-  max-width: 800px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 40px 24px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  padding: 120px 24px 72px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 48px;
+  align-items: start;
   position: relative;
 }
 
-/* Floating profile summary for a sleeker look */
 .profile-summary-container {
-  position: fixed;
-  bottom: 40px;
-  right: 40px;
-  z-index: 50;
-  width: 320px;
+  position: sticky;
+  top: 116px;
+  z-index: 10;
+  width: 100%;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (max-width: 1400px) {
-  .profile-summary-container {
-    width: 280px;
-    right: 24px;
-    bottom: 24px;
+  .onboarding-content {
+    max-width: 1160px;
+    grid-template-columns: minmax(0, 1fr) 288px;
+    gap: 36px;
   }
 }
 
 @media (max-width: 1100px) {
+  .onboarding-content {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
   .profile-summary-container {
     position: static;
     width: 100%;
-    margin-top: 60px;
-    padding-bottom: 40px;
+    margin-top: 0;
+    padding-bottom: 0;
+  }
+
+  .profile-summary {
+    top: auto;
   }
 }
 
 /* ─── ONBOARDING IDENTITY PAGE ────────────────────────────────────────────── */
 .main-flow {
   width: 100%;
+  min-width: 0;
+  max-width: 860px;
 }
 
 .step-header {
@@ -1323,6 +1333,36 @@ body::before {
   margin-top: 8px;
 }
 
+.stage-utility-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.stage-utility-row--end {
+  justify-content: flex-end;
+}
+
+.skip-link {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.skip-link:hover {
+  color: rgba(255, 255, 255, 0.82);
+  transform: translateX(2px);
+}
+
 .footer-note {
   font-size: 13px;
   color: rgba(255,255,255,0.4);
@@ -1396,6 +1436,69 @@ body::before {
   color: rgba(255,255,255,0.5);
   margin: 0;
   line-height: 1.5;
+}
+
+.onboarding-panel {
+  padding: 40px;
+  border-radius: 24px;
+}
+
+.onboarding-panel h2 {
+  font-size: 34px;
+  line-height: 1.08;
+  margin: 0 0 18px;
+}
+
+.onboarding-panel p {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 17px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.orc-mark-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.26), rgba(0, 212, 170, 0.08));
+  border: 1px solid rgba(0, 212, 170, 0.32);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  box-shadow: 0 18px 40px rgba(0, 212, 170, 0.12);
+}
+
+.orc-mark-wrap img {
+  width: 44px;
+  height: 44px;
+}
+
+.orc-note-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.orc-note-card {
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.orc-note-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fff;
+  font-size: 15px;
+}
+
+.orc-note-card span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 /* ─── ONBOARDING TEAM PAGE ───────────────────────────────────────────────── */
@@ -1496,14 +1599,27 @@ body::before {
 
 .dept-footer {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dept-footer-secondary {
+  color: rgba(255,255,255,0.28);
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: auto;
 }
 
 .model-badge {
   font-family: var(--font-dm-mono, monospace);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.62);
 }
 
 .footer-actions {
@@ -1702,6 +1818,46 @@ body::before {
   color: #fff;
 }
 
+.goal-suggestion-label {
+  margin-top: 22px;
+  color: rgba(255, 255, 255, 0.36);
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.goal-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.goal-suggestion-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.goal-suggestion-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 212, 170, 0.35);
+  background: rgba(0, 212, 170, 0.08);
+}
+
+.goal-suggestion-chip.active {
+  border-color: rgba(0, 212, 170, 0.46);
+  background: rgba(0, 212, 170, 0.14);
+  color: #fff;
+}
+
 /* ─── REFLECTION BLOCK ──────────────────────────────────────────────────── */
 .reflection-block {
   margin: 16px 0;
@@ -1795,6 +1951,64 @@ body::before {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
+}
+
+@media (max-width: 900px) {
+  .onboarding-content {
+    padding-top: 108px;
+    padding-bottom: 48px;
+  }
+
+  .step-header h1 {
+    font-size: 34px;
+  }
+
+  .prompt {
+    font-size: 28px;
+  }
+
+  .identity-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-row {
+    flex-direction: column;
+  }
+
+  .activation-header h1 {
+    font-size: 30px;
+  }
+
+  .goal-textarea {
+    font-size: 18px;
+    min-height: 140px;
+  }
+
+  .onboarding-panel {
+    padding: 28px;
+  }
+
+  .orc-note-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .onboarding-top-bar {
+    right: 20px;
+    top: 20px;
+  }
+
+  .onboarding-content {
+    padding: 96px 18px 36px;
+    gap: 24px;
+  }
+
+  .stage-utility-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* ─── KNOWLEDGE BASE ──────────────────────────────────────────────────────── */

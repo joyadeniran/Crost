@@ -17,7 +17,7 @@ const PLACEHOLDERS: Record<string, string[]> = {
 export default function ActivatePage() {
   const router = useRouter()
   const { 
-    selectedDepartments, businessCategory, founderName, companyName, city, country, stage,
+    selectedDepartments, businessCategory, founderName, companyName, city, country, businessDescription, stage, riskTolerance,
     setFirstGoal, setOrcPlan 
   } = useOnboardingStore()
 
@@ -27,6 +27,7 @@ export default function ActivatePage() {
   const [completeCount, setCompleteCount] = useState(0)
   const [progress, setProgress] = useState(1)
   const [showRedirect, setShowRedirect] = useState(false)
+  const [selectedSuggestion, setSelectedSuggestion] = useState('')
 
   // Determine placeholders based on category
   const placeholders = PLACEHOLDERS[businessCategory.toLowerCase()] || 
@@ -35,6 +36,7 @@ export default function ActivatePage() {
                         PLACEHOLDERS.default)
   
   const [placeholder, setPlaceholder] = useState(placeholders[0])
+  const suggestions = placeholders.slice(0, 3)
 
   useEffect(() => {
     let i = 0
@@ -111,10 +113,32 @@ export default function ActivatePage() {
     }
   }
 
+  const applySuggestion = (value: string) => {
+    setSelectedSuggestion(value)
+    setGoal(value)
+  }
+
   const handleSkip = async () => {
     setLoading(true)
     try {
-      await fetch('/api/onboarding/complete-final', { method: 'POST' })
+      await fetch('/api/onboarding/complete-final', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'activated',
+          identity: {
+            founderName,
+            companyName,
+            city,
+            country,
+            businessDescription: businessDescription || null,
+            businessCategory,
+            stage,
+          },
+          riskTolerance,
+          selectedDepartments,
+        }),
+      })
       await finalizeAndRedirect()
     } catch (err) {
       router.push('/dashboard')
@@ -124,6 +148,11 @@ export default function ActivatePage() {
   return (
     <div className="onboarding-content animate-fade-in">
       <div className="main-flow">
+        {phase !== 3 && (
+          <button onClick={() => router.push('/onboarding/team')} className="back-link" style={{ marginBottom: '32px', display: 'block' }}>
+            ← Back
+          </button>
+        )}
         <div className="activation-shell glass-panel" style={{ padding: '60px', width: '100%', borderRadius: '24px' }}>
           {phase === 1 && (
             <div className="phase-vignette animate-fade-in">
@@ -165,9 +194,27 @@ export default function ActivatePage() {
                     style={{ width: '100%', minHeight: '160px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', borderRadius: '16px', color: '#fff', fontSize: '18px', resize: 'none' }}
                     placeholder={placeholder}
                     value={goal}
-                    onChange={e => setGoal(e.target.value)}
+                    onChange={e => {
+                      setGoal(e.target.value)
+                      if (selectedSuggestion && e.target.value !== selectedSuggestion) {
+                        setSelectedSuggestion('')
+                      }
+                    }}
                     autoFocus
                   />
+                  <div className="goal-suggestion-label">Suggested first missions</div>
+                  <div className="goal-suggestions">
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        className={`goal-suggestion-chip ${goal === suggestion || selectedSuggestion === suggestion ? 'active' : ''}`}
+                        onClick={() => applySuggestion(suggestion)}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                   <div className="action-row" style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <button type="button" onClick={handleSkip} className="skip-btn" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '14px' }}>Skip for now</button>
                     <button type="submit" className="primary-btn-crost lg" disabled={!goal || loading}>

@@ -1,6 +1,27 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+const ONBOARDING_ROUTES = [
+  '/onboarding/identity',
+  '/onboarding/control',
+  '/onboarding/orc',
+  '/onboarding/team',
+  '/onboarding/activate',
+]
+
+function getOnboardingTarget(step?: string | null) {
+  if (step === 'complete') return '/dashboard'
+  if (step === 'activated') return '/onboarding/activate'
+  if (step === 'team') return '/onboarding/team'
+  if (step === 'orc') return '/onboarding/orc'
+  if (step === 'control') return '/onboarding/control'
+  return '/onboarding/identity'
+}
+
+function getRouteRank(pathname: string) {
+  return ONBOARDING_ROUTES.findIndex((route) => pathname.startsWith(route))
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -43,38 +64,30 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
-
-    const onboardingComplete = user.user_metadata?.onboarding_step === 'complete'
-
-    if (!onboardingComplete) {
-      const step = user.user_metadata?.onboarding_step
-      let target = '/onboarding/identity'
-      if (step === 'activated') target = '/onboarding/activate'
-      else if (step === 'team') target = '/onboarding/team'
-      else if (step === 'control') target = '/onboarding/control'
-      
-      if (pathname !== target) {
-        return NextResponse.redirect(new URL(target, request.url))
-      }
-    }
   }
 
   // Redirect away from Login/Onboarding if complete
   if (pathname === '/login' || pathname.startsWith('/onboarding') || pathname === '/signup') {
     if (user) {
-       const onboardingComplete = user.user_metadata?.onboarding_step === 'complete'
+       const step = user.user_metadata?.onboarding_step
+       const onboardingComplete = step === 'complete'
        if (onboardingComplete) {
          return NextResponse.redirect(new URL('/dashboard', request.url))
        }
-       
-       const step = user.user_metadata?.onboarding_step
-       let target = '/onboarding/identity'
-       if (step === 'activated') target = '/onboarding/activate'
-       else if (step === 'team') target = '/onboarding/team'
-       else if (step === 'control') target = '/onboarding/control'
 
-       if (pathname.startsWith('/onboarding') && pathname !== target) {
+       const target = getOnboardingTarget(step)
+
+       if (pathname === '/login' || pathname === '/signup') {
          return NextResponse.redirect(new URL(target, request.url))
+       }
+
+       if (pathname.startsWith('/onboarding')) {
+         const requestedRank = getRouteRank(pathname)
+         const maxAllowedRank = getRouteRank(target)
+
+         if (requestedRank > maxAllowedRank) {
+           return NextResponse.redirect(new URL(target, request.url))
+         }
        }
     }
   }
@@ -83,5 +96,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login'],
+  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login', '/signup'],
 }
