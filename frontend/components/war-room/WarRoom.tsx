@@ -1680,7 +1680,7 @@ export function WarRoom() {
 
     // Regular Orc goal
     handleGoalSubmit(rawInput)
-  }, [handleGoalSubmit])
+  }, [handleGoalSubmit, departments])
 
   const handleDialogueResponse = useCallback(async (message?: string, skip?: boolean) => {
     if (!activeGoal) return

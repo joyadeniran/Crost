@@ -181,7 +181,57 @@ export function ArtifactCard({ artifact }: Props) {
   const iconColor = EXT_COLORS[ext]?.fg ?? 'var(--accent)'
   const iconBg   = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
 
-  // ... downloadArtifact and deleteArtifact functions remain the same ...
+  const downloadArtifact = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDownloading(true)
+    try {
+      let downloadUrl = ''
+      let fileName = displayFilename
+
+      if (artifact.file_url) {
+        const res = await fetch(artifact.file_url)
+        const blob = await res.blob()
+        downloadUrl = URL.createObjectURL(blob)
+        fileName = artifact.file_url.split('/').pop()?.split('?')[0] ?? displayFilename
+      } else if (artifact.preview_url) {
+        const res = await fetch(artifact.preview_url)
+        const blob = await res.blob()
+        downloadUrl = URL.createObjectURL(blob)
+      } else {
+        const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
+        const mime = ext === 'json' ? 'application/json' : ext === 'md' ? 'text/markdown' : 'text/plain'
+        const blob = new Blob([content], { type: mime })
+        downloadUrl = URL.createObjectURL(blob)
+      }
+
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+    } catch (err) {
+      console.error('[Download Failed]', err)
+      window.open(artifact.file_url || artifact.preview_url || '', '_blank')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const deleteArtifact = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Delete this artifact? This cannot be undone.')) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      window.location.reload()
+    } catch {
+      alert('Failed to delete artifact. Please try again.')
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <>
