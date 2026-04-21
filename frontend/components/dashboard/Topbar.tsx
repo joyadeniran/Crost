@@ -51,24 +51,9 @@ export function Topbar() {
     : PAGE_TITLES[pathname] ?? 'Crost'
 
   return (
-    <div style={{
-      height: 52,
-      minHeight: 52,
-      borderBottom: '1px solid var(--border)',
-      background: 'var(--bg-2)',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '0 20px',
-      gap: 12,
-    }}>
+    <div className="crost-topbar">
       {/* Title */}
-      <span style={{
-        fontFamily: 'var(--font-syne, Syne)',
-        fontWeight: 600,
-        fontSize: 14,
-        color: 'var(--text)',
-        flex: 1,
-      }}>
+      <span className="crost-topbar-title">
         {title}
       </span>
 
@@ -80,21 +65,7 @@ export function Topbar() {
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              border: `1px solid ${showNotifications ? 'var(--accent)' : 'var(--border)'}`,
-              background: 'var(--bg-3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: showNotifications ? 'var(--accent)' : 'var(--text-2)',
-              cursor: 'pointer',
-              position: 'relative',
-              transition: 'all 0.15s',
-              outline: 'none'
-            }}
+            className={`topbar-control-btn ${showNotifications ? 'active' : ''}`}
           >
             <BellIcon />
             {pendingCount > 0 && (
@@ -105,7 +76,7 @@ export function Topbar() {
                 width: 16,
                 height: 16,
                 background: 'var(--red)',
-                borderRadius: 8,
+                borderRadius: '50%',
                 fontSize: 9,
                 fontFamily: 'var(--font-dm-mono, monospace)',
                 display: 'flex',
@@ -113,6 +84,7 @@ export function Topbar() {
                 justifyContent: 'center',
                 color: '#fff',
                 border: '2px solid var(--bg-2)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
               }}>
                 {pendingCount}
               </span>
@@ -127,19 +99,7 @@ export function Topbar() {
         {/* Settings */}
         <Link
           href="/dashboard/settings"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--bg-3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-2)',
-            textDecoration: 'none',
-            transition: 'all 0.15s',
-          }}
+          className={`topbar-control-btn ${pathname === '/dashboard/settings' ? 'active' : ''}`}
         >
           <GearIcon />
         </Link>

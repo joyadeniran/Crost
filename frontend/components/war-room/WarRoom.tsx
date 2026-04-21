@@ -130,20 +130,13 @@ function GoalInput({
   }
 
   return (
-    <div style={{
-      background: 'var(--bg-2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: '14px 16px',
-      marginBottom: 20,
-      position: 'relative',
-    }}>
+    <div className="goal-input-container">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{
           width: 6, height: 6,
           borderRadius: '50%',
-          background: isLoading ? '#facc15' : '#4ade80',
-          boxShadow: isLoading ? '0 0 8px #facc15' : '0 0 8px #4ade80',
+          background: isLoading ? 'var(--amber)' : 'var(--accent)',
+          boxShadow: isLoading ? '0 0 8px var(--amber)' : '0 0 8px var(--accent)',
           flexShrink: 0,
           animation: isLoading ? 'pulse 1s infinite' : undefined,
         }} />
@@ -152,6 +145,7 @@ function GoalInput({
           fontSize: 10,
           color: 'var(--text-3)',
           letterSpacing: '0.08em',
+          fontWeight: 600,
         }}>
           {isLoading ? 'ORCHESTRATOR PLANNING…' : 'WAR ROOM'}
         </span>
@@ -161,10 +155,9 @@ function GoalInput({
             fontFamily: 'var(--font-dm-mono, monospace)',
             fontSize: 9,
             color: 'var(--text-4)',
-            opacity: 0.45,
             letterSpacing: '0.06em',
           }}>
-            @ dept · / tool
+            @dept · /tool · ⌘↵
           </span>
         )}
       </div>
@@ -186,7 +179,7 @@ function GoalInput({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={isLoading}
-        placeholder="Tell your company what to do… (@dept · /tool · ⌘↵ to send)"
+        placeholder="Tell your company what to do…"
         rows={2}
         style={{
           width: '100%',
@@ -207,17 +200,10 @@ function GoalInput({
         <button
           onClick={handleSubmit}
           disabled={!value.trim() || isLoading}
-          style={{
-            background: value.trim() && !isLoading ? 'var(--text)' : 'var(--bg-3)',
-            color: value.trim() && !isLoading ? 'var(--bg)' : 'var(--text-3)',
-            border: 'none',
-            borderRadius: 6,
-            padding: '6px 14px',
-            fontFamily: 'var(--font-dm-mono, monospace)',
-            fontSize: 11,
-            cursor: value.trim() && !isLoading ? 'pointer' : 'not-allowed',
-            letterSpacing: '0.04em',
-            transition: 'all 0.15s',
+          className="btn-primary-crost"
+          style={{ 
+            opacity: value.trim() && !isLoading ? 1 : 0.4,
+            padding: '5px 14px'
           }}
         >
           {isLoading ? 'PLANNING…' : hasActiveGoal ? 'NEW GOAL' : 'DISPATCH'}
@@ -1108,26 +1094,9 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
   if (!report) return null
 
   return (
-    <div style={{
-      background: 'var(--bg-2)',
-      border: '1px solid var(--accent)',
-      borderRadius: 'var(--radius)',
-      padding: '24px',
-      marginTop: 20,
-      position: 'relative',
-      overflow: 'hidden',
-      boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-    }}>
+    <div className="synthesis-card">
       {/* Background Glow */}
-      <div style={{
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 300,
-        height: 300,
-        background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
+      <div className="synthesis-glow" />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
@@ -1139,30 +1108,25 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             textTransform: 'uppercase',
             display: 'block',
             marginBottom: 4,
+            fontFamily: 'var(--font-dm-mono, monospace)',
           }}>
             Strategic Synthesis
           </span>
           <h3 style={{ 
-            fontFamily: 'var(--font-dm-sans, sans-serif)', 
+            fontFamily: 'var(--font-syne, sans-serif)', 
             fontSize: 20, 
-            fontWeight: 600,
+            fontWeight: 700,
             color: 'var(--text)',
             margin: 0,
+            letterSpacing: '-0.01em',
           }}>
             Orc Report
           </h3>
         </div>
         <button 
           onClick={onDismiss}
-          style={{
-            background: 'var(--bg-3)',
-            border: 'none',
-            color: 'var(--text-3)',
-            fontSize: 18,
-            cursor: 'pointer',
-            padding: '4px 8px',
-            borderRadius: 4,
-          }}
+          className="topbar-control-btn"
+          style={{ width: '28px', height: '28px', border: 'none', background: 'var(--bg-3)' }}
         >
           ×
         </button>
@@ -1172,7 +1136,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
         fontFamily: 'var(--font-dm-sans, sans-serif)',
         fontSize: 14,
         color: 'var(--text-2)',
-        lineHeight: 1.6,
+        lineHeight: 1.7,
         whiteSpace: 'pre-wrap',
       }}>
         {report.body}
@@ -1189,12 +1153,13 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
         <div style={{
           width: 32,
           height: 32,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+          borderRadius: '10px',
+          background: 'linear-gradient(135deg, var(--accent) 0%, var(--blue) 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 14,
+          boxShadow: '0 4px 12px rgba(0, 212, 170, 0.2)',
         }}>
           🧠
         </div>

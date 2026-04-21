@@ -92,11 +92,190 @@ body::before {
   height: 100vh;
 }
 
+.crost-topbar {
+  height: 52px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17, 17, 20, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  z-index: 40;
+}
+
+.crost-topbar-title {
+  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+}
+
+.topbar-control-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  outline: none;
+}
+
+.topbar-control-btn:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.topbar-control-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
 .crost-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ─── GLASSMORPHISM ─────────────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(20, 20, 25, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-bright);
+}
+
+/* ─── ARTIFACT CARDS ──────────────────────────────────────────────────────── */
+.artifact-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.artifact-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-bright);
+  transform: translateX(2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.artifact-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.artifact-row:hover .artifact-icon-wrap {
+  transform: scale(1.05);
+}
+
+.artifact-name {
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  whiteSpace: nowrap;
+}
+
+.artifact-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ─── BADGES ─────────────────────────────────────────────────────────────── */
+.crost-badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+}
+
+/* ─── SYNTHESIS CARD ──────────────────────────────────────────────────────── */
+.synthesis-card {
+  background: var(--bg-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.synthesis-glow {
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(0, 212, 170, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ─── GOAL INPUT ──────────────────────────────────────────────────────────── */
+.goal-input-container {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.goal-input-container:focus-within {
+  border-color: var(--border-bright);
+  background: var(--bg-3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .crost-content {
@@ -164,18 +343,29 @@ body::before {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   color: var(--text-2);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
   user-select: none;
+  border: 1px solid transparent;
 }
 
-.nav-item:hover { background: var(--bg-3); color: var(--text); }
-.nav-item.active { background: var(--accent-dim); color: var(--accent); }
+.nav-item:hover { 
+  background: var(--bg-3); 
+  color: var(--text);
+  transform: translateX(2px);
+}
+
+.nav-item.active { 
+  background: var(--accent-dim); 
+  color: var(--accent); 
+  border-color: rgba(0, 212, 170, 0.15);
+}
 
 .sidebar-bottom {
   padding: 12px 8px;
