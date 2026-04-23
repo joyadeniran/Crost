@@ -17,6 +17,7 @@ import type {
   WorkerDept,
 } from '@/types'
 import { truncateString, cleanLargePayload, formatMemoBody } from './utils'
+import { loadSkillsForTask } from './skills'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -198,7 +199,10 @@ export async function buildFinalPrompt(
   capabilities: string[] = [],
   restrictions: string[] = [],
   departmentSlug?: string,
-  goalId?: string
+  goalId?: string,
+  // Spec §9.5: pre-loaded skill content from loadSkillsForTask().
+  // Injected as a ## SKILLS GUIDANCE section before identity context.
+  skillContent?: string
 ): Promise<string> {
   const supabase = createServerSupabaseClient()
 
@@ -322,6 +326,10 @@ Rules:
   return [
     `## CROST CONSTITUTION (Non-negotiable)\n${constitution}`,
     `## YOUR ROLE\n${departmentPrompt}`,
+    // Spec §9.5: inject skill guidance immediately after role definition so the
+    // model reads the output contract (JSON schema, structure rules, anti-patterns)
+    // before it sees identity or memo context.
+    skillContent ? `## SKILLS GUIDANCE\n${skillContent}` : '',
     `## IDENTITY HANDLING\n${identityHandling}`,
     `## IDENTITY CONTEXT\n${identityContext || `### ASSISTANT IDENTITY\n${DEFAULT_ASSISTANT_IDENTITY}`}`,
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
@@ -972,6 +980,14 @@ export async function runWorkerTask(
 
   await supabase.from('departments').update({ status: 'running', current_task: task.label }).eq('id', deptRow.id)
 
+  // Spec §9.5: Load skills for this task before building the prompt.
+  // loadSkillsForTask is non-fatal — returns empty strings/arrays if no skills match.
+  const { content: skillContent, slugs: loadedSkillSlugs } = await loadSkillsForTask(
+    task.action,
+    dept,
+    task.params
+  )
+
   const taskPrompt = `Execute precisely and output JSON.\n\nTASK:\nID: ${task.id}\nAction: ${task.action}\nLabel: ${task.label}\nReasoning: ${task.reasoning}\nExpected Deliverable: ${task.expected_deliverable}\nParams: ${JSON.stringify(task.params)}\n\nResponse MUST be JSON.`
 
   const finalPrompt = await buildFinalPrompt(
@@ -980,7 +996,8 @@ export async function runWorkerTask(
     deptRow.capabilities ?? [],
     deptRow.restrictions ?? [],
     deptRow.slug,
-    goalId
+    goalId,
+    skillContent || undefined
   )
 
   let modelName = task.model
@@ -1050,6 +1067,8 @@ export async function runWorkerTask(
         artifact_type: uploaded.artifactType,
         title: `Output: ${task.label}`,
         file_url: uploaded.fileUrl,          // ← file_url, not preview_url
+        // Spec §9.5: record which skill slugs were loaded when producing this artefact.
+        skills_used: loadedSkillSlugs,
         metadata: {
           task_id: task.id,
           action: task.action,
