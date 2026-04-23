@@ -3,11 +3,41 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.8  
-**Last Updated:** April 21, 2026  
-**Deployment Status:** ✅ COMPLETE — Type Error & Build Stability Fix (v11.8).
+**Current Version:** 11.9  
+**Last Updated:** April 23, 2026  
+**Deployment Status:** ✅ COMPLETE — Skills Layer & Schema Alignment (v11.9).
 
 ---
+
+## Session v11.9 - Skills Layer & Schema Alignment
+
+**Date**: April 23, 2026  
+**Status**: ✅ COMPLETE — Verified local, migration generated  
+**Impact**: Resolved critical Spec gaps #2, #6, and #13. Established the "Skills Layer" as the primary lever for high-quality artefact production.
+
+### Changes
+1. **Skills Layer Infrastructure**: 
+   - Created 5 production-grade SKILL.md files under `frontend/lib/skills/` (pptx, docx, xlsx, pdf, pitch_deck).
+   - Implemented `loadSkillsForTask` in `frontend/lib/skills/index.ts` to dynamically resolve and load skill guidance based on task action and params.
+2. **LLM Prompt Injection**: 
+   - Enhanced `buildFinalPrompt` in `llm-client.ts` to support a new `## SKILLS GUIDANCE` section.
+   - Updated `runWorkerTask` to inject detected skills into the model prompt at task time.
+3. **Schema Alignment (Spec §9)**:
+   - Extended `artifact_type` enum to include `presentation` and `pdf` in both TypeScript and Zod schemas (Gap #6).
+   - Added `skills_used` tracking to the `Artifact` interface, Zod schema, and DB insert logic (Gap #2).
+   - Enforced `file_url` as a required, non-nullable string to align with the "no body fields" spec requirement (Gap #13).
+4. **Database Migration**: 
+   - Generated Supabase migration `20260423_add_skills_used_to_artifacts.sql` to add the `skills_used` text array column to the `artifacts` table with a GIN index for analytics.
+
+### Files Changed
+- `frontend/types/index.ts`
+- `frontend/app/api/artifacts/route.ts`
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/skills/index.ts` (NEW)
+- `frontend/lib/skills/{pptx,docx,xlsx,pdf,pitch_deck}/SKILL.md` (NEW)
+- `supabase/migrations/20260423_add_skills_used_to_artifacts.sql` (NEW)
+- `CROST_MASTER.md` (this entry)
+
 
 ## Session v11.8 - Type Error & Build Stability Fix
 
