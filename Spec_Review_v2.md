@@ -38,7 +38,7 @@
   - Add "What next?" widget on the dashboard page                               
                   
   ---                                                                           
-  2. §9.5 Skills Layer — Entirely Absent
+  2. [✓ COMPLETE] §9.5 Skills Layer — Entirely Absent
                                                                                 
   Blast radius: All artefact generation, artifacts table schema, Artifact
   TypeScript type, executeToolCall task runner, DoD #5 and #6                   
@@ -154,7 +154,7 @@
   ---             
   🟠 HIGH — Spec Violations / Trust Gaps                                        
                                                                                 
-  6. §9 Artefact artifact_type Enum Incomplete
+  6. [✓ COMPLETE] §9 Artefact artifact_type Enum Incomplete
                                                                                 
   File: frontend/app/api/artifacts/route.ts:61, types/index.ts:138              
                                                                                 
@@ -248,7 +248,7 @@
   ---
   🟡 MEDIUM — Partial/Degraded Implementation
                                                                                 
-  13. §9 Artifact.file_url Is Optional in Type but Required in Spec
+  13. [✓ COMPLETE] §9 Artifact.file_url Is Optional in Type but Required in Spec
                                                                                 
   types/index.ts:143: file_url?: string | null (optional). Spec §9: "body text  
   fields are deprecated. New artefacts must have file_url populated." This      
