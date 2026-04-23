@@ -5,19 +5,32 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { EventLogClient } from '@/components/event-log/EventLogClient'
 import type { EventLogEntry } from '@/types'
 
-export default async function EventLogPage() {
+interface PageProps {
+  searchParams: { goal_id?: string; type?: string }
+}
+
+export default async function EventLogPage({ searchParams }: PageProps) {
   const authClient = await createSupabaseServerComponentClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) redirect('/login')
 
+  const goalId = searchParams.goal_id ?? null
+  const typeFilter = searchParams.type ?? null
+
   const supabase = createServerSupabaseClient()
-  const { data } = await supabase
+  let query = supabase
     .from('event_log')
     .select('*')
     .eq('created_by', user.id)
     .order('created_at', { ascending: false })
     .limit(50)
 
+  // When arriving from a deep-link (e.g. WarRoom ‘view full event log →’),
+  // scope the initial server fetch to that goal so the page loads relevant
+  // events immediately. The client can widen the filter from there.
+  if (goalId) query = query.eq('goal_id', goalId)
+
+  const { data } = await query
   const events = (data ?? []) as EventLogEntry[]
 
   return (
@@ -31,7 +44,11 @@ export default async function EventLogPage() {
         </p>
       </div>
 
-      <EventLogClient events={events} />
+      <EventLogClient
+        events={events}
+        initialGoalId={goalId}
+        initialType={typeFilter}
+      />
     </div>
   )
 }

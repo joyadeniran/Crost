@@ -1384,6 +1384,9 @@ export function WarRoom() {
   const [commandMessages, setCommandMessages] = useState<InlineMessage[]>([])
   const [messagesHydrated, setMessagesHydrated] = useState(false)
   const [pollError, setPollError] = useState<string | null>(null)
+  // One-shot error detail fetch: populated only when goal status flips to 'failed'.
+  // Uses the already-imported supabaseClient — no new subscription, no polling.
+  const [goalErrorEvents, setGoalErrorEvents] = useState<{ description: string; event_type: string; created_at: string }[]>([])
 
   // Rehydrate pending-approval cards from localStorage on mount and reconcile
   // with server state — if the approval has already been decided elsewhere
@@ -1458,6 +1461,26 @@ export function WarRoom() {
     }
     setDecisions(synced)
   }, [activeGoal?.id])
+
+  // One-shot: when the active goal flips to 'failed', fetch the last 3 error-level
+  // events for that goal so we can surface useful detail inline without making
+  // the user navigate away to the Event Log. Zero extra subscriptions — this is
+  // a single SELECT that fires once per failure.
+  useEffect(() => {
+    if (activeGoal?.status !== 'failed' || !activeGoal?.id) return
+    setGoalErrorEvents([]) // reset from any prior failure
+    supabaseClient
+      .from('event_log')
+      .select('description, event_type, created_at')
+      .eq('goal_id', activeGoal.id)
+      .in('event_type', ['error', 'task_failed', 'orc_stall_detected'])
+      .order('created_at', { ascending: false })
+      .limit(3)
+      .then(({ data }) => {
+        if (data && data.length > 0) setGoalErrorEvents(data)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGoal?.status, activeGoal?.id])
 
   // On mount: pick up any pending goal left by the onboarding flow.
   // The handoff ALWAYS wins over any persisted activeGoal — a stale goal from a
@@ -1969,9 +1992,30 @@ export function WarRoom() {
           background: 'rgba(239,68,68,0.08)',
           border: '1px solid rgba(239,68,68,0.3)',
           borderRadius: 'var(--radius)',
-          padding: '12px 16px',
+          padding: '14px 16px',
+          position: 'relative',
         }}>
-          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: '#f87171', marginBottom: 4 }}>
+          <button
+            onClick={() => setActiveGoal(null)}
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 12,
+              background: 'transparent',
+              border: 'none',
+              color: '#f87171',
+              cursor: 'pointer',
+              fontSize: 16,
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+            }}
+            title="Dismiss"
+          >×</button>
+          
+          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: '#f87171', marginBottom: 4, paddingRight: 20 }}>
             ⚠ Orchestrator failed to generate a plan.
           </div>
           {activeGoal.outcome && (
@@ -1983,12 +2027,77 @@ export function WarRoom() {
               lineHeight: 1.5,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
+              marginBottom: goalErrorEvents.length > 0 ? 10 : 0,
             }}>
               {activeGoal.outcome}
             </div>
           )}
-          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
-            Try rephrasing your goal, or check the event log for details.
+
+          {/* Inline error detail — populated by one-shot fetch on failure */}
+          {goalErrorEvents.length > 0 && (
+            <div style={{
+              background: 'rgba(239,68,68,0.06)',
+              border: '1px solid rgba(239,68,68,0.15)',
+              borderRadius: 6,
+              padding: '8px 10px',
+              marginBottom: 10,
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontSize: 9,
+                color: '#f87171',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                marginBottom: 6,
+                opacity: 0.7,
+              }}>What went wrong</div>
+              {goalErrorEvents.map((ev, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'flex-start',
+                  paddingBottom: i < goalErrorEvents.length - 1 ? 6 : 0,
+                  marginBottom: i < goalErrorEvents.length - 1 ? 6 : 0,
+                  borderBottom: i < goalErrorEvents.length - 1 ? '1px solid rgba(239,68,68,0.1)' : 'none',
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontSize: 9,
+                    color: 'rgba(248,113,113,0.6)',
+                    whiteSpace: 'nowrap',
+                    paddingTop: 1,
+                  }}>
+                    {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontSize: 10,
+                    color: '#f87171',
+                    lineHeight: 1.5,
+                    wordBreak: 'break-word',
+                  }}>
+                    {ev.description}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 11, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span>Try rephrasing your goal, or</span>
+            <a
+              href={`/dashboard/event-log?goal_id=${activeGoal.id}&type=error`}
+              style={{
+                color: 'var(--accent)',
+                textDecoration: 'none',
+                fontWeight: 600,
+                fontSize: 11,
+                borderBottom: '1px solid rgba(0,212,170,0.3)',
+                paddingBottom: 1,
+              }}
+            >
+              view full event log →
+            </a>
           </div>
         </div>
       )}

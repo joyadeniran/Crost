@@ -3,11 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.9  
-**Last Updated:** April 23, 2026  
-**Deployment Status:** ✅ COMPLETE — Skills Layer & Schema Alignment (v11.9).
+**Current Version:** 11.10  
+**Last Updated:** April 24, 2026  
+**Deployment Status:** ✅ COMPLETE — Failure Card Enrichment & Deep-Linking (v11.10).
 
 ---
+
+## Session v11.10 - Failure Card Enrichment & Event Log Deep-Linking
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — Verified local, zero egress impact  
+**Impact**: Resolved the "opaque failure" UX issue. Founders now see exactly why an orchestrator failed (inline) and can deep-link into a pre-filtered event log.
+
+### Changes
+1. **Dynamic Failure Detail**: Added `goalErrorEvents` state to `WarRoom.tsx` with a one-shot `useEffect` that fetches the last 3 error/task_failed events only when a goal status flips to `failed`. 
+2. **Failure Card UI Enrichment**: Overhauled the failure indicator in the War Room to show inline error descriptions with timestamps and a direct link to the full log.
+3. **Event Log Deep-Linking**: Updated `dashboard/event-log/page.tsx` to accept `goal_id` and `type` searchParams. The server-side query now pre-filters the initial 50 events to the specific goal ID if provided.
+4. **Targeted Filter UI**: Enhanced `EventLogClient.tsx` to respect initial props. Added a red-tinted **Goal Scope Banner** that activates when arriving from a deep-link, ensuring the user knows they are looking at a filtered view and providing a "clear filter" action.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/app/dashboard/event-log/page.tsx`
+- `frontend/components/event-log/EventLogClient.tsx`
+- `CROST_MASTER.md` (this entry)
+
 
 ## Session v11.9 - Skills Layer & Schema Alignment
 
