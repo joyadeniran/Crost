@@ -37,15 +37,21 @@ const EVENT_TYPE_OPTIONS: EventType[] = [
 
 interface Props {
   events: EventLogEntry[]
+  /** Pre-set from URL ?goal_id= (WarRoom deep-link) */
+  initialGoalId?: string | null
+  /** Pre-set from URL ?type= (WarRoom deep-link) */
+  initialType?: string | null
 }
 
-export function EventLogClient({ events: initial }: Props) {
+export function EventLogClient({ events: initial, initialGoalId, initialType }: Props) {
   const [events, setEvents] = useState<EventLogEntry[]>(initial)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(initial.length === 50)
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>(initialType ?? 'all')
   const [deptFilter, setDeptFilter] = useState<string>('all')
+  // goal_id scope — set when arriving via deep-link, clearable
+  const [goalScope, setGoalScope] = useState<string | null>(initialGoalId ?? null)
 
   // Live updates
   useEffect(() => {
@@ -91,11 +97,13 @@ export function EventLogClient({ events: initial }: Props) {
     return events.filter(ev => {
       if (typeFilter !== 'all' && ev.event_type !== typeFilter) return false
       if (deptFilter !== 'all' && ev.department_slug !== deptFilter) return false
+      // goalScope client-side guard (server already scoped, but keep in sync for UI)
+      if (goalScope && (ev as any).goal_id && (ev as any).goal_id !== goalScope) return false
       if (search && !ev.description.toLowerCase().includes(search.toLowerCase()) &&
           !ev.event_type.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [events, typeFilter, deptFilter, search])
+  }, [events, typeFilter, deptFilter, goalScope, search])
 
   const inputStyle: React.CSSProperties = {
     background: 'var(--bg-2)',
@@ -110,6 +118,39 @@ export function EventLogClient({ events: initial }: Props) {
 
   return (
     <>
+      {/* Goal-scoped filter banner — shown when arriving via WarRoom deep-link */}
+      {goalScope && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: 'rgba(239,68,68,0.07)',
+          border: '1px solid rgba(239,68,68,0.2)',
+          borderRadius: 6,
+          padding: '7px 12px',
+          marginBottom: 12,
+          fontSize: 11,
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          color: '#f87171',
+        }}>
+          <span style={{ flex: 1 }}>Filtered to goal: <strong style={{ letterSpacing: '0.03em' }}>{goalScope.slice(0, 8)}…</strong></span>
+          <button
+            onClick={() => { setGoalScope(null); setTypeFilter('all') }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#f87171',
+              cursor: 'pointer',
+              fontSize: 10,
+              textDecoration: 'underline',
+              padding: 0,
+            }}
+          >
+            clear filter ×
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input

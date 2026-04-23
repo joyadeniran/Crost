@@ -53,6 +53,12 @@ Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
 
 ---
 
+## App Access
+
+**Live Application**: https://app.crosthq.com
+
+<!-- **Local Development**: http://localhost:3000 (when running `cd frontend && pnpm dev`) -->
+
 ## Commands
 
 All frontend commands run from the `frontend/` directory. Package manager is **pnpm**.
@@ -149,7 +155,7 @@ Copy `frontend/.env.example` → `frontend/.env.local` and fill in:
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-side only) |
-| `NEXT_PUBLIC_APP_URL` | App root (`http://localhost:3000` for dev) |
+| `NEXT_PUBLIC_APP_URL` | App root (`http://localhost:3000` for dev; `https://app.crosthq.com` for production) |
 | `LITELLM_BASE_URL` | LiteLLM proxy (`http://localhost:4000`) |
 | `LITELLM_MASTER_KEY` | Proxy auth key |
 | `GROQ_API_KEY` / `GOOGLE_AI_STUDIO_API_KEY` / `ANTHROPIC_API_KEY` | LLM provider keys |
