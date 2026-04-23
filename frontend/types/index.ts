@@ -135,12 +135,17 @@ export interface Artifact {
   goal_id: string | null
   department_id: string | null
   department_slug: string
-  artifact_type: 'image' | 'document' | 'code' | 'data' | 'spreadsheet'
+  // Spec §9: 'presentation' and 'pdf' are first-class MVP types.
+  artifact_type: 'image' | 'document' | 'code' | 'data' | 'spreadsheet' | 'presentation' | 'pdf'
   title: string
   body: string | null
   metadata: Record<string, unknown>
   preview_url: string | null
-  file_url?: string | null
+  // Spec §9: file_url is REQUIRED — body fields are deprecated.
+  // New artefacts must always have a Supabase Storage URL.
+  file_url: string
+  // Spec §9.5: which skill slugs were loaded when producing this artefact.
+  skills_used: string[]
   created_by?: string
   created_at: string
 }

@@ -58,11 +58,14 @@ const CreateArtifactSchema = z.object({
   goal_id: z.string().uuid().nullable().optional(),
   department_id: z.string().uuid().nullable().optional(),
   department_slug: z.string().min(1),
-  artifact_type: z.enum(['image', 'document', 'code', 'data', 'spreadsheet']),
+  // Spec §9: 'presentation' and 'pdf' are first-class MVP artefact types.
+  artifact_type: z.enum(['image', 'document', 'code', 'data', 'spreadsheet', 'presentation', 'pdf']),
   title: z.string().min(1),
   file_url: z.string().url('file_url must be a valid URL pointing to Supabase Storage'),
   metadata: z.record(z.unknown()).default({}),
   preview_url: z.string().url().nullable().optional(),
+  // Spec §9.5: skill slugs loaded during artefact production.
+  skills_used: z.array(z.string()).default([]),
 })
 
 export async function POST(req: NextRequest) {
