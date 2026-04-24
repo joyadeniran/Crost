@@ -65,9 +65,30 @@ export function SuggestedActionChips({ entityType, entityId, onActionExecute }: 
         {actions.map(action => (
           <button
             key={action.id}
-            onClick={() => {
-              if (onActionExecute) onActionExecute(action)
-              else alert('Action execution not hooked up yet!') // Will build next
+            onClick={async () => {
+              if (onActionExecute) {
+                onActionExecute(action)
+                return
+              }
+              try {
+                const res = await fetch('/api/suggested-actions/execute', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action_id: action.id }),
+                })
+                const data = await res.json()
+                if (!res.ok || !data.success) {
+                  console.error('[SuggestedAction] Execution failed:', data.error)
+                  return
+                }
+                if (data.result?.status === 'approval_needed') {
+                  console.log('[SuggestedAction] Awaiting approval:', data.result.execution_id)
+                } else {
+                  console.log('[SuggestedAction] Completed:', data.result)
+                }
+              } catch (err) {
+                console.error('[SuggestedAction] Network error:', err)
+              }
             }}
             title={action.reasoning}
             style={{

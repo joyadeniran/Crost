@@ -131,17 +131,42 @@ export async function executeToolCall(options: ExecuteOptions) {
 
   // 3. Approval Routing Guard — HITL DEFAULT-DENY (CROST_SPEC §11).
   // Per spec: "NOTHING executes without founder approval."
-  // Only tools explicitly on the read-only allowlist (LOW_RISK_READ_TOOLS) may
-  // auto-run. Every write/send/mutation — gmail.send_email, slack.post_message,
-  // github.create_pull_request, etc. — MUST be gated.
+  // Risk mode (Careful / Balanced / Aggressive) determines the threshold.
+  // Careful    → all actions require approval
+  // Balanced   → low-risk read-only auto-runs; medium+ requires approval
+  // Aggressive → low + medium auto-run; high + critical always require approval
+  const { data: riskConfig } = await supabase
+    .from('system_config')
+    .select('value')
+    .eq('key', 'risk_tolerance')
+    .eq('created_by', userId)
+    .maybeSingle()
+  const riskMode = (riskConfig?.value as string) ?? 'balanced'
+
   let requiresApproval: boolean
-  if (LOW_RISK_READ_TOOLS.includes(fullyQualifiedTool) && (risk === 'low' || risk === 'medium')) {
-    // Explicit read + low/medium risk: safe to auto-run
-    requiresApproval = toolCall.requiresApproval === true
-  } else {
-    // Everything else (writes, deletes, unknown tools, any high/critical risk) → approval required
+  const isReadOnly = LOW_RISK_READ_TOOLS.includes(fullyQualifiedTool)
+  const toolRisk = risk || 'high'
+
+  if (riskMode === 'careful') {
+    // Careful: everything requires approval
     requiresApproval = true
+  } else if (riskMode === 'aggressive') {
+    // Aggressive: low + medium auto-run; high + critical require approval
+    if (isReadOnly && (toolRisk === 'low' || toolRisk === 'medium')) {
+      requiresApproval = toolCall.requiresApproval === true
+    } else {
+      requiresApproval = true
+    }
+  } else {
+    // Balanced (default): low auto-runs; medium + high + critical require approval
+    if (isReadOnly && toolRisk === 'low') {
+      requiresApproval = toolCall.requiresApproval === true
+    } else {
+      requiresApproval = true
+    }
   }
+
+  // Critical tools always require approval regardless of risk mode
   if (CRITICAL_TOOLS.includes(fullyQualifiedTool)) {
     requiresApproval = true
   }

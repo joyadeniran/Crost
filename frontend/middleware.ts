@@ -66,6 +66,15 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Block unverified email/password users from onboarding or dashboard
+  if (user && user.app_metadata?.provider === 'email' && !user.email_confirmed_at) {
+    // Allow them to remain on /login (OTP entry) and auth callback pages
+    const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname.startsWith('/auth')
+    if (!isAuthPage) {
+      return NextResponse.redirect(new URL('/login?unverified=true', request.url))
+    }
+  }
+
   // Redirect away from Login/Onboarding if complete
   if (pathname === '/login' || pathname.startsWith('/onboarding') || pathname === '/signup') {
     if (user) {
