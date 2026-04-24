@@ -243,11 +243,13 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                 }}>
-                  {ev.event_type.replace(/_/g, ' ')}
+                  {ev.event_type.replace(/_/g, ' ').replace('goal post mortem written', 'mission report written')}
                 </span>
 
                 {/* Description */}
-                <span style={{ color: 'var(--text-2)', lineHeight: 1.4 }}>{ev.description}</span>
+                <span style={{ color: 'var(--text-2)', lineHeight: 1.4 }}>
+                  {ev.description.replace(/Post-mortem/g, 'Mission Report')}
+                </span>
 
                 {/* Dept + tokens */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>

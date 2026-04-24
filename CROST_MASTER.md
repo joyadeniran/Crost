@@ -3,9 +3,33 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.12  
+**Current Version:** 11.13  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Silent Failure & Hanging Task Elimination (v11.12).
+**Deployment Status:** ✅ COMPLETE — Terminology Canonicalization & Legacy Data Transformation (v11.13).
+
+---
+
+## Session v11.13 - Terminology Canonicalization & Legacy Data Transformation
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — All UI surfaces and background emitters updated to canonical "Mission Report" naming.  
+**Impact**: Resolved critical Spec Gap regarding terminology consistency. The system now enforces "Mission Report" globally and gracefully transforms legacy "Post-mortem" data from existing database records during display.
+
+### Changes
+
+1. **Strategic Synthesis Removal**: Replaced the hardcoded "Strategic Synthesis" label in `SynthesisReportCard` (`WarRoom.tsx`) with the canonical "Mission Report" label.
+2. **Orc Report → Mission Report**: Standardized the header in the War Room synthesis card and the title prefix in the LLM generation logic (`llm-client.ts`) to use "Mission Report".
+3. **Legacy Data Transformation Layer**:
+    - **Event Log**: Added a display-time transformation in `EventLogClient.tsx` that maps `goal_post_mortem_written` events to "Mission Report Written" and replaces "Post-mortem" strings in descriptions.
+    - **War Room Error Summaries**: Applied terminology transformation to the `goalErrorEvents` display to ensure legacy error logs are correctly labeled.
+    - **Synthesis Reports**: Injected a transformation into the report body rendering in the War Room to ensure historical reports authored as "Post-mortems" appear as "Mission Reports."
+4. **Emitter Alignment**: Verified that `scripts/worker.ts` correctly emits "Mission Report" events and memo body text.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/event-log/EventLogClient.tsx`
+- `frontend/lib/llm-client.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
