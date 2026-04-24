@@ -3,9 +3,44 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.15  
+**Current Version:** 11.16  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Mission Report Completeness Fix (v11.15).
+**Deployment Status:** ✅ COMPLETE — Artifact Sources / Citations schema (v11.16).
+
+---
+
+## Session v11.16 — Artifact Sources / Citations Schema
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — Type-check clean.  
+**Impact**: Implements Spec §9 citations requirement (DoD #6, #8, #13, #14). Every artefact now carries a structured `sources` field (`memo_ids`, `kb_file_ids`, `tool_calls`). The DB column is indexed for reverse-lookup. The Artifact drawer in the UI surfaces a "SOURCES" footer with colour-coded badges per source type. All four artifact-creation code paths now include `sources`.
+
+### What Was Built
+
+1. **`ArtifactSources` type** (`types/index.ts`): New interface with `memo_ids: string[]`, `kb_file_ids: string[]`, `tool_calls: Record<string, unknown>[]`. Added as a required field on `Artifact`.
+
+2. **`CreateArtifactSchema`** (`app/api/artifacts/route.ts`): Added `ArtifactSourcesSchema` Zod schema and `sources` field (defaults to empty arrays). API now validates and persists citations on every create call.
+
+3. **Supabase migration** (`supabase/migrations/20260424_add_sources_to_artifacts.sql`): Adds `sources JSONB NOT NULL DEFAULT '{"memo_ids":[],"kb_file_ids":[],"tool_calls":[]}'` column. Adds GIN indexes on `sources->'memo_ids'` and `sources->'kb_file_ids'` for efficient reverse-lookup. Includes a backfill UPDATE for any pre-existing rows.
+
+4. **`ArtifactCard.tsx`** (`components/artifacts/ArtifactCard.tsx`): New `CitationsSection` component rendered in the detail drawer. Shows colour-coded badges (MEMOS / KB FILES / TOOLS) with count summaries. Tool calls expose a collapsible JSON detail view. Empty state shows a clear "No citations recorded" message.
+
+5. **Artifact creation sites** (4 files): Added `sources` with correct defaults/values:
+   - `lib/llm-client.ts` — worker task output (empty arrays; structure ready for future KB + memo population)
+   - `lib/tools/execute-tool-call.ts` — tool execution artifacts populate `tool_calls` with `{ service, action, executed_at }`
+   - `app/api/tools/execute/route.ts` — mock save_document populates `tool_calls`
+   - `app/api/worker/execute/route.backup.ts` — backup route populated with tool name
+
+### Files Changed
+- `frontend/types/index.ts`
+- `frontend/app/api/artifacts/route.ts`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/app/api/tools/execute/route.ts`
+- `frontend/app/api/worker/execute/route.backup.ts`
+- `supabase/migrations/20260424_add_sources_to_artifacts.sql` (new)
+- `CROST_MASTER.md` (this entry)
 
 ---
 

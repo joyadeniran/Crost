@@ -271,7 +271,13 @@ async function handleToolResultArchiving({
         artifact_type: 'data',
         title: `Tool Output: ${result.service}.${result.action}`,
         file_url: urldata.publicUrl,
-        created_by: userId
+        created_by: userId,
+        // Spec §9: citations — record the tool call that produced this artefact.
+        sources: {
+          memo_ids: [],
+          kb_file_ids: [],
+          tool_calls: [{ service: result.service, action: result.action, executed_at: new Date().toISOString() }],
+        },
       }).select('id').single();
 
       if (artifact) {

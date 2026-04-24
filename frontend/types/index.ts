@@ -151,6 +151,13 @@ export interface SuggestedAction {
   created_by: string
 }
 
+// Spec §9: citations — every artefact populates this field.
+export interface ArtifactSources {
+  memo_ids: string[]       // Company memo UUIDs that informed this artefact
+  kb_file_ids: string[]    // Knowledge base file UUIDs referenced
+  tool_calls: Record<string, unknown>[]  // External tool calls made (Gmail, Slack, etc.)
+}
+
 export interface Artifact {
   id: string
   goal_id: string | null
@@ -167,6 +174,8 @@ export interface Artifact {
   file_url: string
   // Spec §9.5: which skill slugs were loaded when producing this artefact.
   skills_used: string[]
+  // Spec §9: citations are non-negotiable — every artefact populates sources.
+  sources: ArtifactSources
   suggested_actions?: string[]    // Array of UUIDs linking to suggested_actions table
   created_by?: string
   created_at: string

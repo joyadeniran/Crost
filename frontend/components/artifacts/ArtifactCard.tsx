@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Artifact } from '@/types'
+import { Artifact, ArtifactSources } from '@/types'
 import Image from 'next/image'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
 
@@ -163,6 +163,105 @@ function ExtBadge({ ext }: { ext: string }) {
     >
       {ext}
     </span>
+  )
+}
+
+// ─── Citations Section ────────────────────────────────────────────────────────
+
+function CitationsSection({ sources }: { sources?: ArtifactSources }) {
+  const memoCount = sources?.memo_ids?.length ?? 0
+  const kbCount = sources?.kb_file_ids?.length ?? 0
+  const toolCount = sources?.tool_calls?.length ?? 0
+  const hasAnySources = memoCount > 0 || kbCount > 0 || toolCount > 0
+
+  return (
+    <div>
+      <div style={{
+        fontSize: 10, color: 'var(--text-4)',
+        fontFamily: 'var(--font-dm-mono, monospace)',
+        letterSpacing: '0.08em', marginBottom: 10,
+      }}>
+        SOURCES
+      </div>
+      <div style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: 10,
+        padding: '14px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}>
+        {!hasAnySources ? (
+          <span style={{ fontSize: 12, color: 'var(--text-4)', fontStyle: 'italic' }}>
+            No citations recorded for this artefact.
+          </span>
+        ) : (
+          <>
+            {memoCount > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  color: 'rgba(90,171,255,0.9)',
+                  background: 'rgba(40,130,255,0.08)',
+                  border: '1px solid rgba(40,130,255,0.18)',
+                  borderRadius: 5, padding: '2px 7px',
+                }}>MEMOS</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {memoCount} memo{memoCount !== 1 ? 's' : ''} referenced
+                </span>
+              </div>
+            )}
+            {kbCount > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  color: 'rgba(0,200,150,0.9)',
+                  background: 'rgba(0,200,150,0.08)',
+                  border: '1px solid rgba(0,200,150,0.18)',
+                  borderRadius: 5, padding: '2px 7px',
+                }}>KB FILES</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {kbCount} knowledge base file{kbCount !== 1 ? 's' : ''} referenced
+                </span>
+              </div>
+            )}
+            {toolCount > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  color: 'rgba(255,180,0,0.9)',
+                  background: 'rgba(255,180,0,0.08)',
+                  border: '1px solid rgba(255,180,0,0.18)',
+                  borderRadius: 5, padding: '2px 7px',
+                }}>TOOLS</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {toolCount} tool call{toolCount !== 1 ? 's' : ''} made
+                </span>
+                <details style={{ marginLeft: 4 }}>
+                  <summary style={{ fontSize: 11, color: 'var(--text-4)', cursor: 'pointer', listStyle: 'none' }}>
+                    details ▾
+                  </summary>
+                  <pre style={{
+                    marginTop: 8,
+                    background: 'rgba(0,0,0,0.3)',
+                    borderRadius: 6,
+                    padding: '8px 10px',
+                    fontSize: 10,
+                    color: 'var(--text-3)',
+                    overflow: 'auto',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    maxHeight: 140,
+                  }}>
+                    {JSON.stringify(sources!.tool_calls, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -504,6 +603,9 @@ export function ArtifactCard({ artifact }: Props) {
                 </>
               )}
               
+              {/* Citations — Sources footer (Spec §9) */}
+              <CitationsSection sources={artifact.sources} />
+
               {/* Contextual Action Chips */}
               <SuggestedActionChips entityType="artifact" entityId={artifact.id} />
             </div>

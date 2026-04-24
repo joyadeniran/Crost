@@ -1073,6 +1073,12 @@ export async function runWorkerTask(
         file_url: uploaded.fileUrl,          // ← file_url, not preview_url
         // Spec §9.5: record which skill slugs were loaded when producing this artefact.
         skills_used: loadedSkillSlugs,
+        // Spec §9: citations — populated with worker provenance data where available.
+        sources: {
+          memo_ids: [],
+          kb_file_ids: [],
+          tool_calls: [],
+        },
         metadata: {
           task_id: task.id,
           action: task.action,
