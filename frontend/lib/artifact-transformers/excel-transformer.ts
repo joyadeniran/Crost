@@ -1,4 +1,5 @@
 import * as xlsx from 'xlsx';
+import { healSkillPayload } from './heal-payload';
 
 /**
  * Universal Excel transformer.
@@ -13,6 +14,10 @@ import * as xlsx from 'xlsx';
  */
 export async function transformToExcel(data: any): Promise<Buffer> {
   const workbook = xlsx.utils.book_new();
+
+  // Repair double-encoded JSON emitted by some LLM responses (e.g. `sheets`
+  // arriving as a stringified JSON array) before running skill-schema checks.
+  data = healSkillPayload(data);
 
   // ─── SKILL.md schema: { skill: "xlsx", sheets: [...] } ──────────────────
   // This is the canonical output when the LLM followed the xlsx SKILL.md contract.
