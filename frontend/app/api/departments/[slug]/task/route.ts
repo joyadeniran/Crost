@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
-import { buildFinalPrompt, callLLM } from '@/lib/llm-client'
+import { buildFinalPrompt, callLLM, runOrcReport } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 import { detectOutputType } from '@/lib/artifact-transformers'
@@ -257,12 +257,29 @@ export async function POST(req: NextRequest, { params }: Params) {
     .update({ status: 'running', current_task: body.task.slice(0, 120), last_active_at: new Date().toISOString() })
     .eq('id', dept.id)
 
+  // Create a synthetic single-department goal so the task can be summarized by
+  // Orc on completion (Mission Report) and so any approval/memo/artifact is
+  // traceable back through the goal system.
+  const syntheticGoalTitle = `@${dept.slug}: ${body.task.slice(0, 80)}${body.task.length > 80 ? '…' : ''}`
+  const { data: syntheticGoal } = await supabase
+    .from('goals')
+    .insert({
+      title: syntheticGoalTitle,
+      founder_input: body.task,
+      status: 'executing',
+      created_by: user.id,
+    })
+    .select('id')
+    .single()
+  const goalId: string | null = syntheticGoal?.id ?? null
+
   await supabase.from('event_log').insert({
     department_id: dept.id,
     department_slug: dept.slug,
+    goal_id: goalId,
     event_type: 'task_started',
     description: `Task started: "${body.task.slice(0, 80)}${body.task.length > 80 ? '…' : ''}"`,
-    metadata: { task_preview: body.task.slice(0, 200) },
+    metadata: { task_preview: body.task.slice(0, 200), direct_dispatch: true },
     created_by: user.id
   })
 
@@ -352,6 +369,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           department_id: dept.id,
           department_name: dept.name,
           department_slug: dept.slug,
+          goal_id: goalId,
           action_type: canonicalActionType,
           action_label: approvalReq.action_label,
           payload: enrichedPayload,
@@ -382,6 +400,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await supabase.from('event_log').insert({
         department_id: dept.id,
         department_slug: dept.slug,
+        goal_id: goalId,
         event_type: 'approval_requested',
         description: `Approval requested: ${approvalReq.action_label}`,
         metadata: { approval_id: approval?.id, action_type: approvalReq.action_type },
@@ -401,6 +420,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         risk_level: approvalReq.risk_level ?? 'medium',
         payload: approvalReq.payload,
         department_name: dept.name,
+        goal_id: goalId,
       })
     }
 
@@ -428,6 +448,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         await supabase.from('company_memos').insert({
           from_department: dept.name,
           from_department_id: dept.id,
+          goal_id: goalId,
           title: `[Task] ${body.task.slice(0, 80)}`,
           body: `Output stored as downloadable artifact (ID: ${artifact.id}). See artifacts section to download.`,
           tags: ['department_task', dept.slug, 'artifact_reference'],
@@ -440,6 +461,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         await supabase.from('company_memos').insert({
           from_department: dept.name,
           from_department_id: dept.id,
+          goal_id: goalId,
           title: `[Task] ${body.task.slice(0, 80)}`,
           body: answer.slice(0, 3000),
           tags: ['department_task', dept.slug],
@@ -453,6 +475,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await supabase.from('company_memos').insert({
         from_department: dept.name,
         from_department_id: dept.id,
+        goal_id: goalId,
         title: `[Task] ${body.task.slice(0, 80)}`,
         body: answer,
         tags: ['department_task', dept.slug],
@@ -472,6 +495,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     await supabase.from('event_log').insert({
       department_id: dept.id,
       department_slug: dept.slug,
+      goal_id: goalId,
       event_type: 'task_completed',
       description: `Task completed: "${body.task.slice(0, 60)}${body.task.length > 60 ? '…' : ''}"`,
       metadata: { artifact_created: !!artifactId },
@@ -480,10 +504,20 @@ export async function POST(req: NextRequest, { params }: Params) {
       created_by: user.id,
     })
 
+    // Trigger Orc Mission Report for the synthetic goal (best-effort, non-blocking).
+    if (goalId) {
+      runOrcReport(goalId)
+        .then(async () => {
+          await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
+        })
+        .catch(e => console.error('[Dept Task] runOrcReport failed:', e))
+    }
+
     return NextResponse.json({
       answer,
       approval_requested: false,
-      artifact_id: artifactId
+      artifact_id: artifactId,
+      goal_id: goalId,
     })
   } catch (err) {
     // Reset department status on failure
@@ -492,9 +526,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       .update({ status: 'error', current_task: null })
       .eq('id', dept.id)
 
+    // Mark synthetic goal as failed so it doesn't stay 'running' forever.
+    if (goalId) {
+      await supabase.from('goals').update({ status: 'failed' }).eq('id', goalId)
+    }
+
     await supabase.from('event_log').insert({
       department_id: dept.id,
       department_slug: dept.slug,
+      goal_id: goalId,
       event_type: 'task_failed',
       description: `Task failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
       metadata: { error: String(err) },

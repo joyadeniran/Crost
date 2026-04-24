@@ -1640,7 +1640,9 @@ export function WarRoom() {
       }
       // Surface any execution error from the server (e.g. missing composio connection)
       const execError: string | null = json?.execution_error ?? null
-      const execDone: boolean = json?.execution_status === 'executed'
+      // 'executed' → done. 'failed' → done with error. null → no-op approval (nothing to execute server-side), treat as done.
+      const execStatus: 'executed' | 'failed' | null = json?.execution_status ?? null
+      const execDone: boolean = execStatus !== 'failed' // anything not 'failed' counts as a terminal state
       setCommandMessages(msgs => msgs.map(m =>
         m.id === msgId
           ? {
@@ -1652,6 +1654,46 @@ export function WarRoom() {
             }
           : m
       ))
+
+      // Safety-net polling: if server returned approved but execution_status is missing
+      // (e.g. edge function timed out mid-execution), poll the approval row until it
+      // reaches a terminal state so the UI doesn't stay on "ACTION EXECUTING" forever.
+      if (decision === 'approved' && !execDone && msg.approvalId) {
+        const approvalId = msg.approvalId
+        const deadline = Date.now() + 90_000 // 90s cap
+        const poll = async () => {
+          while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 2500))
+            try {
+              const r = await fetch(`/api/approvals/${approvalId}`)
+              if (!r.ok) continue
+              const j = await r.json()
+              const st = j?.data?.status
+              if (st === 'executed' || st === 'failed' || st === 'rejected') {
+                setCommandMessages(msgs => msgs.map(m =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        approvalExecuted: st !== 'failed',
+                        approvalExecutionError: st === 'failed'
+                          ? (j?.data?.execution_result?.error ?? 'Execution failed.')
+                          : m.approvalExecutionError,
+                      }
+                    : m
+                ))
+                return
+              }
+            } catch { /* keep polling */ }
+          }
+          // Timed out — surface a soft message so the UI isn't perpetually stuck
+          setCommandMessages(msgs => msgs.map(m =>
+            m.id === msgId && !m.approvalExecuted
+              ? { ...m, approvalExecuted: true, approvalExecutionError: m.approvalExecutionError ?? 'Execution is taking longer than expected. Check the event log.' }
+              : m
+          ))
+        }
+        poll()
+      }
     } catch (err: any) {
       console.error('[handleApprovalDecision]', err)
       setCommandMessages(msgs => msgs.map(m =>
