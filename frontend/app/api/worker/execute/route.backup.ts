@@ -137,7 +137,8 @@ export async function POST(req: Request) {
         title: `Tool Output: ${toolName}`,
         body: fullBodyText,
         metadata: { toolName, taskId, source: 'tool_execution' },
-        created_by: userId
+        created_by: userId,
+        sources: { memo_ids: [], kb_file_ids: [], tool_calls: [{ tool: toolName, executed_at: new Date().toISOString() }] },
       }).select('id').single();
 
       artifactReference = artifact?.id ?? null;

@@ -52,6 +52,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const ArtifactSourcesSchema = z.object({
+  memo_ids: z.array(z.string().uuid()).default([]),
+  kb_file_ids: z.array(z.string().uuid()).default([]),
+  tool_calls: z.array(z.record(z.unknown())).default([]),
+})
+
 // Schema for artifact creation — files should be uploaded to Supabase Storage separately
 // This endpoint only stores metadata
 const CreateArtifactSchema = z.object({
@@ -66,6 +72,8 @@ const CreateArtifactSchema = z.object({
   preview_url: z.string().url().nullable().optional(),
   // Spec §9.5: skill slugs loaded during artefact production.
   skills_used: z.array(z.string()).default([]),
+  // Spec §9: citations — non-negotiable on every artefact.
+  sources: ArtifactSourcesSchema.default({ memo_ids: [], kb_file_ids: [], tool_calls: [] }),
 })
 
 export async function POST(req: NextRequest) {
