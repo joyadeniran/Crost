@@ -139,7 +139,7 @@ export async function executeToolCall(options: ExecuteOptions) {
     .from('system_config')
     .select('value')
     .eq('key', 'risk_tolerance')
-    .eq('created_by', userId)
+    .eq('user_id', userId)
     .maybeSingle()
   const riskMode = (riskConfig?.value as string) ?? 'balanced'
 

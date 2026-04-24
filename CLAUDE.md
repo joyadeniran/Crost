@@ -1,172 +1,161 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Context
-
-| File | Purpose |
-|------|---------|
-| [`CROST_SPEC.md`](CROST_SPEC.md) | Product and technical specification — source of truth for intended behavior |
-| [`CROST_MASTER.md`](CROST_MASTER.md) | Implementation log — session history, deployment notes, recent fixes |
-
-**IMPORTANT:**
-- **Before starting any new build phase**, read `CROST_SPEC.md` to align implementation with the spec.
-- **After every successful implementation**, append a summary entry to `CROST_MASTER.md` (session version, what was built, any notable decisions or fixes).
-
-## MCP Tools: code-review-graph
-
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
-
-### When to use graph tools FIRST
-
-- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
-- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
-- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
-- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
-- **Architecture questions**: `get_architecture_overview` + `list_communities`
-
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
-
-### Key Tools
-
-| Tool | Use when |
-|------|----------|
-| `detect_changes` | Reviewing code changes — gives risk-scored analysis |
-| `get_review_context` | Need source snippets for review — token-efficient |
-| `get_impact_radius` | Understanding blast radius of a change |
-| `get_affected_flows` | Finding which execution paths are impacted |
-| `query_graph` | Tracing callers, callees, imports, tests, dependencies |
-| `semantic_search_nodes` | Finding functions/classes by name or keyword |
-| `get_architecture_overview` | Understanding high-level codebase structure |
-| `refactor_tool` | Planning renames, finding dead code |
-
-### Workflow
-
-1. The graph auto-updates on file changes (via hooks).
-2. Use `detect_changes` for code review.
-3. Use `get_affected_flows` to understand impact.
-4. Use `query_graph` pattern="tests_for" to check coverage.
+This file provides guidance to Claude Code when working with this repository.
+**Keep this file as your primary reference. Minimise what you load from other files.**
 
 ---
 
-## App Access
+## Reference Documents — When to Read What
 
-**Live Application**: https://app.crosthq.com
+> Reading these files costs tokens on every load. Only read what the task actually requires.
 
-<!-- **Local Development**: http://localhost:3000 (when running `cd frontend && pnpm dev`) -->
+| Document | When to read | Cost |
+|---|---|---|
+| **`Spec_Review_v4.md`** | Any new feature or bug fix — read this first. It is the curated current-state tracker (~150 lines). | Low |
+| **`CROST_SPEC.md §section`** | Only when the relevant section is ambiguous after reading Spec_Review_v4. Use the **Spec Section Map** below to find the right section. Never read the full file. | Medium per section |
+| **`CROST_MASTER.md` — last entry only** | Only when you need to confirm the current version or what was last changed. Read lines 1–12 only. Append a new entry after every code change. Never read the full file. | Low (first 12 lines only) |
+
+### Spec Section Map — targeted reads only
+
+| Working on | Read |
+|---|---|
+| Suggested Actions, chip execution, action catalog | §6.1 |
+| Mission execution, task states, parallel dispatch | §6 |
+| Mission Reports | §7 |
+| Memo / company memory, two-table reality | §8 |
+| Artefacts, Skills Layer, citations | §9, §9.5 |
+| Knowledge Base, extraction, retrieval | §10 |
+| Approvals, HITL, risk mode thresholds | §11 |
+| Tool connections, Composio, executeToolCall | §12, §15.7 |
+| War Room, interaction modes (@dept, /tool) | §14, §16 |
+| Architecture, BYOK, auth, free tier, data model | §15 |
+| MVP scope, Definition of Done checklist | §17 |
+| Orc behaviour rules | §4 |
+| Departments, activation, skills loading | §5 |
+
+### CROST_MASTER.md — append protocol
+
+After every session where code is changed, append a new entry:
+```
+## Session vX.Y — Short title
+**Date**: …  **Status**: ✅ / 🛠  
+**Impact**: One sentence.
+### What Was Built
+1. Bullet per change
+### Files Changed
+- list
+```
+Update the version number and "Last Updated" in lines 5–8. Do **not** re-read the full log.
+
+---
+
+## Code Knowledge Graph — Use First
+
+**ALWAYS use the code-review-graph MCP tools BEFORE Grep/Glob/Read.**
+The graph is faster, cheaper, and gives structural context (callers, dependents) that file scanning cannot.
+
+| Tool | Use when |
+|---|---|
+| `semantic_search_nodes` | Find any function/component by name or keyword |
+| `query_graph` (callers_of / callees_of / imports_of) | Trace relationships |
+| `get_impact_radius` | Blast radius before editing a shared function |
+| `detect_changes` | Risk-scored analysis of uncommitted diffs |
+| `get_review_context` | Token-efficient source snippets for review |
+| `get_affected_flows` | Which execution paths a change touches |
+| `get_architecture_overview` | High-level structure |
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+---
 
 ## Commands
 
-All frontend commands run from the `frontend/` directory. Package manager is **pnpm**.
+All frontend commands run from `frontend/`. Package manager: **pnpm**.
 
 ```bash
-# Development
-cd frontend && pnpm dev          # Next.js dev server on localhost:3000
-
-# Build & type check
+cd frontend && pnpm dev          # Next.js dev server — localhost:3000
 cd frontend && pnpm build        # Production build
-cd frontend && pnpm type-check   # tsc --noEmit (run before committing)
+cd frontend && pnpm type-check   # tsc --noEmit — run before every commit
 cd frontend && pnpm lint         # ESLint
-
-# Background worker
-pnpm worker                      # Runs scripts/worker.ts via tsx (root package)
+pnpm worker                      # Background worker (repo root)
 ```
 
-There are no automated test suites. Manual validation scripts are in `/scripts/`:
-- `health-check.ts` — API health & Onyx availability
-- `checkDB.js` / `check_events.ts` — DB connectivity and event log verification
+No automated test suites. Manual scripts in `/scripts/`: `health-check.ts`, `checkDB.js`, `check_events.ts`.
 
 ---
 
 ## Architecture
 
-**Crost** is an agentic OS for solo founders. AI **Departments** (Sales, Marketing, Ops, custom) execute goals autonomously. A supervisor agent called **Orc** dispatches goals to departments and gates risky actions through an **Approval Queue**.
+**Crost** — agentic OS for solo founders. Orc (Chief of Staff) dispatches goals to AI Departments, gates risky actions through an Approval Queue, and produces cited artefacts via the Skills Layer.
 
-### Tech Stack
+### Stack
 
-- **Next.js 14** (App Router) + **React 18** + **TypeScript 5.5**
-- **Supabase** — PostgreSQL, Auth (SSR), Row Level Security
-- **Tailwind CSS** + **Radix UI** — styling and component primitives
-- **Zustand** — client-side global state (`/frontend/lib/store.ts`, `onboarding-store.ts`)
-- **Composio** — external tool integrations (Gmail, Slack, GitHub, etc.)
-- **LiteLLM proxy** — routes LLM calls; falls back across Groq → Gemini → Claude → Ollama
+- **Next.js 14** App Router · **React 18** · **TypeScript 5.5**
+- **Supabase** — PostgreSQL + Auth SSR + RLS
+- **Zustand** — `lib/store.ts` (dashboard), `lib/onboarding-store.ts` (onboarding)
+- **Composio** — Gmail, Slack, GitHub, HubSpot integrations
+- **LiteLLM proxy** — routes across Groq → Gemini → Claude
 
 ### Directory Map
 
 ```
 frontend/
-├── app/
-│   ├── dashboard/          # Main UI (departments, war room, artifacts, event log)
-│   ├── onboarding/         # 5-step setup flow (identity → control → orc → team → activate)
-│   ├── auth/, login/, signup/  # Supabase SSR auth pages
-│   └── api/
-│       ├── goals/          # Goal lifecycle: create, execute, close
-│       ├── departments/    # Department CRUD and agent orchestration
-│       ├── artifacts/      # AI-generated memos, reports, documents
-│       ├── approvals/      # Approval queue (pending → approved/rejected → executed)
-│       ├── tools/          # Tool execution, Composio bridge, connection sync
-│       ├── connect/        # OAuth flows for external integrations
-│       ├── knowledge/      # Knowledge base (uploaded context files)
-│       └── worker/         # Background async execution
+├── app/api/
+│   ├── goals/            # Goal lifecycle: create, execute, dispatch
+│   ├── departments/      # Department CRUD + agent orchestration
+│   ├── artifacts/        # Artefact create/list/delete
+│   ├── approvals/        # HITL queue — pending → approved/rejected → executed
+│   ├── suggested-actions/[id]/execute/  # Chip-tap execution (§6.1)
+│   ├── tools/            # Composio bridge, tool sync
+│   ├── knowledge/        # KB upload, search (writes back kb_file_ids to sources)
+│   └── worker/           # Background async execution
 ├── components/
-│   ├── war-room/           # Goal input, real-time execution state, results
-│   ├── departments/        # Department cards and configuration
-│   ├── chat/               # Command menu (@dept, /tool triggers)
-│   ├── artifacts/          # Memo and document viewer
-│   ├── approvals/          # Approval decision UI
-│   └── ui/                 # Shared Radix + Tailwind primitives
+│   ├── war-room/         # WarRoom.tsx — Orc input, plan card, task approval
+│   ├── artifacts/        # ArtifactCard.tsx — preview, sources, chip footer
+│   ├── suggested-actions/# SuggestedActionChips.tsx — full execution state machine
+│   ├── chat/             # ChatCommandMenu.tsx — @dept / /tool autocomplete
+│   └── departments/      # DepartmentCard.tsx
 ├── lib/
-│   ├── llm-client.ts       # LLM routing across all providers
-│   ├── tools/execute-tool-call.ts  # Composio tool invocation
-│   ├── artifact-transformers/      # Goal → Word/PDF/Markdown generation
-│   ├── composio-tools.ts   # Composio API wrapper
-│   └── supabase.ts         # Supabase server client
-└── types/index.ts          # All shared TypeScript types
-
-scripts/                    # CLI utilities (tsx, run from repo root)
-supabase/migrations/        # SQL DDL — schema changes go here
-litellm/litellm_config.yaml # LLM proxy model definitions
+│   ├── llm-client.ts     # Orc + worker LLM calls, runOrcReport, skill injection
+│   ├── tools/execute-tool-call.ts  # Gateway: risk mode, HITL, Composio, internal tools
+│   ├── suggested-actions.ts        # generateAndInsertSuggestedActions
+│   ├── skills/           # SKILL.md files (pptx, docx, xlsx, pdf, pitch_deck)
+│   ├── artifact-transformers/      # JSON → real .pptx / .docx / .xlsx files
+│   └── supabase.ts       # Server client
+└── types/index.ts        # All shared TypeScript types — add new types here only
 ```
 
 ### Key Data Flows
 
-1. **Goal execution**: War Room → `POST /api/goals` → Orc agent → department agent → tool calls via Composio → events logged → result streamed back
-2. **Approval queue**: Risky tool call → `POST /api/approvals` → founder reviews → `PATCH /api/approvals/:id` → tool executes
-3. **Tool connections**: `GET /api/tools/sync` verifies Composio connections and auto-heals stale ones (just-in-time)
-4. **LLM routing**: `lib/llm-client.ts` checks `ENV_MODE` and `CLOUD_MODEL` env vars to select provider; graceful fallback chain
+1. **Goal execution**: War Room → `POST /api/goals` → Orc (`runOrchestratorTask`) → tasks dispatched → departments (`runWorkerTask`) → Skills loaded → artefact uploaded → `generateAndInsertSuggestedActions` → Mission Report → `goal_mission_report_written` event
+2. **Chip tap**: `SuggestedActionChips` → `POST /api/suggested-actions/[id]/execute` → resolves `action_slug` → `executeToolCall(executive, ...)` → HITL approval or immediate execution → SuggestedAction row updated
+3. **Tool execution**: `executeToolCall` → reads `risk_tolerance` from `system_config` → checks `RISK_MODE_AUTO` threshold → approval_queue OR Composio execute
+4. **KB search**: `POST /api/knowledge/search` → returns matches → `writeKbSourcesToArtifact` updates `artifacts.sources.kb_file_ids`
 
 ### LLM Model Selection
 
-Controlled by env vars in `.env.local`:
-- `ENV_MODE=cloud` + `CLOUD_MODEL=groq/llama-3.3-70b-versatile` (default cloud)
-- `ENV_MODE=local` uses Ollama via `OLLAMA_BASE_URL`
-- Override per-call with `CLOUD_MODEL_WORKER` for background tasks
+Env vars in `frontend/.env.local`:
+- `CLOUD_MODEL` (default `groq/llama-3.3-70b-versatile`) — primary
+- `CLOUD_MODEL_WORKER` — background tasks
+- `ENV_MODE=local` → Ollama via `OLLAMA_BASE_URL`
 
-### Environment Setup
+### Environment Variables
 
-Copy `frontend/.env.example` → `frontend/.env.local` and fill in:
-
-| Variable | Purpose |
-|----------|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-side only) |
-| `NEXT_PUBLIC_APP_URL` | App root (`http://localhost:3000` for dev; `https://app.crosthq.com` for production) |
-| `LITELLM_BASE_URL` | LiteLLM proxy (`http://localhost:4000`) |
-| `LITELLM_MASTER_KEY` | Proxy auth key |
-| `GROQ_API_KEY` / `GOOGLE_AI_STUDIO_API_KEY` / `ANTHROPIC_API_KEY` | LLM provider keys |
-| `COMPOSIO_API_KEY` | Tool integrations |
+`NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` · `NEXT_PUBLIC_APP_URL` · `LITELLM_BASE_URL` · `LITELLM_MASTER_KEY` · `GROQ_API_KEY` · `GOOGLE_AI_STUDIO_API_KEY` · `ANTHROPIC_API_KEY` · `COMPOSIO_API_KEY`
 
 ---
 
 ## Conventions
 
-- **API routes** live in `frontend/app/api/` and export `GET`/`POST`/`PATCH`/`DELETE` handlers (Next.js App Router)
-- **Server vs client Supabase**: use `lib/supabase.ts` server client in API routes; `@supabase/ssr` browser client in components
-- **Types**: all shared types are in `frontend/types/index.ts` — add new types there rather than co-locating
-- **DB changes**: create a new file in `supabase/migrations/` with a timestamp prefix; never edit existing migrations
-- **State**: Zustand store in `lib/store.ts` for dashboard state; `lib/onboarding-store.ts` for setup flow only
+- **API routes**: `frontend/app/api/` — export `GET`/`POST`/`PATCH`/`DELETE` (Next.js App Router)
+- **Supabase**: `lib/supabase.ts` server client in API routes; `@supabase/ssr` browser client in components
+- **Types**: add to `frontend/types/index.ts` — never co-locate type definitions
+- **DB changes**: new file in `supabase/migrations/` with timestamp prefix; never edit existing migrations
+- **Artefact creation**: always populate `sources: { memo_ids, kb_file_ids, tool_calls }` and call `generateAndInsertSuggestedActions` after inserting
+- **Risk mode**: `executeToolCall` reads `system_config.risk_tolerance` per user; default is `balanced`
+
+---
+
+## Live Application
+
+**https://app.crosthq.com**

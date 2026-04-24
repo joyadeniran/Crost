@@ -3,9 +3,35 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.19  
+**Current Version:** 11.20  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — XLSX Skill Routing & Detection Fix (v11.19).
+**Deployment Status:** ✅ COMPLETE — SuggestedActionChips full state machine + enriched payloads + per-ID execute route (v11.20).
+
+---
+
+## Session v11.20 — SuggestedActionChips Full State Machine + Merge Best-of-Both
+
+**Date**: April 24, 2026
+**Status**: ✅ COMPLETE
+**Impact**: Completes §6.1 end-to-end — chip taps now have full UX (inline input, spinner, done/error/approval states), enriched action payloads with file metadata, save_to_kb action, and a RESTful per-ID execute route. Also fixes risk_tolerance query bug and token-optimises CLAUDE.md.
+
+### What Was Built
+1. **`SuggestedActionChips.tsx` full state machine** — `idle → needs_input → loading → done/approval/error` per chip. Inline email input panel with Enter-to-submit/Esc-to-cancel. Risk-level colour coding (amber medium, green low). Completed chips stay visible as audit trail.
+2. **`/api/suggested-actions/[id]/execute/route.ts`** — RESTful per-ID execute handler. Routes: `send_to_email` → `executeToolCall(executive, gmail.send_email)` → HITL; `save_to_kb` → `knowledge_base_files` insert; `add_to_memo` → `company_memos` insert; `make_changes` → redirect hint. Threads outcome back to SuggestedAction row (completed/failed/approved).
+3. **`lib/suggested-actions.ts` enriched payloads** — Added `artifact_title` param; `make_changes` and `add_to_memo` now carry full payload; `save_to_kb` action added; `send_to_email` now includes `file_url`, `file_name`, `subject`, `required_inputs: ['destination_email']`.
+4. **`execute-tool-call.ts` risk query fix** — `eq('created_by', userId)` → `eq('user_id', userId)` for `system_config` risk_tolerance lookup.
+5. **`CLAUDE.md` token-optimised** — Tiered reading model (Spec_Review_v4 first, then targeted §sections). Under 200 lines. Eliminates "read full CROST_SPEC.md" instruction that cost 25k tokens per session.
+6. **`Spec_Review_v4.md` added** — 150-line authoritative current-state tracker with MVP DoD checklist and open gaps (H1 in-browser preview, H2 middleware OTP, H3 duplicate email).
+7. **`llm-client.ts`** — Pass `artifact_title` to `generateAndInsertSuggestedActions` from artifact creation path.
+
+### Files Changed
+- `frontend/components/suggested-actions/SuggestedActionChips.tsx`
+- `frontend/app/api/suggested-actions/[id]/execute/route.ts` (new)
+- `frontend/lib/suggested-actions.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/lib/llm-client.ts`
+- `CLAUDE.md`
+- `Spec_Review_v4.md` (new)
 
 ---
 

@@ -1097,6 +1097,7 @@ export async function runWorkerTask(
           goal_id: goalId,
           artifact_type: uploaded.artifactType,
           file_url: uploaded.fileUrl,
+          artifact_title: `Output: ${task.label}`,
           created_by: userId
         })
         if (actionIds.length > 0) {
