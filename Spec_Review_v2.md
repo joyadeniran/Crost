@@ -9,7 +9,7 @@
   ---                                                                           
   🔴 CRITICAL — MVP Blockers
                             
-  1. §6.1 Suggested Next Actions — Entirely Absent
+  1. [✓ COMPLETE] §6.1 Suggested Next Actions — Entirely Absent
                                                                                 
   Blast radius: WarRoom completion messages, ArtifactCard, MissionReport,       
   Dashboard widget, approval_queue, executeToolCall gateway, DoD #11            
@@ -235,7 +235,7 @@
   user.email_confirmed_at. If null, redirect to a blocking verification screen.
                                                                                 
   ---             
-  12. §2 Beat 9 — War Room Completion Message Missing Deep Link + Chips
+  12. [✓ COMPLETE] §2 Beat 9 — War Room Completion Message Missing Deep Link + Chips
                                                                                 
   File: frontend/components/war-room/WarRoom.tsx
                                                                                 
@@ -244,6 +244,7 @@
   action chips. The current War Room has a SynthesisReportCard that shows the   
   ORC REPORT memo content — but no deep link to the artefact, no citations
   footnote, and no chips (upstream from item 1 above).
+  Fix: SuggestedActionChips are now rendered in the WarRoom and ArtifactCard.
 
   ---
   🟡 MEDIUM — Partial/Degraded Implementation

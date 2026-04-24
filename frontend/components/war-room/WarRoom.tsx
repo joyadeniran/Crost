@@ -9,6 +9,7 @@ import { useCrostStore } from '@/lib/store'
 import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus } from '@/types'
 import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
+import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
 
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
@@ -1204,26 +1205,34 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
         borderTop: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between', // Changed to split orchestrator mark and chips
         gap: 12,
       }}>
-        <div style={{
-          width: 32,
-          height: 32,
-          borderRadius: '10px',
-          background: 'linear-gradient(135deg, var(--accent) 0%, var(--blue) 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 14,
-          boxShadow: '0 4px 12px rgba(0, 212, 170, 0.2)',
-        }}>
-          🧠
-        </div>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
-          <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Chief of Staff Pass</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, var(--accent) 0%, var(--blue) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14,
+            boxShadow: '0 4px 12px rgba(0, 212, 170, 0.2)',
+          }}>
+            🧠
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
+            <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Chief of Staff Pass</div>
+          </div>
         </div>
       </div>
+      
+      {/* Suggest Contextual Follow-ups per §6.1 */}
+      {report.id && (
+        <SuggestedActionChips entityType="mission_report" entityId={report.id} />
+      )}
     </div>
   )
 }

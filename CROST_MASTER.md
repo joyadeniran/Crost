@@ -3,9 +3,34 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.10  
+**Current Version:** 11.11  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Failure Card Enrichment & Deep-Linking (v11.10).
+**Deployment Status:** ✅ COMPLETE — Suggested Next Actions Layer (v11.11).
+
+---
+
+## Session v11.11 - Suggested Next Actions Layer
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — App code verified, backend migration required via dashboard  
+**Impact**: Resolved critical Spec Gap #1 and established the canonical follow-through layer via `SuggestedAction` integration. Required for the "Beat 9 Magic Moment."
+
+### Changes
+1. **Schema & Types**: Created Supabase migration `20260424_add_suggested_actions.sql` and updated TypeScript interfaces for `SuggestedAction` and `SuggestedActionStatus` mapping perfectly to Spec §6.1. Added `suggested_actions` field to `Artifact`.
+2. **Action Generator**: Added `suggested-actions.ts` helper tool that automatically produces common follow-up actions (`make_changes`, `add_to_memo`, `send_to_email`) correctly formatted and scored as a DB insert array.
+3. **Execution Injection**: Updated `llm-client.ts` to call the generator tool dynamically during `runWorkerTask` and `runOrcReport`. Actions generate implicitly on completion without extra latency or prompts.
+4. **UI Chip Cards**: Delivered `SuggestedActionChips.tsx`, resolving the presentation layer in two surfaces across the app. Added chips to the `WarRoom` (Orc completion reporting) and `ArtifactCard` detail pane.
+
+### Files Changed
+- `frontend/types/index.ts`
+- `frontend/lib/suggested-actions.ts` (NEW)
+- `frontend/lib/llm-client.ts`
+- `frontend/components/suggested-actions/SuggestedActionChips.tsx` (NEW)
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `supabase/migrations/20260424_add_suggested_actions.sql`
+- `Spec_Review_v2.md`
+- `CROST_MASTER.md` (this entry)
 
 ---
 
