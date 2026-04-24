@@ -3,9 +3,41 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.11  
+**Current Version:** 11.12  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Suggested Next Actions Layer (v11.11).
+**Deployment Status:** ✅ COMPLETE — Silent Failure & Hanging Task Elimination (v11.12).
+
+---
+
+## Session v11.12 - Silent Failure & Hanging Task Elimination
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — 8 critical bugs eliminated across the goal → task → approval execution pipeline. Type-check clean.  
+**Impact**: Goals, tasks, and approvals now reach terminal states deterministically. No task can silently hang in `running`, no goal can stay stuck in `executing`, and the chain reaction cascades reliably across the full waterfall.
+
+### Bugs Fixed
+
+1. **Goal never auto-completed** (`llm-client.ts`): `runOrcReport` was called when all tasks finished but the goal status was never updated. Goal stayed stuck in `executing` forever. Fix: added `goals.update({ status: 'completed' })` after `runOrcReport`.
+
+2. **Task stuck `running` after approval rejected** (`approvals/[id]/route.ts`): When a founder rejected an approval, the linked `goal_task` (via `__task_id` in payload) was never updated. Fix: on rejection, mark linked task `rejected` and fire CHAIN_REACTION so downstream tasks can unblock.
+
+3. **Task stuck `running` after approval execution failure** (`approvals/[id]/route.ts`): When Composio/internal tool execution threw, the approval was marked `failed` but the linked `goal_task` was not. Fix: in the execution catch block, update linked task to `failed`.
+
+4. **LiteLLM fetch had no timeout** (`llm-client.ts`): If LiteLLM was slow or unreachable, `callLiteLLM` hung indefinitely, causing goals to stay in `planning` and tasks in `running` with no recovery. Fix: added `signal: AbortSignal.timeout(90_000)`.
+
+5. **Department stuck `running` on LLM error** (`llm-client.ts`): If `callLLM` threw, `runWorkerTask` propagated the error without resetting department status. Fix: wrapped the full execution body in try/catch; catch resets department to `error`.
+
+6. **`goal_tasks` stuck `running` if memo insert failed** (`llm-client.ts`): `goal_tasks.update` came after `company_memos.insert`. A memo DB failure left the task in `running` permanently. Fix: moved task status update before memo insert; wrapped memo insert in its own try/catch (non-fatal).
+
+7. **Dead approval filter in dispatch** (`dispatch/route.ts`): The approval expiry check filtered on `action_type: 'task_approval'` — a value never inserted into the DB. The entire block was dead code. Fix: removed the block.
+
+8. **CHAIN_REACTION missed `pending` tasks** (`dispatch/route.ts`): Chain reaction only scanned for `planned` tasks. Initial tasks that were never attempted stayed `pending` and were silently skipped, breaking waterfall chains where the founder only dispatched the first task. Fix: chain reaction now also scans `pending` tasks with no blockers.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/app/api/approvals/[id]/route.ts`
+- `frontend/app/api/goals/[id]/dispatch/route.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 

@@ -87,6 +87,27 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .eq('id', approval.department_id)
       .eq('created_by', user.id)
 
+    // If rejected, mark the associated goal task as rejected so the chain can continue.
+    if (decision === 'rejected') {
+      const taskId = (approval.payload as any)?.__task_id
+      if (taskId && approval.goal_id) {
+        await supabase.from('goal_tasks').update({
+          status: 'rejected',
+          completed_at: new Date().toISOString()
+        }).eq('goal_id', approval.goal_id).eq('task_id', taskId)
+
+        // Trigger chain reaction so downstream tasks that only needed this one to terminal can proceed.
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+          },
+          body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
+        }).catch(e => console.error('[Approval Rejection] Chain reaction failed:', e))
+      }
+    }
+
     // Log decision
     await supabase.from('event_log').insert({
       department_id: approval.department_id,
@@ -235,6 +256,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             status: 'failed',
             execution_result: { error: executionError }
           }).eq('id', params.id)
+
+          // Mark the associated goal task as failed so it doesn't stay stuck in 'running'.
+          const failedTaskId = (approval.payload as any)?.__task_id
+          if (failedTaskId && approval.goal_id) {
+            await supabase.from('goal_tasks').update({
+              status: 'failed',
+              completed_at: new Date().toISOString()
+            }).eq('goal_id', approval.goal_id).eq('task_id', failedTaskId)
+          }
+
           await supabase.from('event_log').insert({
             department_slug: approval.department_slug,
             goal_id: approval.goal_id,
