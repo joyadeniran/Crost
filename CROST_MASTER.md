@@ -3,9 +3,99 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.16  
+**Current Version:** 11.17  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Artifact Sources / Citations schema (v11.16).
+**Deployment Status:** ✅ COMPLETE — Spec Review v3 + 8 Critical Fixes (v11.17).
+
+---
+
+## Session v11.17 — Spec Review v3 + 8 Critical Fixes
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — Type-check clean. All 8 fixes deployed. `Spec_Review_v3.md` produced.  
+**Impact**: Closes the HITL trust contract, hardens auth, wires suggested actions end-to-end, enriches the dashboard, and produces a comprehensive audit document (`Spec_Review_v3.md`) cataloguing all remaining gaps.
+
+### Context
+A full code-vs-spec audit of `CROST_SPEC.md` v2.2 against HEAD (`767d30ce`) was performed. The audit identified 5 critical gaps, 6 high-priority gaps, 8 medium-priority gaps, and 6 edge cases. During the audit, 8 critical/high-priority items were fixed immediately; the rest are documented in `Spec_Review_v3.md` with actionable recommendations.
+
+### Fixes Applied
+
+1. **Risk Mode Wiring** (`frontend/lib/tools/execute-tool-call.ts`)
+   - **Before**: `LOW_RISK_READ_TOOLS` was a hardcoded whitelist; `system_config.risk_tolerance` was never read.
+   - **After**: Queries `system_config` for `risk_tolerance` per user. Implements three-mode threshold table:
+     - `careful` → all actions require approval
+     - `balanced` (default) → low-risk read-only auto-runs; medium+ requires approval
+     - `aggressive` → low + medium auto-run; high + critical always require approval
+   - **Spec**: §11 / DoD #10
+
+2. **Middleware OTP Enforcement** (`frontend/middleware.ts`)
+   - **Before**: Email/password users could enter onboarding and dashboard without verifying their email.
+   - **After**: For `email` provider users with `!email_confirmed_at`, redirects to `/login?unverified=true` unless already on an auth page.
+   - **Spec**: §11 / DoD #2
+
+3. **Signup Duplicate Email Redirect** (`frontend/app/signup/page.tsx`)
+   - **Before**: Returning users who tried to sign up again saw a generic error toast.
+   - **After**: Detects `error.code === 'user_already_exists'` or "already registered" message, shows info toast, redirects to `/login?email=...`.
+   - **Spec**: §15.6
+
+4. **Artifact extMap Missing `presentation` + `pdf`** (`frontend/components/artifacts/ArtifactCard.tsx`)
+   - **Before**: `extMap` only had `spreadsheet → xlsx` and `document → docx`, so PPTX and PDF artifacts showed generic icons.
+   - **After**: Added `presentation → pptx` and `pdf → pdf` mappings with correct MIME types.
+   - **Spec**: §9 / DoD #6
+
+5. **Processing Copy Constants** (`frontend/lib/processing-copy.ts` — NEW)
+   - **Before**: No canonical loading messages existed; War Room showed generic "ORCHESTRATOR PLANNING…" text.
+   - **After**: New constants file with 18 office-themed + 6 warm-playful messages per Spec §2 Beat 8. Includes `getRandomProcessingMessage()` and `getRandomWarmMessage()` helpers.
+   - **Note**: Constants are ready but **not yet wired** into `WarRoom.tsx` (remaining gap).
+   - **Spec**: §2 Beat 8
+
+6. **KB Search Write-Back to Artifact Sources** (`frontend/app/api/knowledge/search/route.ts`)
+   - **Before**: `knowledge_base_search` returned matches but never wrote matched `file_ids` to the calling artifact's `sources.kb_file_ids`.
+   - **After**: New `writeKbSourcesToArtifact()` helper accepts an optional `artifact_id` parameter, fetches existing sources to merge (preserving `memo_ids` and `tool_calls`), and writes merged `kb_file_ids` back. Called on all three search return paths: semantic search, keyword fallback, and direct file search.
+   - **Spec**: §10 / DoD #14
+
+7. **Suggested Action Gateway** (`frontend/lib/execute-suggested-action.ts` — NEW, `frontend/app/api/suggested-actions/execute/route.ts` — NEW, `frontend/components/suggested-actions/SuggestedActionChips.tsx`)
+   - **Before**: Chips rendered but tapping fired `alert('Action execution not hooked up yet!')`.
+   - **After**: Full execution gateway built:
+     - Loads `SuggestedAction` row, validates `status === 'generated'`
+     - Maps all 10 catalog slugs → `(service, action, params)`
+     - Routes direct-action slugs through `departmentId: 'executive'`
+     - Calls `executeToolCall(...)` with `silent: true`
+     - Threads outcomes back into DB (`completed` / `failed` / `dispatched`)
+     - Emits `suggested_action_*` event_log entries
+   - **Catalog**: `send_to_email`, `add_to_memo`, `make_changes`, `send_to_contact`, `save_to_kb`, `schedule_recurring`, `generate_companion`, `share_with_teammate`, `draft_followup`, `start_new_mission`
+   - **Spec**: §6.1, §15.7 / DoD #11
+
+8. **Dashboard "What Next?" Widget** (`frontend/components/dashboard/WhatNextWidget.tsx` — NEW, `frontend/app/dashboard/page.tsx`)
+   - **Before**: No dashboard surface for unresolved suggested actions.
+   - **After**: Server-fetches top 3 `generated` `suggested_actions` rows per user. Renders a card with emoji icons per action slug, label, reasoning excerpt, risk-level colour badge, and deep-link to the source artifact. Hidden when no suggestions exist.
+   - **Spec**: §6.1 Surface #4
+
+### Audit Deliverable
+
+**`Spec_Review_v3.md`** — Comprehensive gap analysis covering:
+- Critical gaps: KB search write-back (FIXED), in-browser preview (remaining)
+- High-priority gaps: Processing copy wiring, `company_memo` migration, deprecated slug rejection, icon coverage
+- Medium-priority gaps: Suggested action expiry, `callEmbeddings` timeout, model routing divergence
+- Edge cases: JIT sync race, `start_new_mission` special case, status filter mismatch, risk mode case sensitivity
+- File-by-file audit table (14 files)
+- DoD checklist (13 items) with ✅ / 🟡 / ❌ status
+- Priority-ordered recommendations (15 items)
+
+### Files Changed
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/middleware.ts`
+- `frontend/app/signup/page.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/lib/processing-copy.ts` (NEW)
+- `frontend/app/api/knowledge/search/route.ts`
+- `frontend/lib/execute-suggested-action.ts` (NEW)
+- `frontend/app/api/suggested-actions/execute/route.ts` (NEW)
+- `frontend/components/suggested-actions/SuggestedActionChips.tsx`
+- `frontend/components/dashboard/WhatNextWidget.tsx` (NEW)
+- `frontend/app/dashboard/page.tsx`
+- `Spec_Review_v3.md` (NEW)
+- `CROST_MASTER.md` (this entry)
 
 ---
 

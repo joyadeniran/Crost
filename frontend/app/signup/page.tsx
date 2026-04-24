@@ -27,7 +27,15 @@ export default function SignUpPage() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
-      if (error) throw error
+      if (error) {
+        // Spec §15.6: duplicate email → redirect to /login, not /signup
+        if (error.code === 'user_already_exists' || error.message?.toLowerCase().includes('already registered')) {
+          toast('An account already exists with this email. Redirecting to sign in…', 'info')
+          window.location.href = `/login?email=${encodeURIComponent(email)}`
+          return
+        }
+        throw error
+      }
       setShowOtp(true)
       toast('Verification code sent!', 'success')
     } catch (err: any) {

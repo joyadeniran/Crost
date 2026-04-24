@@ -31,6 +31,8 @@ function inferFilename(artifact: Artifact): { name: string; ext: string } {
     image: 'png',
     data: 'json',
     code: 'txt',
+    presentation: 'pptx',
+    pdf: 'pdf',
   }
   const ext = extMap[artifact.artifact_type] ?? 'txt'
   return { name: title, ext }

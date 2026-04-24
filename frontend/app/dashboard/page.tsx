@@ -5,6 +5,7 @@ import { RealtimeProvider } from '@/components/providers/RealtimeProvider'
 import { LiveDepartmentGrid } from '@/components/departments/LiveDepartmentGrid'
 import { DashboardActions } from '@/components/departments/DashboardActions'
 import { WarRoom } from '@/components/war-room/WarRoom'
+import { WhatNextWidget } from '@/components/dashboard/WhatNextWidget'
 import { Department } from '@/types'
 import { redirect } from 'next/navigation'
 
@@ -163,16 +164,24 @@ export default async function DashboardPage() {
     }
   }
 
-  const [approvalResult, identityResult] = await Promise.all([
+  const [approvalResult, identityResult, suggestedActionsResult] = await Promise.all([
     supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', currentUser.id),
     supabase
       .from('system_config')
       .select('key, value')
       .in('key', ['company_name', 'company_identity'])
       .eq('created_by', currentUser.id),
+    supabase
+      .from('suggested_actions')
+      .select('id, action_slug, label, reasoning, risk_level, source_entity_type, source_entity_id, created_at')
+      .eq('created_by', currentUser.id)
+      .eq('status', 'generated')
+      .order('created_at', { ascending: false })
+      .limit(3),
   ])
 
   const departments = (deptResult.data ?? []) as Department[]
+  const suggestedActions = suggestedActionsResult.data ?? []
   const pendingCount = approvalResult.data?.length ?? 0
   const companyName = identityResult.data?.find((row) => row.key === 'company_name')?.value
   const companyIdentity = identityResult.data?.find((row) => row.key === 'company_identity')?.value
@@ -292,6 +301,9 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* What Next? — top unresolved suggestions */}
+      <WhatNextWidget actions={suggestedActions} />
 
       {/* War Room — goal input + plan card */}
       <WarRoom />

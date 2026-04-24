@@ -8,10 +8,46 @@ export const dynamic = 'force-dynamic';
 // Called by execute-tool-call.ts when service='internal' action='knowledge_base_search'
 // Also callable from Orc/departments via the standard tool exec pathway.
 
+/**
+ * Writes matched KB file IDs back to the calling artifact's sources column.
+ * Spec §10 / DoD #14: "All retrievals populate the calling artefact's sources.kb_file_ids"
+ */
+async function writeKbSourcesToArtifact(
+  supabase: any,
+  artifactId: string | undefined,
+  kbFileIds: string[]
+) {
+  if (!artifactId || kbFileIds.length === 0) return;
+  try {
+    // Fetch existing sources to merge (avoid overwriting memo_ids or tool_calls)
+    const { data: artifact } = await supabase
+      .from('artifacts')
+      .select('sources')
+      .eq('id', artifactId)
+      .single();
+
+    const existingSources = artifact?.sources ?? {};
+    const existingKbIds: string[] = existingSources.kb_file_ids ?? [];
+    const mergedKbIds = [...new Set([...existingKbIds, ...kbFileIds])];
+
+    await supabase
+      .from('artifacts')
+      .update({
+        sources: {
+          ...existingSources,
+          kb_file_ids: mergedKbIds,
+        },
+      })
+      .eq('id', artifactId);
+  } catch (err) {
+    console.warn('[KB Search] Failed to write sources back to artifact:', err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerSupabaseClient();
-    const { userId, query, category, fileType, limit = 5 } = await req.json();
+    const { userId, query, category, fileType, limit = 5, artifact_id } = await req.json();
 
     if (!userId || !query) {
       return NextResponse.json({ error: 'userId and query are required' }, { status: 400 });
@@ -50,7 +86,7 @@ export async function POST(req: NextRequest) {
 
         if (vectorMatches && vectorMatches.length > 0) {
           // Hydrate with parent file info
-          const fileIds = [...new Set(vectorMatches.map((c: any) => c.knowledge_file_id))];
+          const fileIds = [...new Set(vectorMatches.map((c: any) => c.knowledge_file_id as string))] as string[];
           const { data: parentFiles } = await supabase
             .from('knowledge_base_files')
             .select('id, title, category, extracted_summary')
@@ -74,6 +110,7 @@ export async function POST(req: NextRequest) {
             try { await supabase.rpc('increment_kb_reference', { file_id: id }); } catch { /* best-effort */ }
           });
 
+          await writeKbSourcesToArtifact(supabase, artifact_id, fileIds);
           return NextResponse.json({ matches });
         }
       } catch (embedErr) {
@@ -93,7 +130,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Hydrate with parent file info
-      const fileIds = [...new Set(chunks.map(c => c.knowledge_file_id))];
+      const fileIds = [...new Set(chunks.map((c: any) => c.knowledge_file_id as string))];
       const { data: parentFiles } = await supabase
         .from('knowledge_base_files')
         .select('id, title, category, extracted_summary')
@@ -121,6 +158,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      await writeKbSourcesToArtifact(supabase, artifact_id, fileIds);
       return NextResponse.json({ matches });
     }
 
@@ -145,6 +183,7 @@ export async function POST(req: NextRequest) {
       } catch { /* best-effort */ }
     }
 
+    await writeKbSourcesToArtifact(supabase, artifact_id, fileIds);
     return NextResponse.json({ matches });
   } catch (err: any) {
     console.error('[KB Search]', err);
