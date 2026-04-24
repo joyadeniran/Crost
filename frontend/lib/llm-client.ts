@@ -1169,7 +1169,7 @@ export async function runOrcReport(goalId: string): Promise<void> {
     const { data: newReport } = await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',
-      title: `[ORC REPORT] ${goal.title}`,
+      title: `[Mission Report] ${goal.title}`,
       body: formatMemoBody(content),
       priority: 'high',
       source_type: 'orchestrator',

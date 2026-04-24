@@ -1167,7 +1167,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             marginBottom: 4,
             fontFamily: 'var(--font-dm-mono, monospace)',
           }}>
-            Strategic Synthesis
+            Mission Report
           </span>
           <h3 style={{ 
             fontFamily: 'var(--font-syne, sans-serif)', 
@@ -1177,7 +1177,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             margin: 0,
             letterSpacing: '-0.01em',
           }}>
-            Orc Report
+            Mission Report
           </h3>
         </div>
         <button 
@@ -1196,7 +1196,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
         lineHeight: 1.7,
         whiteSpace: 'pre-wrap',
       }}>
-        {report.body}
+        {report.body?.replace(/Post-mortem/g, 'Mission Report')}
       </div>
 
       <div style={{
@@ -2085,7 +2085,7 @@ export function WarRoom() {
                     lineHeight: 1.5,
                     wordBreak: 'break-word',
                   }}>
-                    {ev.description}
+                    {ev.description.replace(/Post-mortem/g, 'Mission Report')}
                   </span>
                 </div>
               ))}
