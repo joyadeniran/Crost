@@ -18,6 +18,7 @@ import type {
 } from '@/types'
 import { truncateString, cleanLargePayload, formatMemoBody } from './utils'
 import { loadSkillsForTask } from './skills'
+import { generateAndInsertSuggestedActions } from './suggested-actions'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1059,7 +1060,7 @@ export async function runWorkerTask(
     const uploaded = await uploadArtifact(goalId || null, task.id, dept, content)
     if (uploaded) {
       artifactUrl = uploaded.fileUrl
-      await supabase.from('artifacts').insert({
+      const { data: newArtifact } = await supabase.from('artifacts').insert({
         goal_id: goalId || null,
         created_by: userId,
         department_slug: dept,
@@ -1076,7 +1077,22 @@ export async function runWorkerTask(
           sizeBytes: content.length,
           source: 'worker_task',
         }
-      })
+      }).select('id').single()
+
+      if (newArtifact) {
+        // Spec §6.1 Generate Suggested Next Actions for this Artefact
+        const actionIds = await generateAndInsertSuggestedActions({
+          source_entity_type: 'artifact',
+          source_entity_id: newArtifact.id,
+          goal_id: goalId,
+          artifact_type: uploaded.artifactType,
+          file_url: uploaded.fileUrl,
+          created_by: userId
+        })
+        if (actionIds.length > 0) {
+          await supabase.from('artifacts').update({ suggested_actions: actionIds }).eq('id', newArtifact.id)
+        }
+      }
     }
   }
 
@@ -1133,7 +1149,7 @@ export async function runOrcReport(goalId: string): Promise<void> {
   try {
     const { model: reportModel } = await getModel('summarization', goal.created_by)
     const { content } = await callLLM(reportModel, prompt, "You are the Orc Chief of Staff. Synthesize results.", goal.created_by)
-    await supabase.from('company_memos').insert({
+    const { data: newReport } = await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',
       title: `[ORC REPORT] ${goal.title}`,
@@ -1141,7 +1157,17 @@ export async function runOrcReport(goalId: string): Promise<void> {
       priority: 'high',
       source_type: 'orchestrator',
       created_by: goal.created_by
-    })
+    }).select('id').single()
+
+    if (newReport) {
+      // Spec §6.1 Generate Suggested Next Actions for this Mission Report
+      await generateAndInsertSuggestedActions({
+        source_entity_type: 'mission_report',
+        source_entity_id: newReport.id,
+        goal_id: goalId,
+        created_by: goal.created_by
+      }) // We don't need to link them back into company_memos, we query by source_entity_id
+    }
   } catch (err) {
     console.error('[runOrcReport] Failed:', err)
   }

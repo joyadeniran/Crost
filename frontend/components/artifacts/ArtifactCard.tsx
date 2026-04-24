@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Artifact } from '@/types'
 import Image from 'next/image'
+import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
 
 interface Props {
   artifact: Artifact
@@ -502,6 +503,9 @@ export function ArtifactCard({ artifact }: Props) {
                   )}
                 </>
               )}
+              
+              {/* Contextual Action Chips */}
+              <SuggestedActionChips entityType="artifact" entityId={artifact.id} />
             </div>
 
             {/* Drawer Footer */}

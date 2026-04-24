@@ -130,6 +130,27 @@ export interface CompanyMemo {
   confidence_decay_days: number  // days after which memo is flagged as stale by Orc
 }
 
+export type SuggestedActionStatus = 'suggested' | 'tapped' | 'approved' | 'executing' | 'completed' | 'failed' | 'dismissed'
+
+export interface SuggestedAction {
+  id: string
+  source_entity_type: 'artifact' | 'mission_report' | 'memo'
+  source_entity_id: string
+  action_slug: string             // e.g. "send_to_email", "save_to_kb"
+  label: string                   // human-readable chip label
+  reasoning: string               // why Orc thinks this is useful next
+  payload: Record<string, unknown>
+  required_tool: string | null    // e.g. "gmail" — drives connect prompt
+  required_inputs: string[]       // e.g. ["destination_email"]
+  risk_level: RiskLevel
+  status: SuggestedActionStatus
+  approval_id: string | null      // UUID if blocked on approval
+  result_artifact_id: string | null
+  created_at: string
+  resolved_at: string | null
+  created_by: string
+}
+
 export interface Artifact {
   id: string
   goal_id: string | null
@@ -146,6 +167,7 @@ export interface Artifact {
   file_url: string
   // Spec §9.5: which skill slugs were loaded when producing this artefact.
   skills_used: string[]
+  suggested_actions?: string[]    // Array of UUIDs linking to suggested_actions table
   created_by?: string
   created_at: string
 }
