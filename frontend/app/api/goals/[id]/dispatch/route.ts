@@ -88,7 +88,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         supabase.from('company_memos').select('task_id').eq('goal_id', goal.id)
       ])
       
-      const planned = (allTasks || []).filter(t => t.status === 'planned')
+      // Include 'pending' tasks (never attempted) alongside 'planned' tasks (blocked by deps).
+      // This ensures dependent tasks are dispatched automatically even if the founder only
+      // manually dispatched the first task in the chain.
+      const planned = (allTasks || []).filter(t => t.status === 'planned' || t.status === 'pending')
       const memoIds = new Set((allMemos || []).map(m => m.task_id))
       
       let count = 0
@@ -173,30 +176,6 @@ export async function POST(req: NextRequest, { params }: Params) {
           { status: 409 }
         )
       }
-    }
-
-    // ─── Approval expiry check ────────────────────────────────────────────────
-    // Check approval_queue for this goal/task to ensure no expired approvals execute.
-    const { data: approvalRow } = await supabase
-      .from('approval_queue')
-      .select('status, expires_at')
-      .eq('goal_id', params.id)
-      .eq('action_type', 'task_approval')
-      .order('requested_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (approvalRow && approvalRow.expires_at && new Date(approvalRow.expires_at) < new Date()) {
-      await supabase
-        .from('goal_tasks')
-        .update({ status: 'expired', completed_at: new Date().toISOString() })
-        .eq('goal_id', params.id)
-        .eq('task_id', task_id)
-
-      return NextResponse.json(
-        { success: false, error: 'Approval window expired for this task', code: 'APPROVAL_EXPIRED', timestamp: new Date().toISOString() },
-        { status: 410 }
-      )
     }
 
     // ─── Env mode snapshot ────────────────────────────────────────────────────

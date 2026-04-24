@@ -591,6 +591,7 @@ async function callLiteLLM(
       ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90_000),
   })
 
   if (!res.ok) {
@@ -981,6 +982,8 @@ export async function runWorkerTask(
 
   await supabase.from('departments').update({ status: 'running', current_task: task.label }).eq('id', deptRow.id)
 
+  // Wrap execution in try/catch so department status is always reset, even on LLM errors.
+  try {
   // Spec §9.5: Load skills for this task before building the prompt.
   // loadSkillsForTask is non-fatal — returns empty strings/arrays if no skills match.
   const { content: skillContent, slugs: loadedSkillSlugs } = await loadSkillsForTask(
@@ -1096,37 +1099,51 @@ export async function runWorkerTask(
     }
   }
 
-  await supabase.from('company_memos').insert({
-    goal_id: goalId || null,
-    task_id: task.id,
-    from_department: deptRow.name,
-    from_department_id: deptRow.id,
-    title: `[${task.action}] ${task.label}`,
-    body: formatMemoBody(
-      artifactUrl
-        ? `Output saved as downloadable artifact. See Artifacts section to download.\n\nSummary: ${workerResult.memo_summary}`
-        : workerResult.memo_summary
-    ),
-    tags: [task.action, dept],
-    confidence: 0.8,
-    source_type: 'agent',
-    created_by: userId
-  })
-
+  // Update task status FIRST — resilient against memo insert failures.
   await supabase.from('goal_tasks').update({ status: workerResult.status, completed_at: new Date().toISOString() }).eq('task_id', task.id)
   await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', deptRow.id)
 
-  // Chain Reaction: If this goal is now finished, trigger the synthesis report
+  // Memo insert is non-critical — log failure but never block task completion.
+  try {
+    await supabase.from('company_memos').insert({
+      goal_id: goalId || null,
+      task_id: task.id,
+      from_department: deptRow.name,
+      from_department_id: deptRow.id,
+      title: `[${task.action}] ${task.label}`,
+      body: formatMemoBody(
+        artifactUrl
+          ? `Output saved as downloadable artifact. See Artifacts section to download.\n\nSummary: ${workerResult.memo_summary}`
+          : workerResult.memo_summary
+      ),
+      tags: [task.action, dept],
+      confidence: 0.8,
+      source_type: 'agent',
+      created_by: userId
+    })
+  } catch (memoErr) {
+    console.error('[runWorkerTask] Memo insert failed (non-fatal):', memoErr)
+  }
+
+  // Chain Reaction: if all tasks are terminal, synthesize and auto-complete the goal.
   if (goalId) {
     const { data: allTasks } = await supabase.from('goal_tasks').select('status').eq('goal_id', goalId)
     const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired'])
     const allTerminal = (allTasks || []).every(t => terminalStatuses.has(t.status))
     if (allTerminal) {
       await runOrcReport(goalId)
+      await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
     }
   }
 
   return workerResult
+  } catch (workerErr) {
+    // Reset department to 'error' so it doesn't stay stuck in 'running'.
+    try {
+      await supabase.from('departments').update({ status: 'error', current_task: null }).eq('id', deptRow.id)
+    } catch {}
+    throw workerErr
+  }
 }
 
 // ─── Orc Synthesis Report ───────────────────────────────────────────────────
