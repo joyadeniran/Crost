@@ -240,12 +240,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             const dispatchUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`
             fetch(dispatchUrl, {
               method: 'POST',
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
               },
               body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
             }).catch(e => console.error('[Approval Execution] Chain reaction failed:', e))
+          }
+
+          // Synthetic single-dept goals (from /api/departments/[slug]/task) have
+          // no goal_tasks rows — the chain-reaction flow won't fire runOrcReport
+          // for them. Detect that case and synthesize the Mission Report inline.
+          if (approval.goal_id) {
+            const { count: taskCount } = await supabase
+              .from('goal_tasks')
+              .select('id', { count: 'exact', head: true })
+              .eq('goal_id', approval.goal_id)
+            if (!taskCount || taskCount === 0) {
+              const { runOrcReport } = await import('@/lib/llm-client')
+              runOrcReport(approval.goal_id)
+                .then(async () => {
+                  await supabase.from('goals').update({ status: 'completed' }).eq('id', approval.goal_id)
+                })
+                .catch(e => console.error('[Approval Execution] runOrcReport failed:', e))
+            }
           }
           
         } catch (execErr: any) {
