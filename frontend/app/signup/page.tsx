@@ -49,12 +49,22 @@ export default function SignUpPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const { error } = await supabaseClient.auth.verifyOtp({
+      const { data, error } = await supabaseClient.auth.verifyOtp({
         email,
         token: otp,
         type: 'signup'
       })
       if (error) throw error
+      // G1: record consent on verified signup
+      if (data.user?.id) {
+        const source = searchParams?.get('source') || 'direct'
+        await supabaseClient.from('user_consents').insert({
+          user_id: data.user.id,
+          consent_type: 'terms_and_privacy',
+          source,
+          consented_at: new Date().toISOString(),
+        }).then(() => {}) // best-effort, don't block navigation
+      }
       window.location.href = '/onboarding/identity'
     } catch (err: any) {
       toast(err.message || 'Invalid code', 'error')
@@ -123,7 +133,7 @@ export default function SignUpPage() {
                   className="login-button" 
                   disabled={loading}
                 >
-                  {loading ? <span className="spinner"></span> : 'Initialize Crost →'}
+                  {loading ? <span className="spinner"></span> : 'Start Free →'}
                 </button>
               </form>
 

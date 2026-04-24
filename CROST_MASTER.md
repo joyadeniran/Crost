@@ -3,9 +3,29 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.20  
+**Current Version:** 11.21  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — SuggestedActionChips full state machine + enriched payloads + per-ID execute route (v11.20).
+**Deployment Status:** ✅ COMPLETE — MVP gaps closed: in-browser preview (PDF + Office Online), user_consents, CTA copy (v11.21).
+
+---
+
+## Session v11.21 — MVP Gaps Closed (DoD H1, G1, G3)
+
+**Date**: April 24, 2026
+**Status**: ✅ COMPLETE
+**Impact**: All remaining MVP DoD items resolved. App is now feature-complete for v1 launch.
+
+### What Was Built
+1. **H1 — In-browser artefact preview** (`ArtifactCard.tsx`): PDF renders via native browser `<iframe>`. PPTX/DOCX/XLSX render via Microsoft Office Online embed (`view.officeapps.live.com`). Images now also fall back to `file_url` if `preview_url` is absent. `data`/`code` types still show "Native File Available" badge.
+2. **G1 — `user_consents` insert** (`signup/page.tsx`): On successful OTP verification, inserts a `user_consents` row with `user_id`, `source` (from `?source=` param, default `direct`), `consent_type: 'terms_and_privacy'`, and `consented_at`.
+3. **G3 — CTA copy** (`signup/page.tsx`): "Initialize Crost →" → "Start Free →" per spec §2 Beat 2.
+
+### Files Changed
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/app/signup/page.tsx`
+
+### MVP DoD Status
+- H1 ✅ H2 ✅ H3 ✅ G1 ✅ G3 ✅ — all items resolved. M1 (memo table migration) and M2 (app store) are post-MVP.
 
 ---
 

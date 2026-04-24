@@ -535,13 +535,33 @@ export function ArtifactCard({ artifact }: Props) {
 
             {/* Preview */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {artifact.artifact_type === 'image' && artifact.preview_url ? (
+              {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
                 <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 12, overflow: 'hidden' }}>
-                  <Image src={artifact.preview_url} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
+                  <Image src={artifact.preview_url || artifact.file_url!} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
                 </div>
               ) : (
                 <>
-                  {artifact.file_url && (
+                  {/* PDF: native browser inline viewer */}
+                  {artifact.artifact_type === 'pdf' && artifact.file_url && (
+                    <iframe
+                      src={artifact.file_url}
+                      style={{ width: '100%', height: 420, border: 'none', borderRadius: 10, background: '#fff' }}
+                      title={displayFilename}
+                    />
+                  )}
+
+                  {/* PPTX / DOCX / XLSX: Office Online embed */}
+                  {['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
+                    <iframe
+                      src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
+                      style={{ width: '100%', height: 420, border: 'none', borderRadius: 10 }}
+                      title={displayFilename}
+                      sandbox="allow-scripts allow-same-origin allow-popups"
+                    />
+                  )}
+
+                  {/* Data / code / unknown: show "native file" badge */}
+                  {!['pdf', 'presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
                     <div style={{
                       padding: '16px 18px',
                       background: `${iconBg}`,
