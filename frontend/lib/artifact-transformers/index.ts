@@ -42,6 +42,16 @@ export function detectOutputType(content: string, isJson: boolean): OutputDetect
     return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
   }
 
+  // ── CHECK 0a: Skill contract (highest priority — LLM followed SKILL.md) ─
+  // The xlsx / docx skills instruct the LLM to set "skill": "xlsx" | "docx"
+  // at the root of the JSON. Match this before any heuristic check.
+  if (parsed?.skill === 'xlsx') {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
+  }
+  if (parsed?.skill === 'docx') {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
+  }
+
   // ── CHECK 0: Explicit format field set by department prompt ─────────────
   if (parsed?.format && typeof parsed.format === 'string') {
     const fmt = parsed.format.toLowerCase();

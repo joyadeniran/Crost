@@ -3,9 +3,47 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.13  
+**Current Version:** 11.14  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Terminology Canonicalization & Legacy Data Transformation (v11.13).
+**Deployment Status:** ✅ COMPLETE — Artifact Transformer Skill Schema Fix (v11.14).
+
+---
+
+## Session v11.14 - Artifact Transformer Skill Schema Fix
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — Type-check clean. All 6 output checks pass.  
+**Impact**: Resolved broken xlsx and docx output for any goal that used the SKILL.md output contract. Previously, skill-schema JSON was dumped as raw key/value rows (the `sheets` array became a JSON string in a single cell). Now all skill-schema output correctly produces multi-sheet, formatted, formula-ready files.
+
+### Root Cause
+
+The LLM follows `SKILL.md` and emits `{ "skill": "xlsx", "sheets": [...] }` or `{ "skill": "docx", "sections": [...] }`. Neither `detectOutputType` nor the transformers recognised the `skill` field — the entire JSON fell through to the generic `flattenToRows` fallback, producing a two-column key/value sheet where `sheets` was a raw JSON blob in a single cell.
+
+### Changes
+
+1. **`detectOutputType` (index.ts)** — Added highest-priority check (before all heuristics) for `parsed.skill === "xlsx"` → `transformToExcel` and `parsed.skill === "docx"` → `transformToDocument`.
+
+2. **`excel-transformer.ts`** — Added `transformSkillSchema()` at the top of `transformToExcel`. Handles:
+   - String columns (`"Column Name"`) and object columns (`{key, header, type, width, format}`) — both normalised uniformly
+   - Array rows and object rows — mapped correctly by index or key
+   - Formula cells (`=...`) stored as actual Excel formula cells (not string literals)
+   - Totals row with `=SUM()` formulas auto-generated for numeric/currency/percent columns
+   - Column widths from the `width` field
+   - Number formats (`z` property) for currency, percent, number, date columns
+   - Freeze panes (`!sheetViews`) for all sheets with `freeze_header_row: true`
+   - Default number formats applied by `type` when no explicit `format` is given
+
+3. **`document-transformer.ts`** — Added `skill: "docx"` handler at the top of `transformToDocument`. Handles:
+   - Title, subtitle, author, date metadata
+   - Recursive `sections` array with `heading`, `content`, `subsections`
+   - Heading levels 1/2/3 mapped to HEADING_1/2/3
+   - `footnotes` array rendered as a References section at the end
+
+### Files Changed
+- `frontend/lib/artifact-transformers/index.ts`
+- `frontend/lib/artifact-transformers/excel-transformer.ts`
+- `frontend/lib/artifact-transformers/document-transformer.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 

@@ -3,6 +3,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
 /**
  * Universal document transformer.
  * Handles all department JSON schemas:
+ *   - SKILL.md:   { skill: "docx", sections: [...] } — canonical skill output
  *   - OPERATIONS: deliverable_content.summary + sections
  *   - SALES:      output.summary + objectives/strategies
  *   - MARKETING:  strategy.summary + target_audience/channels
@@ -12,6 +13,77 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
  */
 export async function transformToDocument(data: any): Promise<Buffer> {
   const children: Paragraph[] = [];
+
+  // ─── SKILL.md schema: { skill: "docx", sections: [...] } ─────────────────
+  // Highest priority — the LLM followed the docx SKILL.md contract.
+  if (data?.skill === 'docx' && Array.isArray(data?.sections)) {
+    // Title
+    if (data.title) {
+      children.push(new Paragraph({
+        text: String(data.title),
+        heading: HeadingLevel.TITLE,
+        spacing: { after: 200 },
+      }));
+    }
+    // Subtitle / author / date metadata line
+    const meta = [data.subtitle, data.author, data.date].filter(Boolean).join(' · ');
+    if (meta) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: meta, italics: true, size: 22 })],
+        spacing: { after: 400 },
+      }));
+    }
+
+    // Render sections recursively
+    function renderSection(section: any) {
+      const level = section.level || 1;
+      const headingLevel =
+        level === 1 ? HeadingLevel.HEADING_1
+        : level === 2 ? HeadingLevel.HEADING_2
+        : HeadingLevel.HEADING_3;
+
+      if (section.heading) {
+        children.push(new Paragraph({
+          text: String(section.heading),
+          heading: headingLevel,
+          spacing: { before: level === 1 ? 400 : 200, after: 100 },
+        }));
+      }
+      if (section.content) {
+        for (const line of String(section.content).split('\n')) {
+          children.push(new Paragraph({
+            children: [new TextRun(line)],
+            spacing: { after: 80 },
+          }));
+        }
+      }
+      if (Array.isArray(section.subsections)) {
+        for (const sub of section.subsections) renderSection(sub);
+      }
+    }
+
+    for (const section of data.sections) renderSection(section);
+
+    // Footnotes
+    if (Array.isArray(data.footnotes) && data.footnotes.length > 0) {
+      children.push(new Paragraph({
+        text: 'References',
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 400, after: 100 },
+      }));
+      for (const fn of data.footnotes) {
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: `${fn.ref || ''} `, bold: true }),
+            new TextRun(String(fn.text || '')),
+          ],
+          spacing: { after: 60 },
+        }));
+      }
+    }
+
+    return buildDoc(children);
+  }
 
   // ─── OPERATIONS schema ────────────────────────────────────────────────────
   if (data?.deliverable_content) {
