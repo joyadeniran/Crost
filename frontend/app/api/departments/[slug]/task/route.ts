@@ -22,6 +22,7 @@ import { buildFinalPrompt, callLLM, runOrcReport } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 import { detectOutputType } from '@/lib/artifact-transformers'
+import { loadSkillsForTask } from '@/lib/skills'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,7 +110,8 @@ async function createArtifactFromContent(
   deptSlug: string,
   taskPreview: string,
   userId: string,
-  supabase: any
+  supabase: any,
+  taskHint?: string
 ): Promise<{ id: string; file_url: string } | null> {
   try {
     // Detect content type
@@ -119,7 +121,7 @@ async function createArtifactFromContent(
        isJson = content.trim().startsWith('{') || content.trim().startsWith('[');
     }
     
-    const detection = detectOutputType(content, isJson);
+    const detection = detectOutputType(content, isJson, taskHint);
     
     let fileContent: string | Buffer = content;
     if (detection.targetFormat !== 'json' && detection.transformer) {
@@ -289,8 +291,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   let artifactId: string | undefined
 
   try {
+    // Load skills for this task so the LLM receives the correct SKILL.md contract
+    const { content: skillContent } = await loadSkillsForTask(body.task, dept.slug, {})
+
     // Build prompt
-    const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug)
+    const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug, goalId ?? undefined, skillContent || undefined)
 
     // Call LLM
     const { content, tokensUsed: used } = await callLLM(dept.model_name, finalPrompt, undefined, user.id)
@@ -438,7 +443,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         dept.slug,
         body.task.slice(0, 60),
         user.id,
-        supabase
+        supabase,
+        body.task
       )
 
       if (artifact) {

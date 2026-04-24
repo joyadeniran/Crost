@@ -133,7 +133,8 @@ async function uploadArtifact(
   goalId: string | null,
   taskId: string,
   deptSlug: string,
-  content: string
+  content: string,
+  taskHint?: string
 ): Promise<{ fileUrl: string; artifactType: 'document' | 'spreadsheet' | 'data'; extension: string } | null> {
   const supabase = createServerSupabaseClient()
 
@@ -142,7 +143,7 @@ async function uploadArtifact(
     const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
     const isJson = (stripped.startsWith('{') && stripped.endsWith('}')) || (stripped.startsWith('[') && stripped.endsWith(']'))
 
-    const detection = detectOutputType(stripped, isJson)
+    const detection = detectOutputType(stripped, isJson, taskHint)
 
     let fileContent: string | Buffer = stripped
     if (detection.transformer) {
@@ -1060,7 +1061,7 @@ export async function runWorkerTask(
 
   let artifactUrl: string | null = null
   if (isJsonContent) {
-    const uploaded = await uploadArtifact(goalId || null, task.id, dept, content)
+    const uploaded = await uploadArtifact(goalId || null, task.id, dept, content, task.action)
     if (uploaded) {
       artifactUrl = uploaded.fileUrl
       const { data: newArtifact } = await supabase.from('artifacts').insert({

@@ -21,14 +21,46 @@ export interface OutputDetection {
  *   5. Legacy schema detection
  *   6. Default → md  (never txt for structured JSON)
  */
-export function detectOutputType(content: string, isJson: boolean): OutputDetection {
+/**
+ * `taskHint` is the founder's raw task / action text. When supplied, strong
+ * format cues in the hint (e.g. "excel sheet", "pitch deck", "pdf report")
+ * override weaker response-shape heuristics further down — this prevents an
+ * LLM that drifted into narrative from silently producing the wrong file type.
+ */
+export function detectOutputType(content: string, isJson: boolean, taskHint?: string): OutputDetection {
+  // Normalise the founder-task hint so we can run keyword checks on it.
+  const hintLower = (taskHint || '').toLowerCase();
+  const hintDemandsXlsx = /\b(excel|xlsx|spreadsheet|workbook|budget|forecast|projection|tracker|p&l|balance sheet|income statement|cash[- ]flow|kpi tracker|financial model|excel sheet|excel template)\b/.test(hintLower);
+  const hintDemandsPptx = /\b(pptx|powerpoint|pitch deck|slide deck|slides|keynote)\b/.test(hintLower);
+  const hintDemandsPdf = /\b(pdf|pdf report|export pdf)\b/.test(hintLower);
+  const hintDemandsDocx = /\b(docx|word document|word doc|memo|brief|letter|one[- ]pager|word report)\b/.test(hintLower);
+
   if (!isJson) {
+    // Founder explicitly asked for a typed artefact but LLM returned narrative —
+    // transform the narrative into that type anyway rather than dropping to .txt.
+    if (hintDemandsXlsx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
+    if (hintDemandsPptx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument }; // pptx transformer not in scope here — fall back to docx
+    if (hintDemandsDocx) return { sourceFormat: 'text', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
     // Plain text: only use txt for truly unstructured text
     return {
       sourceFormat: 'text',
       contentType: 'generic',
       targetFormat: 'txt',
     };
+  }
+
+  // ── Hint override (highest priority among JSON routes) ──────────────────
+  // If the founder asked for a specific format, lock it in before any content
+  // heuristic — this is what fixes "prompt asked for Excel, got DOCX".
+  if (hintDemandsXlsx) {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
+  }
+  if (hintDemandsPdf) {
+    // No dedicated PDF transformer yet — produce markdown so downstream can convert.
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+  }
+  if (hintDemandsDocx) {
+    return { sourceFormat: 'json', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
   }
 
   // Strip markdown fences that LLMs often wrap JSON in
