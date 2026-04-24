@@ -3,9 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.14  
+**Current Version:** 11.15  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Artifact Transformer Skill Schema Fix (v11.14).
+**Deployment Status:** ✅ COMPLETE — Mission Report Completeness Fix (v11.15).
+
+---
+
+## Session v11.15 - Mission Report Completeness Fix
+
+**Date**: April 24, 2026  
+**Status**: ✅ COMPLETE — Type-check clean. Three bugs eliminated.  
+**Impact**: Mission Reports now generate exactly once (no duplicates), emit the canonical `goal_mission_report_written` event so the live events panel reflects completion, and the body truncation guard is clean of dead legacy references.
+
+### Bugs Fixed
+
+1. **Idempotency check used wrong title prefix** (`llm-client.ts`): The guard queried `title.ilike.[ORC REPORT]%` but the title prefix was renamed to `[Mission Report]`. Every call to `runOrcReport` always saw no existing report and re-generated, creating duplicate Mission Report memos. Fix: query now matches both `[Mission Report]%` (current) and `[ORC REPORT]%` (legacy rows) via `.or()`.
+
+2. **`goal_mission_report_written` event never fired** (`llm-client.ts`): The event type exists in `types/index.ts` and the DB CHECK constraint, and `scripts/worker.ts` correctly emits it, but `runOrcReport` in `llm-client.ts` never called `logEvent`. The live events panel therefore never showed Mission Report completion. Fix: added `logEvent({ event_type: 'goal_mission_report_written', ... })` after the report memo is inserted and suggested actions are generated.
+
+3. **Dead `[ORC REPORT]` check in `formatMemoBody`** (`utils.ts`): The body truncation guard checked `body.includes('[ORC REPORT]')` — a prefix that only appeared in memo *titles*, never in memo *bodies*. This branch was unreachable. Fix: removed the dead check, kept only `[Mission Report]`.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/utils.ts`
+- `CROST_MASTER.md` (this entry)
 
 ---
 

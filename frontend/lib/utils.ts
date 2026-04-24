@@ -76,7 +76,7 @@ export function resolveIcon(icon: string | null | undefined): string {
  * Forcefully ensures a memo body doesn't exceed the storage threshold.
  */
 export function formatMemoBody(body: string): string {
-  // Check for common markers like [ORC REPORT] or [Mission Report] which should be slightly larger
-  const limit = (body.includes('[ORC REPORT]') || body.includes('[Mission Report]')) ? 3000 : 1000;
+  // Mission Reports get a larger body limit so the synthesis isn't truncated
+  const limit = body.includes('[Mission Report]') ? 3000 : 1000;
   return truncateString(body, limit);
 }

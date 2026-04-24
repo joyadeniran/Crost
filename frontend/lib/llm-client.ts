@@ -1153,8 +1153,15 @@ export async function runOrcReport(goalId: string): Promise<void> {
   const { data: goal } = await supabase.from('goals').select('*').eq('id', goalId).single()
   if (!goal) return
 
-  // Idempotency: skip if report already exists
-  const { data: existingReport } = await supabase.from('company_memos').select('id').eq('goal_id', goalId).ilike('title', '[ORC REPORT]%').maybeSingle()
+  // Idempotency: skip if a Mission Report already exists for this goal.
+  // Match both current prefix '[Mission Report]' and legacy '[ORC REPORT]' so stale rows
+  // from before the rename are still detected and don't trigger a duplicate.
+  const { data: existingReport } = await supabase
+    .from('company_memos')
+    .select('id')
+    .eq('goal_id', goalId)
+    .or('title.ilike.[Mission Report]%,title.ilike.[ORC REPORT]%')
+    .maybeSingle()
   if (existingReport) return
 
   const { data: memos } = await supabase.from('company_memos').select('*').eq('goal_id', goalId)
@@ -1183,7 +1190,16 @@ export async function runOrcReport(goalId: string): Promise<void> {
         source_entity_id: newReport.id,
         goal_id: goalId,
         created_by: goal.created_by
-      }) // We don't need to link them back into company_memos, we query by source_entity_id
+      })
+
+      // Spec §7 — emit the canonical event so the live events panel reflects completion
+      await logEvent({
+        event_type: 'goal_mission_report_written',
+        department_slug: 'orchestrator',
+        goal_id: goalId,
+        description: `Mission Report written for goal: "${goal.title}"`,
+        created_by: goal.created_by,
+      })
     }
   } catch (err) {
     console.error('[runOrcReport] Failed:', err)
