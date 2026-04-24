@@ -78,7 +78,7 @@ const ACTION_SKILL_MAP: Array<{ keywords: string[]; slugs: SkillSlug[] }> = [
     ],
     slugs: ['docx'],
   },
-  // Excel / spreadsheet
+  // Excel / spreadsheet (expanded — catches finance / ops / sales xlsx intents)
   {
     keywords: [
       'create_spreadsheet',
@@ -88,12 +88,34 @@ const ACTION_SKILL_MAP: Array<{ keywords: string[]; slugs: SkillSlug[] }> = [
       'create_budget',
       'build_pipeline',
       'financial_model',
+      'financial_projection',
+      'financial_projections',
+      'fy_projection',
+      'fy_projections',
       'sales_pipeline',
       'generate_spreadsheet',
+      'balance_sheet',
+      'income_statement',
+      'cash_flow',
+      'p&l',
+      'profit_and_loss',
+      'kpi_tracker',
       'spreadsheet',
       'tracker',
       'budget',
       'forecast',
+      'projection',
+      'projections',
+      'workbook',
+      'excel',
+      'xlsx',
+      // 'sheet' and 'template' are ambiguous when standalone, but the combo
+      // tokens below hit the most common founder phrasings without matching
+      // generic "report template" or "one-pager sheet":
+      'excel sheet',
+      'excel template',
+      'sheet template',
+      'spreadsheet template',
     ],
     slugs: ['xlsx'],
   },
@@ -151,12 +173,14 @@ export async function loadSkillsForTask(
 ): Promise<{ content: string; slugs: SkillSlug[] }> {
   const resolvedSlugs = new Set<SkillSlug>()
 
-  // Step 1: match action keywords
+  // Step 1: match action keywords — collect ALL matches (not first-wins) so a
+  // multi-intent prompt like "write the FY28 report as an Excel sheet" loads
+  // both docx and xlsx skills. `orderSlugs` controls final ordering; the
+  // transformer detection layer picks the actual output format.
   const actionLower = taskAction.toLowerCase()
   for (const entry of ACTION_SKILL_MAP) {
     if (entry.keywords.some((kw) => actionLower.includes(kw))) {
       entry.slugs.forEach((s) => resolvedSlugs.add(s))
-      break // first match wins — most-specific first ordering handles priority
     }
   }
 
@@ -211,7 +235,7 @@ export async function loadSkillsForTask(
  * pptx must come before pitch_deck so the LLM reads the base contract first.
  */
 function orderSlugs(slugs: SkillSlug[]): SkillSlug[] {
-  const PRIORITY: SkillSlug[] = ['pptx', 'docx', 'xlsx', 'pdf', 'pitch_deck']
+  const PRIORITY: SkillSlug[] = ['pptx', 'xlsx', 'docx', 'pdf', 'pitch_deck']
   return PRIORITY.filter((s) => slugs.includes(s))
 }
 

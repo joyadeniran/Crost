@@ -3,9 +3,37 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.18  
+**Current Version:** 11.19  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — War Room / Orc Mission Report + XLSX SKILL Healer (v11.18).
+**Deployment Status:** ✅ COMPLETE — XLSX Skill Routing & Detection Fix (v11.19).
+
+---
+
+## Session v11.19 — XLSX Skill Routing & Output-Type Detection Fix
+
+**Date**: April 24, 2026
+**Status**: ✅ COMPLETE
+**Impact**: Fixes four compounded root causes that caused spreadsheet tasks (e.g. "Create sample FY28 projection Excel sheet template @finance") to be misrouted to `docx` instead of `xlsx`.
+
+### Changes
+1. **Skill injection wired in direct `@dept` endpoint** — `POST /api/departments/[slug]/task` now calls `loadSkillsForTask(body.task, dept.slug, {})` before `buildFinalPrompt()` and passes the skill content as the 7th argument. Previously the direct-dispatch path never loaded skills, so the LLM never received the xlsx SKILL.md contract.
+2. **Keyword map expanded for xlsx triggers** — `ACTION_SKILL_MAP` in `lib/skills/index.ts` already contained expanded keywords (`excel`, `spreadsheet`, `workbook`, `budget`, `forecast`, `projection`, `tracker`, `p&l`, `balance_sheet`, `income_statement`, `cash_flow`, `kpi_tracker`, `financial_model`, `excel sheet`, `excel template`, `sheet template`, `spreadsheet template`). This was in place from a prior edit; this session verified it and ensured propagation.
+3. **`orderSlugs` priority reordered** — changed from `['pptx', 'docx', 'xlsx', 'pdf', 'pitch_deck']` to `['pptx', 'xlsx', 'docx', 'pdf', 'pitch_deck']`. When a multi-intent prompt matches both docx and xlsx keywords, xlsx now wins (its SKILL.md is presented first to the LLM).
+4. **`detectOutputType` now receives founder prompt hint** — extended `createArtifactFromContent` in `route.ts` and `uploadArtifact` in `llm-client.ts` to accept an optional `taskHint` string, which is forwarded to `detectOutputType(content, isJson, taskHint)`. The hint regex (`excel|xlsx|spreadsheet|workbook|budget|forecast|projection|...`) overrides weak response-shape heuristics, so even if the LLM drifts to narrative the task text still routes to the correct transformer.
+5. **Worker task propagation** — `runWorkerTask` now passes `task.action` as the `taskHint` argument to `uploadArtifact`, ensuring goal-pipeline artifacts also benefit from founder-prompt-aware detection.
+
+### Edge cases covered
+- Multi-intent prompts like "write the FY28 report as an Excel sheet" — both docx and xlsx skills load; xlsx wins via priority ordering and taskHint override.
+- LLM response drifts to narrative inside JSON — `taskHint` regex still routes to xlsx.
+- Direct `@dept` dispatch and goal-pipeline (`runWorkerTask`) — both paths now load skills and pass task hints.
+- Missing SKILL.md file — `loadSkillsForTask` is non-fatal; empty skill content gracefully falls through.
+- Type-check clean — `tsc --noEmit` passes with zero errors.
+
+### Files Changed
+- `frontend/lib/skills/index.ts`
+- `frontend/app/api/departments/[slug]/task/route.ts`
+- `frontend/lib/llm-client.ts`
+- `CROST_MASTER.md`
 
 ---
 
