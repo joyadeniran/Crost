@@ -3,9 +3,39 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.17  
+**Current Version:** 11.18  
 **Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — Spec Review v3 + 8 Critical Fixes (v11.17).
+**Deployment Status:** ✅ COMPLETE — War Room / Orc Mission Report + XLSX SKILL Healer (v11.18).
+
+---
+
+## Session v11.18 — War Room Execution, Orc Mission Report for `@dept`, XLSX Double-Encoded JSON Healer
+
+**Date**: April 24, 2026
+**Status**: ✅ COMPLETE
+**Impact**: Three correctness fixes in the goal/approval/artifact pipeline.
+
+### Changes
+1. **War Room stuck on "ACTION EXECUTING"** — `WarRoom.tsx` treats `execution_status === null` as a terminal no-op (not "still running") and only `'failed'` marks an error. Added a 90 s safety-net poll of `GET /api/approvals/:id` so the UI reconciles with the server even if the PATCH response was truncated by a cold-start / edge-function timeout.
+2. **Orc Mission Report missing for `@dept` direct dispatches** — `/api/departments/[slug]/task` now creates a synthetic single-department goal on entry (status `executing`, valid per the CHECK constraint), propagates `goal_id` into every memo / artifact / approval / event_log insert, and fires `runOrcReport` + closes the goal on completion. The approvals handler also inline-fires `runOrcReport` when the goal has zero `goal_tasks` rows (i.e. the synthetic case), so approved single-dept tasks still get a Mission Report once the tool executes.
+3. **XLSX (and DOCX) generic-fallback regression from double-encoded LLM JSON** — root cause for the malformed spreadsheet sample: the LLM sometimes emits `sheets` (and `sources.*`) as **stringified JSON** inside the outer JSON. Detection passed `skill === "xlsx"` and routed to `transformToExcel`, but `Array.isArray(data.sheets)` was false so the SKILL.md branch was skipped and output fell through to the generic key/value flatten. Fix: added a `healSkillPayload` normalizer in `excel-transformer.ts` / `document-transformer.ts` that recursively re-parses stringified array/object fields (`sheets`, `rows`, `columns`, `sources.memo_ids`, `sources.kb_file_ids`, `sources.tool_calls`, and similar) before the skill-schema branch runs.
+
+### Edge cases covered
+- Synthetic goal insert failing (goalId null) — all downstream inserts still succeed (columns nullable).
+- Department task throwing mid-LLM — goal marked `failed`, no orphaned `executing` state.
+- Approval with no matching executor (`execution_status === null`) — UI now shows APPROVED done, not stuck.
+- Server timed out after kicking off Composio — client polling closes the loop.
+- `runOrcReport` double-fire — idempotency guard already exists in `llm-client.ts`.
+- Real multi-task goals — chain-reaction path untouched; inline Orc only fires when `goal_tasks` count is 0.
+- Triple-stringified JSON (rare) — heal function loops until it gets a non-string value or hits a safety depth cap.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/app/api/departments/[slug]/task/route.ts`
+- `frontend/app/api/approvals/[id]/route.ts`
+- `frontend/lib/artifact-transformers/excel-transformer.ts`
+- `frontend/lib/artifact-transformers/document-transformer.ts`
+- `CROST_MASTER.md`
 
 ---
 

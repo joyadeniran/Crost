@@ -1,4 +1,5 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { healSkillPayload } from './heal-payload';
 
 /**
  * Universal document transformer.
@@ -13,6 +14,10 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
  */
 export async function transformToDocument(data: any): Promise<Buffer> {
   const children: Paragraph[] = [];
+
+  // Repair double-encoded JSON emitted by some LLM responses (e.g. `sections`
+  // arriving as a stringified JSON array) before running skill-schema checks.
+  data = healSkillPayload(data);
 
   // ─── SKILL.md schema: { skill: "docx", sections: [...] } ─────────────────
   // Highest priority — the LLM followed the docx SKILL.md contract.
