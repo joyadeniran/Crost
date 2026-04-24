@@ -3,6 +3,7 @@ import * as xlsx from 'xlsx';
 /**
  * Universal Excel transformer.
  * Handles all department JSON schemas:
+ *   - SKILL.md:   { skill: "xlsx", sheets: [...] } — canonical skill output
  *   - FINANCE:    analysis.summary + financial_framework / kpis / recommendations
  *   - OPERATIONS: deliverable_content.summary + sections (each section → own sheet)
  *   - SALES:      output.summary + objectives / strategies / metrics
@@ -12,6 +13,13 @@ import * as xlsx from 'xlsx';
  */
 export async function transformToExcel(data: any): Promise<Buffer> {
   const workbook = xlsx.utils.book_new();
+
+  // ─── SKILL.md schema: { skill: "xlsx", sheets: [...] } ──────────────────
+  // This is the canonical output when the LLM followed the xlsx SKILL.md contract.
+  // Highest priority — checked before all department-specific heuristics.
+  if (data?.skill === 'xlsx' && Array.isArray(data?.sheets)) {
+    return transformSkillSchema(data);
+  }
 
   // ─── FINANCE schema ──────────────────────────────────────────────────────
   if (data?.analysis && data?.department === 'FINANCE') {
@@ -124,6 +132,144 @@ export async function transformToExcel(data: any): Promise<Buffer> {
   // ─── Generic fallback: flatten entire JSON into key/value rows ───────────
   const rows = flattenToRows(data);
   appendSheet(workbook, rows.length > 0 ? rows : [{ key: 'output', value: JSON.stringify(data) }], 'Output');
+  return xlsxBuffer(workbook);
+}
+
+// ─── Skill schema transformer ─────────────────────────────────────────────────
+
+interface SkillColumn {
+  key: string;
+  header: string;
+  type: string;
+  width: number;
+  format?: string;
+}
+
+/**
+ * Transforms the canonical SKILL.md xlsx JSON contract into a proper workbook.
+ * Handles both column formats:
+ *   - Object columns: { key, header, type, width, format }
+ *   - String columns: "Column Name" (key = header = the string)
+ * Handles both row formats:
+ *   - Object rows: { col_key: value, ... }
+ *   - Array rows:  [val1, val2, ...] (mapped by column index)
+ */
+function transformSkillSchema(data: any): Buffer {
+  const workbook = xlsx.utils.book_new();
+  const sheets: any[] = Array.isArray(data.sheets) ? data.sheets : [];
+
+  for (const sheetDef of sheets) {
+    const rawCols: any[] = Array.isArray(sheetDef.columns) ? sheetDef.columns : [];
+    if (rawCols.length === 0) continue;
+
+    // Normalise columns to a uniform shape
+    const cols: SkillColumn[] = rawCols.map((c: any) => {
+      if (typeof c === 'string') {
+        return { key: c, header: c, type: 'text', width: 20 };
+      }
+      const type = (c.type || 'text') as string;
+      const defaultWidth = type === 'text' ? 20 : type === 'formula' ? 15 : 12;
+      return {
+        key: c.key || c.header || String(c),
+        header: c.header || c.key || String(c),
+        type,
+        width: c.width || defaultWidth,
+        format: c.format,
+      };
+    });
+
+    // Resolve default number formats for types that have no explicit format
+    const colsWithFormats = cols.map(col => {
+      if (col.format) return col;
+      let format: string | undefined;
+      if (col.type === 'currency') format = '"$"#,##0.00';
+      else if (col.type === 'percent') format = '0.00%';
+      else if (col.type === 'number') format = '#,##0';
+      else if (col.type === 'date') format = 'DD/MM/YYYY';
+      return { ...col, format };
+    });
+
+    // Build array-of-arrays: header row first, then data rows
+    const rows: any[] = Array.isArray(sheetDef.rows) ? sheetDef.rows : [];
+    const aoa: any[][] = [colsWithFormats.map(c => c.header)];
+
+    for (const row of rows) {
+      if (Array.isArray(row)) {
+        aoa.push(colsWithFormats.map((_c, i) => row[i] ?? ''));
+      } else if (typeof row === 'object' && row !== null) {
+        aoa.push(colsWithFormats.map(c => row[c.key] ?? row[c.header] ?? ''));
+      }
+    }
+
+    const ws = xlsx.utils.aoa_to_sheet(aoa);
+
+    // Convert formula strings (starting with '=') to proper formula cells
+    for (let r = 1; r < aoa.length; r++) {
+      for (let c = 0; c < colsWithFormats.length; c++) {
+        const addr = xlsx.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (cell && typeof cell.v === 'string' && (cell.v as string).startsWith('=')) {
+          ws[addr] = { t: 'n', f: (cell.v as string).slice(1), v: 0 };
+        }
+      }
+    }
+
+    // Totals row: SUM formula for every numeric/currency/percent column
+    if (sheetDef.totals_row && rows.length > 0) {
+      const totalsRowIdx = aoa.length;
+      const totalsAoa: any[] = colsWithFormats.map((col, ci) => {
+        const isNumeric = col.type === 'number' || col.type === 'currency' || col.type === 'percent';
+        if (isNumeric) {
+          const excelCol = xlsx.utils.encode_col(ci);
+          const startRow = 2;
+          const endRow = rows.length + 1;
+          return endRow >= startRow ? `=SUM(${excelCol}${startRow}:${excelCol}${endRow})` : '';
+        }
+        return ci === 0 ? 'TOTAL' : '';
+      });
+
+      xlsx.utils.sheet_add_aoa(ws, [totalsAoa], { origin: { r: totalsRowIdx, c: 0 } });
+
+      // Convert SUM formula strings in the totals row to proper formula cells
+      for (let ci = 0; ci < colsWithFormats.length; ci++) {
+        const addr = xlsx.utils.encode_cell({ r: totalsRowIdx, c: ci });
+        const cell = ws[addr];
+        if (cell && typeof cell.v === 'string' && (cell.v as string).startsWith('=')) {
+          ws[addr] = { t: 'n', f: (cell.v as string).slice(1), v: 0 };
+        }
+      }
+    }
+
+    // Column widths
+    ws['!cols'] = colsWithFormats.map(c => ({ wch: c.width }));
+
+    // Number formats — apply to all data cells in typed columns
+    const totalDataRows = aoa.length - 1; // excludes header
+    for (let r = 1; r <= totalDataRows; r++) {
+      for (let ci = 0; ci < colsWithFormats.length; ci++) {
+        const col = colsWithFormats[ci];
+        if (!col.format) continue;
+        const addr = xlsx.utils.encode_cell({ r, c: ci });
+        if (ws[addr]) ws[addr].z = col.format;
+      }
+    }
+
+    // Freeze header row
+    if (sheetDef.freeze_header_row) {
+      ws['!sheetViews'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
+    }
+
+    const sheetName = (sheetDef.name || 'Sheet')
+      .substring(0, 31)
+      .replace(/[/\\?*:[\]]/g, '_');
+
+    xlsx.utils.book_append_sheet(workbook, ws, sheetName || 'Sheet');
+  }
+
+  if (workbook.SheetNames.length === 0) {
+    appendSheet(workbook, [{ Title: data.title || 'Untitled', Author: data.author || '' }], 'Info');
+  }
+
   return xlsxBuffer(workbook);
 }
 
