@@ -1176,16 +1176,16 @@ export async function runOrcReport(goalId: string): Promise<void> {
   if (!memos || memos.length === 0) return
 
   const context = memos.map(m => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
-  const prompt = `Goal: ${goal.founder_input}\n\nFindings:\n${context}\n\nSynthesize into a strategic report.`
+  const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief. Use ## markdown headers (not **bold** pseudo-headers). Lead with the outcome, then key findings, then what's next. No preamble, no "I am pleased to present". Be direct and specific.`
 
   try {
     const { model: reportModel } = await getModel('summarization', goal.created_by)
-    const { content } = await callLLM(reportModel, prompt, "You are the Orc Chief of Staff. Synthesize results.", goal.created_by)
+    const { content } = await callLLM(reportModel, prompt, "You are Orc, a sharp Chief of Staff. Write concise, direct mission debriefs in clean markdown. Use ## and ### headers for sections. No ceremonial language. Get straight to the point.", goal.created_by)
     const { data: newReport } = await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',
       title: `[Mission Report] ${goal.title}`,
-      body: formatMemoBody(content),
+      body: content,
       priority: 'high',
       source_type: 'orchestrator',
       created_by: goal.created_by

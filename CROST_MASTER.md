@@ -3,9 +3,21 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.25  
+**Current Version:** 11.26  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Suggested actions 401 fixed; all execute paths respond end-to-end (v11.25).
+**Deployment Status:** ✅ COMPLETE — Mission Report: fixed truncation, prompt tone, and markdown header output (v11.26).
+
+---
+
+## Session v11.26 — Mission Report: Truncation + Tone + Markdown Fix
+**Date**: 2026-04-25 **Status**: ✅  
+**Impact**: Mission Report bodies now store full LLM output (no 1000-char cut-off), use real `##` markdown headers, and open with outcome-first direct language instead of corporate preamble.
+### What Was Built
+1. Removed `formatMemoBody()` truncation from `runOrcReport` — `content` now stored directly; no more `[TRUNCATED FOR EGRESS EFFICIENCY]`
+2. Rewrote system prompt: "Orc, sharp Chief of Staff, no ceremonial language, clean markdown headers"
+3. Rewrote user prompt: instructs `##` headers (not `**bold**` pseudo-headers), outcome-first, no preamble
+### Files Changed
+- `frontend/lib/llm-client.ts`
 
 ---
 
