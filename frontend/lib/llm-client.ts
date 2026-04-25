@@ -135,7 +135,7 @@ async function uploadArtifact(
   deptSlug: string,
   content: string,
   taskHint?: string
-): Promise<{ fileUrl: string; artifactType: 'document' | 'spreadsheet' | 'data'; extension: string } | null> {
+): Promise<{ fileUrl: string; artifactType: 'document' | 'spreadsheet' | 'data'; extension: string; fileSize: number } | null> {
   const supabase = createServerSupabaseClient()
 
   try {
@@ -186,7 +186,8 @@ async function uploadArtifact(
     }
 
     const { data: urlData } = supabase.storage.from('artifacts').getPublicUrl(data.path)
-    return { fileUrl: urlData.publicUrl, artifactType, extension: ext }
+    const fileSize = typeof fileContent === 'string' ? Buffer.byteLength(fileContent, 'utf8') : fileContent.length
+    return { fileUrl: urlData.publicUrl, artifactType, extension: ext, fileSize }
   } catch (err) {
     console.error('[uploadArtifact] Failed:', err)
     return null
@@ -1072,6 +1073,9 @@ export async function runWorkerTask(
         artifact_type: uploaded.artifactType,
         title: `Output: ${task.label}`,
         file_url: uploaded.fileUrl,          // ← file_url, not preview_url
+        // Gallery v1: record file size and task lineage
+        file_size: uploaded.fileSize,
+        task_id: task.id,
         // Spec §9.5: record which skill slugs were loaded when producing this artefact.
         skills_used: loadedSkillSlugs,
         // Spec §9: citations — populated with worker provenance data where available.
@@ -1084,7 +1088,7 @@ export async function runWorkerTask(
           task_id: task.id,
           action: task.action,
           extension: uploaded.extension,
-          sizeBytes: content.length,
+          sizeBytes: uploaded.fileSize,
           source: 'worker_task',
         }
       }).select('id').single()

@@ -53,12 +53,13 @@ function NavItem({ href, label, Icon, badge, exact = false }: NavItemProps) {
 
 interface Props {
   pendingCount: number
+  artifactCount: number
   identity: string
 }
 
 import { useOnboardingStore } from '@/lib/onboarding-store'
 
-export function SidebarNav({ pendingCount, identity }: Props) {
+export function SidebarNav({ pendingCount, artifactCount, identity }: Props) {
   const router = useRouter()
 
   const handleLogout = async () => {
@@ -81,7 +82,7 @@ export function SidebarNav({ pendingCount, identity }: Props) {
         <NavItem href="/dashboard/notifications" label="Inbox"    Icon={IconBell}      badge={pendingCount} />
         <NavItem href="/dashboard/knowledge"     label="Knowledge"    Icon={IconDatabase} />
         <NavItem href="/dashboard/memos"     label="Memos"        Icon={IconMemos} />
-        <NavItem href="/dashboard/artifacts" label="Artifacts"    Icon={IconArtifacts} />
+        <NavItem href="/dashboard/artifacts" label="Artifacts"    Icon={IconArtifacts} badge={artifactCount} />
         <NavItem href="/dashboard/constitution" label="Constitution" Icon={IconShield} />
         <NavItem href="/dashboard/settings"     label="Settings"     Icon={IconSettings} />
 

@@ -74,6 +74,10 @@ const CreateArtifactSchema = z.object({
   skills_used: z.array(z.string()).default([]),
   // Spec §9: citations — non-negotiable on every artefact.
   sources: ArtifactSourcesSchema.default({ memo_ids: [], kb_file_ids: [], tool_calls: [] }),
+  // Gallery v1: file size in bytes (populated from uploaded blob)
+  file_size: z.number().int().min(0).nullable().optional(),
+  // Gallery v1: task_id for lineage tracking
+  task_id: z.string().uuid().nullable().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -86,11 +90,19 @@ export async function POST(req: NextRequest) {
     const parsed = CreateArtifactSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
-    // Verify file_url is accessible (basic check)
-    if (!parsed.file_url.includes('supabase') && !parsed.file_url.includes('s3')) {
+    // Verify file_url is a valid HTTP(S) URL pointing to known storage
+    let urlValid = false
+    try {
+      const url = new URL(parsed.file_url)
+      urlValid = ['http:', 'https:'].includes(url.protocol) &&
+        (url.hostname.includes('supabase') || url.hostname.includes('s3') || url.hostname.includes('amazonaws'))
+    } catch {
+      urlValid = false
+    }
+    if (!urlValid) {
       return NextResponse.json({
         success: false,
-        error: 'file_url must point to Supabase Storage or S3. Did you upload the file first?',
+        error: 'file_url must be a valid URL pointing to Supabase Storage or S3. Did you upload the file first?',
         code: 'INVALID_FILE_URL'
       }, { status: 400 })
     }

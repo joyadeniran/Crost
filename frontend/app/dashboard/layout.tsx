@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieStore = cookies()
   const cookieMode = cookieStore.get('env_mode')?.value
 
-  const [pendingResult, eventsResult, configResult, modeResult] = await Promise.all([
+  const [pendingResult, eventsResult, configResult, modeResult, artifactCountResult] = await Promise.all([
     supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
     supabase.from('event_log').select('*').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
     supabase.from('system_config').select('key, value').in('key', ['company_name', 'company_identity']).eq('created_by', user.id),
@@ -36,9 +36,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     cookieMode
       ? Promise.resolve({ data: null, error: null })
       : supabase.from('system_config').select('value').eq('key', 'env_mode').eq('created_by', user.id).single(),
+    supabase.from('artifacts').select('id', { count: 'exact', head: true }).eq('created_by', user.id),
   ])
 
   const pendingCount = pendingResult.data?.length ?? 0
+  const artifactCount = artifactCountResult.count ?? 0
   const events = (eventsResult.data ?? []) as EventLogEntry[]
   const companyName = configResult.data?.find((row) => row.key === 'company_name')?.value
   const companyIdentity = configResult.data?.find((row) => row.key === 'company_identity')?.value
@@ -75,7 +77,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
 
         {/* Nav — client component for active state */}
-        <SidebarNav pendingCount={pendingCount} identity={identity} />
+        <SidebarNav pendingCount={pendingCount} artifactCount={artifactCount} identity={identity} />
 
         {/* Seeds Zustand + keeps pending count live across all pages */}
         <LayoutStoreHydrator pendingCount={pendingCount} envMode={envMode} />

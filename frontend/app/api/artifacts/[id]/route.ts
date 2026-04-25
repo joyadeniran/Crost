@@ -79,7 +79,7 @@ export async function DELETE(
       try {
         await supabase.from('event_log').insert({
           department_slug: artifact.department_slug,
-          event_type: 'artifact_created',
+          event_type: 'artifact_deleted',
           description: `Artifact deleted: "${artifact.title}"`,
           metadata: {
             artifact_id: id,
