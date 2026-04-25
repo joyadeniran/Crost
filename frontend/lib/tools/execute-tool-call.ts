@@ -15,7 +15,7 @@ type ExecuteOptions = {
   userId: string;
   departmentId: string; // The slug
   taskId: string;
-  goalId: string;
+  goalId: string | null;
   toolCall: ToolCallPayload;
 };
 
@@ -52,14 +52,17 @@ export async function executeToolCall(options: ExecuteOptions) {
   const supabase = createServerSupabaseClient();
   const fullyQualifiedTool = `${service}.${action}`.toLowerCase();
 
-  // 1. Internal tool bypass — knowledge_base_search and future internal tools
-  if (service.toLowerCase() === 'internal') {
+  // 1. Internal tool bypass — handles both service='internal' (worker path)
+  //    and service='knowledge_base_search' (/ command path from ChatCommandMenu).
+  const INTERNAL_TOOL_SLUGS = new Set(['knowledge_base_search'])
+  if (service.toLowerCase() === 'internal' || INTERNAL_TOOL_SLUGS.has(service.toLowerCase())) {
     const searchResult = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/knowledge/search`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, query: params.query, category: params.category, limit: params.limit || 5 })
+        // params.text is the raw string when invoked via /knowledge_base_search <text>
+        body: JSON.stringify({ userId, query: params.query || params.text || params.q || '', category: params.category, limit: params.limit || 5 })
       }
     );
     return searchResult.json();
@@ -241,7 +244,7 @@ export async function executeToolCall(options: ExecuteOptions) {
   });
 
   // 5. Memory Routing & Separation (Memos vs Artifacts)
-  await handleToolResultArchiving({
+  const { artifactId: createdArtifactId } = await handleToolResultArchiving({
     result,
     userId,
     departmentId,
@@ -250,7 +253,7 @@ export async function executeToolCall(options: ExecuteOptions) {
     executionId: executionLog.id
   });
 
-  return result;
+  return { ...result, artifact_id: createdArtifactId } as ToolResult & { artifact_id: string | null };
 }
 
 /**
@@ -269,9 +272,9 @@ async function handleToolResultArchiving({
   userId: string;
   departmentId: string;
   taskId: string;
-  goalId: string;
+  goalId: string | null;
   executionId: string;
-}) {
+}): Promise<{ artifactId: string | null }> {
   const supabase = createServerSupabaseClient();
   let fullBodyText = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
   const strippedText = fullBodyText.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
@@ -287,7 +290,8 @@ async function handleToolResultArchiving({
     const time = Date.now();
     const fileName = `tool-${taskId}-${time}.json`;
 
-    const { data: uploadData } = await supabase.storage.from('artifacts').upload(`goals/${goalId}/${fileName}`, fullBodyText, { contentType: 'application/json' });
+    const storageBucket = goalId ? `goals/${goalId}/${fileName}` : `direct/${userId}/${fileName}`
+    const { data: uploadData } = await supabase.storage.from('artifacts').upload(storageBucket, fullBodyText, { contentType: 'application/json' });
     if (uploadData) {
       const { data: urldata } = supabase.storage.from('artifacts').getPublicUrl(uploadData.path);
       const { data: artifact } = await supabase.from('artifacts').insert({
@@ -308,6 +312,24 @@ async function handleToolResultArchiving({
       if (artifact) {
         artifactId = artifact.id;
         memoBody = `Executed tool: ${result.service}.${result.action}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).`;
+        // Generate suggested next-step chips for this tool-output artifact (§6.1)
+        try {
+          const { generateAndInsertSuggestedActions } = await import('../suggested-actions')
+          const actionIds = await generateAndInsertSuggestedActions({
+            source_entity_type: 'artifact',
+            source_entity_id: artifact.id,
+            goal_id: goalId,
+            artifact_type: 'data',
+            file_url: urldata.publicUrl,
+            artifact_title: `Tool Output: ${result.service}.${result.action}`,
+            created_by: userId,
+          })
+          if (actionIds.length > 0) {
+            await supabase.from('artifacts').update({ suggested_actions: actionIds }).eq('id', artifact.id)
+          }
+        } catch (saErr) {
+          console.error('[handleToolResultArchiving] suggestedActions insert failed (non-fatal):', saErr)
+        }
       } else {
         memoBody = fullBodyText.substring(0, 2000) + '(truncated)';
       }
@@ -342,4 +364,6 @@ async function handleToolResultArchiving({
       artifactId
     }
   });
+
+  return { artifactId: artifactId ?? null };
 }

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       departmentId: 'executive', // chat-invoked tools run under executive permissions
       taskId: task_id ?? `chat-${Date.now()}`,
-      goalId: goal_id ?? '',
+      goalId: goal_id || null,
       toolCall: {
         service,
         action,
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true, result })
+    return NextResponse.json({ success: true, result, artifact_id: (result as any).artifact_id ?? null })
   } catch (err: any) {
     console.error('[POST /api/tools/invoke]', err)
     return NextResponse.json(
