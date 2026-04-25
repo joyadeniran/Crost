@@ -56,26 +56,7 @@ export function RealtimeProvider({
     return () => { supabaseClient.removeChannel(channel) }
   }, [upsertDepartment, removeDepartment])
 
-  // Approval queue Realtime — update pending count
-  useEffect(() => {
-    const channel = supabaseClient
-      .channel('approvals-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'approval_queue' },
-        async () => {
-          // Re-fetch pending count on any change
-          const { data } = await supabaseClient
-            .from('approval_queue')
-            .select('id')
-            .eq('status', 'pending')
-          setPendingApprovalCount(data?.length ?? 0)
-        }
-      )
-      .subscribe()
-
-    return () => { supabaseClient.removeChannel(channel) }
-  }, [setPendingApprovalCount])
+  // Approval queue count is managed by LayoutStoreHydrator (payload-based, no REST roundtrip).
 
   return <>{children}</>
 }
