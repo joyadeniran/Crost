@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeSuggestedAction } from '@/lib/execute-suggested-action'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthenticated' }, { status: 401 })

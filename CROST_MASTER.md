@@ -3,9 +3,27 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.24  
+**Current Version:** 11.25  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — /tool slash commands now execute end-to-end; suggested actions generated and shown in CommandThread (v11.24).
+**Deployment Status:** ✅ COMPLETE — Suggested actions 401 fixed; all execute paths respond end-to-end (v11.25).
+
+---
+
+## Session v11.25 — Suggested Actions 401 Fix & Edge-Case Hardening
+**Date:** April 25, 2026  **Status:** ✅  
+**Impact:** Suggested action chips ("Send to email", "Save to KB", "Add to Memo") now execute end-to-end without 401 errors; edge-case failures surface correctly instead of silently marking actions completed.
+### Root Cause
+Both `/api/suggested-actions/[id]/execute` and `/api/suggested-actions/execute` used `createServerSupabaseClient()` (service-role key, no cookie context) for `auth.getUser()`. The service-role client never has a session, so `getUser()` always returned `null` → 401 on every chip tap from the browser.
+### What Was Fixed
+1. `[id]/execute/route.ts`: Changed to `createSupabaseServerComponentClient()` for auth; kept service-role client for DB writes (ownership verified with `.eq('created_by', userId)`)
+2. `execute/route.ts` (bulk): Same auth fix
+3. `[id]/execute/route.ts`: Fixed `goalId = merged.goal_id || actionId` → `goalId = (merged.goal_id as string) || null` (using actionId as a fake goal_id caused phantom goal FK rows)
+4. `[id]/execute/route.ts`: Added explicit `missing_connection` (409) and `permission_denied` (403) result branches — previously both fell through to the success path and incorrectly marked actions `completed`
+5. `lib/execute-suggested-action.ts`: Fixed stale status guard (`'generated'` only → accepts `'suggested' | 'generated' | 'tapped'`); fixed `goalId ?? '' ` → `goalId ?? null`; added `missing_connection` / `permission_denied` handling
+### Files Changed
+- `frontend/app/api/suggested-actions/[id]/execute/route.ts`
+- `frontend/app/api/suggested-actions/execute/route.ts`
+- `frontend/lib/execute-suggested-action.ts`
 
 ---
 

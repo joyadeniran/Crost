@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeToolCall } from '@/lib/tools/execute-tool-call'
 
 export const dynamic = 'force-dynamic'
@@ -10,12 +10,17 @@ export const dynamic = 'force-dynamic'
 // Execution contract per Spec §6.1 §15.7:
 //   suggested → tapped → (needs_input?) → executing → completed | failed | approved (if HITL)
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerSupabaseClient()
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // Must use the SSR cookie client for auth — the service-role client has no
+  // session cookie context and auth.getUser() always returns null on it.
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user }, error: authError } = await authClient.auth.getUser()
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // Service-role client for all subsequent DB writes (bypasses RLS; ownership
+  // is verified explicitly via .eq('created_by', userId) on every query).
+  const supabase = createServerSupabaseClient()
 
   const userId = user.id
   const actionId = params.id
@@ -61,8 +66,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     switch (action_slug) {
       // ── send_to_email ───────────────────────────────────────────────────────
       case 'send_to_email': {
-        let goalId = merged.goal_id as string || actionId
-        if (!merged.goal_id && merged.artifact_id) {
+        // Resolve goal_id from payload or artifact; fall back to null (never use
+        // the action ID as a fake goal_id — that produces phantom goal rows).
+        let goalId: string | null = (merged.goal_id as string) || null
+        if (!goalId && merged.artifact_id) {
           const { data: art } = await supabase
             .from('artifacts')
             .select('goal_id')
@@ -188,6 +195,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         .update({ status: 'failed' })
         .eq('id', actionId)
       return NextResponse.json({ error: result.error }, { status: 400 })
+    }
+
+    // Tool not connected — surface clearly rather than marking completed
+    if ((result as any).status === 'missing_connection') {
+      await supabase.from('suggested_actions')
+        .update({ status: 'failed' })
+        .eq('id', actionId)
+      return NextResponse.json({
+        error: (result as any).message || 'Tool not connected',
+        missing_connection: true,
+        service: (result as any).service,
+      }, { status: 409 })
+    }
+
+    if ((result as any).status === 'permission_denied') {
+      await supabase.from('suggested_actions')
+        .update({ status: 'failed' })
+        .eq('id', actionId)
+      return NextResponse.json({ error: (result as any).message }, { status: 403 })
     }
 
     if ((result as any).status === 'requires_approval') {
