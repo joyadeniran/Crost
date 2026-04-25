@@ -200,9 +200,9 @@ export async function executeToolCall(options: ExecuteOptions) {
       created_by: userId,           // Required for RLS and pending count queries
       tool_execution_id: executionLog.id,
       department_slug: departmentId,
-      action_type: "tool_call",
+      action_type: fullyQualifiedTool,
       action_label: `${service}.${action}`,
-      payload: { service, action, params },
+      payload: { ...params, __service: service },
       context: toolCall.reasoning || `HITL approval required for ${fullyQualifiedTool}`,
       risk_level: risk || "high",
       status: "pending",

@@ -80,14 +80,45 @@ function fieldLabel(field: string): string {
 
 function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: () => void }) {
   const router = useRouter()
-  const [chipState, setChipState] = useState<ChipState>('idle')
+  const [chipState, setChipState] = useState<ChipState>(
+    action.status === 'approved' ? 'approval' : 'idle'
+  )
   const [inputs, setInputs] = useState<Record<string, string>>({})
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(
+    action.status === 'approved' ? 'Awaiting your approval in Inbox' : ''
+  )
   const inputRef = useRef<HTMLInputElement>(null)
+  const onDoneRef = useRef(onDone)
+  useEffect(() => { onDoneRef.current = onDone }, [onDone])
 
   useEffect(() => {
     if (chipState === 'needs_input') inputRef.current?.focus()
   }, [chipState])
+
+  // Poll DB every 3 s while waiting for an approval to be executed
+  useEffect(() => {
+    if (chipState !== 'approval') return
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await supabaseClient
+          .from('suggested_actions')
+          .select('status')
+          .eq('id', action.id)
+          .single()
+        if (data?.status === 'completed') {
+          clearInterval(interval)
+          setChipState('done')
+          setMessage('Action Executed')
+          onDoneRef.current()
+        } else if (data?.status === 'failed') {
+          clearInterval(interval)
+          setChipState('error')
+          setMessage('Execution failed')
+        }
+      } catch { /* ignore transient poll errors */ }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [chipState, action.id])
 
   const isCompleted = action.status === 'completed'
   const isDone = chipState === 'done' || isCompleted
@@ -120,7 +151,7 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
       if (data.requires_approval) {
         setChipState('approval')
         setMessage('Awaiting your approval in Inbox')
-        setTimeout(onDone, 2500)
+        // Poll will detect when approval executes and call onDone then
         return
       }
 
@@ -304,7 +335,7 @@ export function SuggestedActionChips({ entityType, entityId }: Props) {
           .select('id, action_slug, label, reasoning, risk_level, status, required_inputs, required_tool, payload')
           .eq('source_entity_type', entityType)
           .eq('source_entity_id', entityId)
-          .in('status', ['suggested', 'tapped', 'completed'])
+          .in('status', ['suggested', 'tapped', 'approved', 'completed'])
           .order('created_at', { ascending: true })
           .limit(3)
 
