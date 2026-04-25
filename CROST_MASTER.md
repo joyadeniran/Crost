@@ -3,13 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.21  
-**Last Updated:** April 24, 2026  
-**Deployment Status:** ✅ COMPLETE — MVP gaps closed: in-browser preview (PDF + Office Online), user_consents, CTA copy (v11.21).
+**Current Version:** 11.22  
+**Last Updated:** April 25, 2026  
+**Deployment Status:** ✅ COMPLETE — Mission Report UI/formatting improved with MarkdownLite (v11.22).
 
 ---
 
-## Session v11.21 — MVP Gaps Closed (DoD H1, G1, G3)
+## Session v11.22 — Mission Report UI & Formatting Fix
+**Date**: April 25, 2026  **Status**: ✅  
+**Impact**: Strategic Mission Reports are now human-readable with proper hierarchy, bolding, and lists.
+### What Was Built
+1. Created `MarkdownLite` component in `WarRoom.tsx` to handle headers, lists, and bold text without external dependencies.
+2. Enhanced `SynthesisReportCard` with improved spacing, typography, and a "Strategic Output" brand treatment.
+3. Added global CSS for `.markdown-lite` to ensure consistent, elegant rendering of AI-generated synthesis.
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/app/globals.css`
+- `CROST_MASTER.md`
+
 
 **Date**: April 24, 2026
 **Status**: ✅ COMPLETE

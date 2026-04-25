@@ -245,20 +245,90 @@ body::before {
   background: var(--bg-2);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 32px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
 }
 
 .synthesis-glow {
   position: absolute;
-  top: -100px;
-  right: -100px;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(0, 212, 170, 0.15) 0%, transparent 70%);
+  top: -150px;
+  right: -150px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0, 212, 170, 0.2) 0%, transparent 70%);
   pointer-events: none;
+}
+
+.markdown-lite {
+  font-family: var(--font-dm-sans, sans-serif);
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+
+.markdown-lite h1, .markdown-lite h2, .markdown-lite h3 {
+  color: var(--text);
+  font-family: var(--font-syne, sans-serif);
+  font-weight: 700;
+  margin: 32px 0 16px;
+  letter-spacing: -0.01em;
+}
+
+.markdown-lite h1 { font-size: 24px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; }
+.markdown-lite h2 { font-size: 20px; }
+.markdown-lite h3 { font-size: 18px; }
+
+.markdown-lite p {
+  margin-bottom: 16px;
+}
+
+.markdown-lite ul, .markdown-lite ol {
+  margin-bottom: 20px;
+  padding-left: 4px;
+}
+
+.markdown-lite li {
+  margin-bottom: 8px;
+  position: relative;
+  padding-left: 24px;
+  list-style: none;
+}
+
+.markdown-lite ul li::before {
+  content: "•";
+  position: absolute;
+  left: 6px;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.markdown-lite ol {
+  counter-reset: item;
+}
+
+.markdown-lite ol li::before {
+  content: counter(item) ".";
+  counter-increment: item;
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  top: 1px;
+}
+
+.markdown-lite strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.markdown-lite br {
+  display: block;
+  margin: 8px 0;
+  content: "";
 }
 
 /* ─── GOAL INPUT ──────────────────────────────────────────────────────────── */
