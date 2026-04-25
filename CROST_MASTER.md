@@ -3,9 +3,63 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.27  
+**Current Version:** 11.28  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Eliminated approval_queue REST polling storm; payload-based count updates (v11.27).
+**Deployment Status:** ✅ COMPLETE — Artefacts Gallery v1: grid layout, tabbed detail drawer, file_size/task_id schema, sidebar badge.
+
+---
+
+## Session v11.28 — Artefacts Gallery v1
+**Date**: 2026-04-25 **Status**: ✅  
+**Impact**: Transformed the Artefacts page from a bare row-list into a visual card grid with rich previews, structured metadata, and trust signals. All changes are backward-compatible and type-safe.
+
+### What Was Built
+1. **Schema**: Added `file_size` (INTEGER) and `task_id` (UUID) columns to `artifacts` table with indexes.
+2. **Types**: Updated `Artifact` interface — `file_size`, `task_id`, `created_by` now required fields.
+3. **API**: `POST /api/artifacts` accepts `file_size` and `task_id`; strengthened `file_url` validation to use `new URL()` parse instead of string `includes`. `DELETE /api/artifacts/[id]` fixed event_type from `artifact_created` → `artifact_deleted`.
+4. **Worker**: `uploadArtifact()` now returns `fileSize` computed from `Buffer.byteLength()`; artifact insert in `runWorkerTask()` populates `file_size` and `task_id`.
+5. **Page**: `dashboard/artifacts/page.tsx` now fetches goals + departments in parallel, builds lookup maps, and renders a responsive CSS grid (`repeat(auto-fill, minmax(280px, 1fr))`). Canonical empty-state copy: "Your generated files will appear here".
+6. **Card Grid**: New `ArtifactCard.tsx` with:
+   - Colored file-type icon placeholder (no new infra)
+   - Thumbnail for images
+   - Title, dynamic department badge with color from DB, goal tag
+   - `timeAgo()` timestamp, format badge, file size
+   - Kebab menu (⋯) with Download / Delete actions
+   - Hover lift effect
+7. **Detail Drawer**: Slide-over panel with **Preview** | **Details** tabs:
+   - Preview tab: iframe for PDF, Office Online embed for PPTX/DOCX/XLSX, content preview for others (all existing logic preserved)
+   - Details tab: structured metadata table (Type, Format, Created by, Created at, Size, Goal, Task) + Skills Used tags
+   - CitationsSection and SuggestedActionChips preserved unchanged
+   - Download button shows filename: `Download {filename}`
+8. **Sidebar**: `SidebarNav` now accepts `artifactCount` prop; `Artifacts` nav item shows badge count. `dashboard/layout.tsx` fetches count via `select('id', { count: 'exact', head: true })`.
+
+### Files Changed
+- `supabase/migrations/20260425130000_artifacts_file_size_task_id.sql` (new)
+- `frontend/types/index.ts`
+- `frontend/app/api/artifacts/route.ts`
+- `frontend/app/api/artifacts/[id]/route.ts`
+- `frontend/lib/llm-client.ts`
+- `frontend/app/dashboard/artifacts/page.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/components/dashboard/SidebarNav.tsx`
+- `frontend/app/dashboard/layout.tsx`
+
+### Deferred to Post-MVP
+- Star / Pin system
+- Lineage tab (needs multi-table joins)
+- Memos tab (needs `sources.memo_ids` query)
+- "Use in Task" / "Send to Dept" actions
+- Storage used indicator
+- Page navigation (1/24) for multi-page docs
+- Upload button (artefacts are dept outputs per spec)
+- Share Link (needs public URL auth)
+- Server-side thumbnail generation for PPTX/DOCX
+
+---
+
+## Session v11.27 — Approval Queue REST Polling Elimination
+**Date**: 2026-04-25 **Status**: ✅  
+**Impact**: Eliminated ~100% of Realtime-triggered REST calls to `approval_queue`. During active missions, every DB change previously fired a full Supabase REST roundtrip; now count is derived directly from the Realtime payload. Fallback interval extended from 15s to 60s. Removed duplicate subscription in `RealtimeProvider`.
 
 ---
 

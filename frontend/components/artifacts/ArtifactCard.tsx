@@ -7,12 +7,13 @@ import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedAc
 
 interface Props {
   artifact: Artifact
+  goalTitle?: string
+  deptColor?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function inferFilename(artifact: Artifact): { name: string; ext: string } {
-  // 1. Try to pull from the storage URL (most accurate)
   if (artifact.file_url) {
     const raw = artifact.file_url.split('/').pop()?.split('?')[0] ?? ''
     const parts = raw.split('.')
@@ -22,8 +23,6 @@ function inferFilename(artifact: Artifact): { name: string; ext: string } {
       return { name: decodeURIComponent(name), ext }
     }
   }
-
-  // 2. Fallback: derive from artifact type + title
   const title = artifact.title.replace(/[^a-zA-Z0-9\s_-]/g, '').replace(/\s+/g, '_')
   const extMap: Record<string, string> = {
     spreadsheet: 'xlsx',
@@ -38,18 +37,29 @@ function inferFilename(artifact: Artifact): { name: string; ext: string } {
   return { name: title, ext }
 }
 
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number | null): string {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function extractPreviewText(raw: string | null, file_url?: string | null): string {
-  if (!raw) {
-    if (file_url) return 'Native file attached. Use the Download button to retrieve it.'
-    return 'No preview available.'
-  }
+function timeAgo(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+function extractPreviewText(raw: string | null): string {
+  if (!raw) return 'No preview available.'
   const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
   try {
     const parsed = JSON.parse(stripped)
@@ -62,83 +72,22 @@ function extractPreviewText(raw: string | null, file_url?: string | null): strin
         return vals[0] ?? ''
       }
       const topLevel = pick(parsed, ['summary', 'executive_summary', 'overview', 'description', 'title'])
-      if (topLevel) return topLevel.slice(0, 280)
-      // Nested
+      if (topLevel) return topLevel.slice(0, 180)
       for (const v of Object.values(parsed)) {
         if (typeof v === 'object' && v !== null) {
           const nested = pick(v as any, ['summary', 'overview', 'description'])
-          if (nested) return nested.slice(0, 280)
+          if (nested) return nested.slice(0, 180)
         }
       }
-      return `Structured ${artifact_type_label(parsed)} data. Download to view full content.`
+      return 'Structured data. Download to view full content.'
     }
-    return stripped.slice(0, 280)
+    return stripped.slice(0, 180)
   } catch {
-    return stripped.slice(0, 280)
+    return stripped.slice(0, 180)
   }
-}
-
-function artifact_type_label(obj: any): string {
-  if ('analysis' in obj) return 'Financial'
-  if ('strategy' in obj) return 'Strategy'
-  if ('marketing' in obj) return 'Marketing'
-  return 'Work'
 }
 
 // ─── File Type Icon ───────────────────────────────────────────────────────────
-
-function FileTypeIcon({ ext, size = 20 }: { ext: string; size?: number }) {
-  const s = { width: size, height: size, display: 'block' } as const
-  switch (ext) {
-    case 'xlsx':
-    case 'csv':
-      return (
-        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
-        </svg>
-      )
-    case 'docx':
-    case 'doc':
-    case 'md':
-    case 'txt':
-      return (
-        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="8" y1="13" x2="16" y2="13"/>
-          <line x1="8" y1="17" x2="16" y2="17"/>
-        </svg>
-      )
-    case 'json':
-      return (
-        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <polyline points="16 18 22 12 16 6"/>
-          <polyline points="8 6 2 12 8 18"/>
-        </svg>
-      )
-    case 'png':
-    case 'jpg':
-    case 'jpeg':
-    case 'webp':
-      return (
-        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <polyline points="21 15 16 10 5 21"/>
-        </svg>
-      )
-    default:
-      return (
-        <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-      )
-  }
-}
-
-// ─── Extension Badge ──────────────────────────────────────────────────────────
 
 const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
   xlsx: { bg: 'rgba(0,180,100,0.12)', fg: '#00c866' },
@@ -152,10 +101,34 @@ const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
   md:   { bg: 'rgba(80,200,255,0.12)', fg: '#50c8ff' },
 }
 
+function FileTypeIcon({ ext, size = 40 }: { ext: string; size?: number }) {
+  const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
+  const s = { width: size, height: size, display: 'block' } as const
+  return (
+    <div style={{
+      width: size,
+      height: size,
+      borderRadius: 10,
+      background: c.bg,
+      color: c.fg,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: 'var(--font-dm-mono, monospace)',
+      fontSize: size < 30 ? 9 : 11,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+    }}>
+      {ext}
+    </div>
+  )
+}
+
 function ExtBadge({ ext }: { ext: string }) {
   const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
   return (
-    <span 
+    <span
       className="crost-badge"
       style={{
         background: c.bg,
@@ -269,19 +242,21 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ArtifactCard({ artifact }: Props) {
+export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const [showDrawer, setShowDrawer] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [activeTab, setActiveTab] = useState<'preview' | 'details'>('preview')
   const [downloading, setDownloading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const createdAt = new Date(artifact.created_at)
   const { name, ext } = inferFilename(artifact)
   const displayFilename = `${name}.${ext}`
-  const previewText = extractPreviewText(artifact.body, artifact.file_url)
-  const fileSize = (artifact as any).file_size ? formatBytes((artifact as any).file_size) : null
+  const previewText = extractPreviewText(artifact.body)
+  const fileSize = formatBytes(artifact.file_size)
   const iconColor = EXT_COLORS[ext]?.fg ?? 'var(--accent)'
-  const iconBg   = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
+  const iconBg = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
+  const deptBadgeColor = deptColor || iconColor
 
   const downloadArtifact = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -300,10 +275,8 @@ export function ArtifactCard({ artifact }: Props) {
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
       } else {
-        const content = artifact.body || JSON.stringify(artifact.metadata, null, 2)
-        const mime = ext === 'json' ? 'application/json' : ext === 'md' ? 'text/markdown' : 'text/plain'
-        const blob = new Blob([content], { type: mime })
-        downloadUrl = URL.createObjectURL(blob)
+        // No fallback to body — file_url is required per spec
+        throw new Error('No downloadable file available')
       }
 
       const link = document.createElement('a')
@@ -337,95 +310,206 @@ export function ArtifactCard({ artifact }: Props) {
 
   return (
     <>
-      {/* ── File Row Card ────────────────────────────────────────── */}
+      {/* ── Card ─────────────────────────────────────────────── */}
       <div
-        className="artifact-row"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={() => setShowDrawer(true)}
+        className="artifact-card"
+        onClick={() => { setShowDrawer(true); setActiveTab('preview'); setMenuOpen(false) }}
+        style={{
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 14,
+          padding: 16,
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          position: 'relative',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+          e.currentTarget.style.background = 'rgba(255,255,255,0.035)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'
+          e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
+        }}
       >
-        {/* Icon */}
-        <div 
-          className="artifact-icon-wrap"
-          style={{
-            background: iconBg,
-            border: `1px solid ${iconColor}25`,
-            color: iconColor,
-          }}
-        >
-          <FileTypeIcon ext={ext} size={18} />
+        {/* Thumbnail area */}
+        <div style={{
+          width: '100%',
+          aspectRatio: '16/10',
+          borderRadius: 10,
+          background: 'rgba(0,0,0,0.25)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          position: 'relative',
+        }}>
+          {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
+            <Image
+              src={artifact.preview_url || artifact.file_url!}
+              fill
+              unoptimized
+              style={{ objectFit: 'cover' }}
+              alt={artifact.title}
+            />
+          ) : (
+            <FileTypeIcon ext={ext} size={48} />
+          )}
         </div>
 
-        {/* Name + Meta */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap'
+        {/* Title */}
+        <div style={{
+          fontFamily: 'var(--font-dm-sans, sans-serif)',
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--text)',
+          lineHeight: 1.35,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+        }}>
+          {artifact.title}
+        </div>
+
+        {/* Department badge + Goal tag */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{
+            fontSize: 10,
+            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            color: deptBadgeColor,
+            background: `${deptBadgeColor}15`,
+            border: `1px solid ${deptBadgeColor}25`,
+            borderRadius: 5,
+            padding: '3px 8px',
           }}>
-            <span className="artifact-name" style={{ maxWidth: 280 }}>
-              {displayFilename}
+            {artifact.department_slug}
+          </span>
+          {goalTitle && (
+            <span style={{
+              fontSize: 10,
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              color: 'var(--text-4)',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 5,
+              padding: '3px 8px',
+            }}>
+              {goalTitle}
             </span>
-            <ExtBadge ext={ext} />
-          </div>
-          {artifact.title && (
-            <div className="artifact-meta" style={{ marginBottom: 4 }}>
-              <span style={{ color: 'var(--text-4)' }}>Output:</span>
-              {artifact.title}
-            </div>
           )}
-          <div className="artifact-meta">
-            <span>{artifact.department_slug}</span>
-            <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
-            <span>{createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-            {fileSize && (
-              <>
-                <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
-                <span style={{ color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
-                  {fileSize}
-                </span>
-              </>
+        </div>
+
+        {/* Meta row */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 11,
+          color: 'var(--text-4)',
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          marginTop: 'auto',
+        }}>
+          <span>{timeAgo(artifact.created_at)}</span>
+          <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+          <ExtBadge ext={ext} />
+          {fileSize && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+              <span>{fileSize}</span>
+            </>
+          )}
+          <div style={{ marginLeft: 'auto', position: 'relative' }}>
+            <button
+              onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-4)',
+                cursor: 'pointer',
+                padding: '4px 6px',
+                borderRadius: 4,
+                fontSize: 16,
+                lineHeight: 1,
+              }}
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div style={{
+                position: 'absolute',
+                bottom: '100%',
+                right: 0,
+                background: 'rgba(30,30,36,0.98)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                padding: '6px 0',
+                minWidth: 140,
+                zIndex: 50,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              }}>
+                <button
+                  onClick={downloadArtifact}
+                  disabled={downloading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 14px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-2)',
+                    fontSize: 12,
+                    fontFamily: 'var(--font-dm-sans, sans-serif)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  Download
+                </button>
+                <button
+                  onClick={deleteArtifact}
+                  disabled={isDeleting}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 14px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,90,90,0.9)',
+                    fontSize: 12,
+                    fontFamily: 'var(--font-dm-sans, sans-serif)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                  </svg>
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <button
-            id={`download-artifact-${artifact.id}`}
-            onClick={downloadArtifact}
-            disabled={downloading}
-            className="btn-primary-crost"
-            title={`Download ${displayFilename}`}
-            style={{ 
-              background: downloading ? 'rgba(0,255,170,0.5)' : 'var(--accent)',
-              padding: '6px 12px',
-              fontSize: '11px'
-            }}
-          >
-            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-            </svg>
-            {downloading ? '…' : 'Download'}
-          </button>
-          <button
-            id={`delete-artifact-${artifact.id}`}
-            onClick={deleteArtifact}
-            disabled={isDeleting}
-            className="btn-reject"
-            title="Delete artifact"
-            style={{ 
-              padding: '6px 10px',
-              opacity: isDeleting ? 0.5 : 1
-            }}
-          >
-            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-            </svg>
-          </button>
-        </div>
       </div>
 
-      {/* ── Detail Drawer ─────────────────────────────────────────── */}
+      {/* ── Detail Drawer ─────────────────────────────────────── */}
       {showDrawer && (
         <div
           style={{
@@ -471,7 +555,7 @@ export function ArtifactCard({ artifact }: Props) {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: iconColor, flexShrink: 0,
                 }}>
-                  <FileTypeIcon ext={ext} size={22} />
+                  <FileTypeIcon ext={ext} size={28} />
                 </div>
                 <div>
                   <div style={{
@@ -506,125 +590,172 @@ export function ArtifactCard({ artifact }: Props) {
               </button>
             </div>
 
-            {/* Metadata Row */}
+            {/* Tabs */}
             <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr',
-              gap: 0,
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              display: 'flex',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              padding: '0 28px',
+              gap: 20,
             }}>
-              {[
-                { label: 'DEPARTMENT', value: artifact.department_slug },
-                { label: 'CREATED', value: createdAt.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }) },
-                { label: 'TYPE', value: artifact.artifact_type },
-                { label: 'FORMAT', value: ext.toUpperCase() },
-              ].map(({ label, value }) => (
-                <div key={label} style={{
-                  padding: '14px 20px',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
-                  borderRight: '1px solid rgba(255,255,255,0.04)',
-                }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 4 }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
-                    {value}
-                  </div>
-                </div>
+              {(['preview', 'details'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: '14px 0 12px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: `2px solid ${activeTab === tab ? 'var(--accent)' : 'transparent'}`,
+                    color: activeTab === tab ? 'var(--text)' : 'var(--text-4)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-dm-sans, sans-serif)',
+                    cursor: 'pointer',
+                    textTransform: 'capitalize',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {tab}
+                </button>
               ))}
             </div>
 
-            {/* Preview */}
+            {/* Tab Content */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 12, overflow: 'hidden' }}>
-                  <Image src={artifact.preview_url || artifact.file_url!} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
-                </div>
-              ) : (
+              {activeTab === 'preview' ? (
                 <>
-                  {/* PDF: native browser inline viewer */}
-                  {artifact.artifact_type === 'pdf' && artifact.file_url && (
-                    <iframe
-                      src={artifact.file_url}
-                      style={{ width: '100%', height: 420, border: 'none', borderRadius: 10, background: '#fff' }}
-                      title={displayFilename}
-                    />
-                  )}
+                  {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 12, overflow: 'hidden' }}>
+                      <Image src={artifact.preview_url || artifact.file_url!} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
+                    </div>
+                  ) : (
+                    <>
+                      {/* PDF: native browser inline viewer */}
+                      {artifact.artifact_type === 'pdf' && artifact.file_url && (
+                        <iframe
+                          src={artifact.file_url}
+                          style={{ width: '100%', height: 420, border: 'none', borderRadius: 10, background: '#fff' }}
+                          title={displayFilename}
+                        />
+                      )}
 
-                  {/* PPTX / DOCX / XLSX: Office Online embed */}
-                  {['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
-                    <iframe
-                      src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
-                      style={{ width: '100%', height: 420, border: 'none', borderRadius: 10 }}
-                      title={displayFilename}
-                      sandbox="allow-scripts allow-same-origin allow-popups"
-                    />
-                  )}
+                      {/* PPTX / DOCX / XLSX: Office Online embed */}
+                      {['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
+                        <iframe
+                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
+                          style={{ width: '100%', height: 420, border: 'none', borderRadius: 10 }}
+                          title={displayFilename}
+                          sandbox="allow-scripts allow-same-origin allow-popups"
+                        />
+                      )}
 
-                  {/* Data / code / unknown: show "native file" badge */}
-                  {!['pdf', 'presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
-                    <div style={{
-                      padding: '16px 18px',
-                      background: `${iconBg}`,
-                      border: `1px solid ${iconColor}20`,
-                      borderRadius: 12,
-                      display: 'flex', alignItems: 'center', gap: 14,
-                    }}>
-                      <div style={{ color: iconColor }}>
-                        <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                          <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                      </div>
+                      {/* Data / code / unknown: show "native file" badge */}
+                      {!['pdf', 'presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
+                        <div style={{
+                          padding: '16px 18px',
+                          background: `${iconBg}`,
+                          border: `1px solid ${iconColor}20`,
+                          borderRadius: 12,
+                          display: 'flex', alignItems: 'center', gap: 14,
+                        }}>
+                          <div style={{ color: iconColor }}>
+                            <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                              <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>Native File Available</div>
+                            <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 2 }}>
+                              Exported as <strong style={{ color: iconColor }}>.{ext}</strong> — download to open in your native application.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div>
-                        <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>Native File Available</div>
-                        <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 2 }}>
-                          Exported as <strong style={{ color: iconColor }}>.{ext}</strong> — download to open in your native application.
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                          CONTENT PREVIEW
+                        </div>
+                        <div style={{
+                          fontFamily: 'Inter, sans-serif',
+                          fontSize: 14,
+                          lineHeight: 1.75,
+                          color: 'var(--text-2)',
+                          whiteSpace: 'pre-wrap',
+                          background: 'rgba(255,255,255,0.02)',
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          borderRadius: 10,
+                          padding: '16px 18px',
+                        }}>
+                          {previewText}
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                      CONTENT PREVIEW
-                    </div>
-                    <div style={{
-                      fontFamily: 'Inter, sans-serif',
-                      fontSize: 14,
-                      lineHeight: 1.75,
-                      color: 'var(--text-2)',
-                      whiteSpace: 'pre-wrap',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.05)',
-                      borderRadius: 10,
-                      padding: '16px 18px',
-                    }}>
-                      {previewText}
-                    </div>
-                  </div>
-
-                  {artifact.metadata && Object.keys(artifact.metadata).length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                        METADATA
-                      </div>
-                      <pre style={{
-                        background: 'rgba(0,0,0,0.3)',
-                        padding: '16px 18px',
-                        borderRadius: 10,
-                        fontSize: 11,
-                        color: 'var(--text-3)',
-                        overflow: 'auto',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        margin: 0,
-                      }}>
-                        {JSON.stringify(artifact.metadata, null, 2)}
-                      </pre>
-                    </div>
+                    </>
                   )}
                 </>
+              ) : (
+                /* Details Tab */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{
+                    fontSize: 10, color: 'var(--text-4)',
+                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    letterSpacing: '0.08em',
+                  }}>
+                    METADATA
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '120px 1fr',
+                    gap: '10px 0',
+                    fontSize: 13,
+                    fontFamily: 'Inter, sans-serif',
+                  }}>
+                    {[
+                      ['Type', artifact.artifact_type],
+                      ['Format', ext.toUpperCase()],
+                      ['Created by', artifact.department_slug],
+                      ['Created at', createdAt.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })],
+                      ['Size', fileSize || '—'],
+                      ['Goal', goalTitle || '—'],
+                      ['Task', artifact.task_id ? artifact.task_id.slice(0, 8) + '…' : '—'],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'contents' }}>
+                        <div style={{ color: 'var(--text-4)', fontWeight: 500 }}>{label}</div>
+                        <div style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {artifact.skills_used && artifact.skills_used.length > 0 && (
+                    <div>
+                      <div style={{
+                        fontSize: 10, color: 'var(--text-4)',
+                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        letterSpacing: '0.08em', marginBottom: 10,
+                      }}>
+                        SKILLS USED
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {artifact.skills_used.map(skill => (
+                          <span key={skill} style={{
+                            fontSize: 11,
+                            color: 'var(--text-3)',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 5,
+                            padding: '3px 8px',
+                            fontFamily: 'var(--font-dm-mono, monospace)',
+                          }}>
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
-              
+
               {/* Citations — Sources footer (Spec §9) */}
               <CitationsSection sources={artifact.sources} />
 

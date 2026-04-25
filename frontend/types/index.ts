@@ -177,7 +177,11 @@ export interface Artifact {
   // Spec §9: citations are non-negotiable — every artefact populates sources.
   sources: ArtifactSources
   suggested_actions?: string[]    // Array of UUIDs linking to suggested_actions table
-  created_by?: string
+  // Gallery v1: file size in bytes for display
+  file_size: number | null
+  // Gallery v1: task_id for lineage tracking (Goal → Task → Artefact)
+  task_id: string | null
+  created_by: string
   created_at: string
 }
 
