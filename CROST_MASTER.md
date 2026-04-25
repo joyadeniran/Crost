@@ -3,9 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.28  
+**Current Version:** 11.29  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Artefacts Gallery v1: grid layout, tabbed detail drawer, file_size/task_id schema, sidebar badge.
+**Deployment Status:** ✅ COMPLETE — Badge count sync, cross-user realtime fix, error handling.
+
+---
+
+## Session v11.29 — Badge Count Sync & Realtime Fix
+**Date**: 2026-04-25 **Status**: ✅  
+**Impact**: Fixed artifact badge count mismatch, hardened pending-approval queries against dual user columns, and eliminated cross-user count contamination in the realtime subscription.
+
+### What Was Built
+1. **Artifact badge count sync** (`layout.tsx`): Replaced `count: 'exact'` (which returned raw unfiltered count) with a `select('id, title, body')` query that applies the same client-side filter as `artifacts/page.tsx` — excluding artifacts whose `title` or `body` starts with `[TOOL EXECUTION FAILED`. Badge now matches the grid count.
+2. **Pending count dual-column query** (`layout.tsx`): Server-side pending approval query now checks both `created_by` and `user_id` via `.or()`, matching the browser-side refresh in `LayoutStoreHydrator`. Eliminates silent under-counting when legacy rows only have `user_id` populated.
+3. **Error handling** (`layout.tsx`): Added silent `console.error` logging for `pendingResult.error` and `artifactListResult.error` — layout no longer swallows DB failures.
+4. **Realtime subscription fix** (`LayoutStoreHydrator`): Replaced optimistic increment/decrement logic with a full `refreshCount()` re-fetch on every `approval_queue` change. The old code blindly adjusted the counter for ALL database events, leaking counts across users. The new approach is slightly more chatty but always correct.
+
+### Files Changed
+- `frontend/app/dashboard/layout.tsx`
+- `frontend/components/providers/LayoutStoreHydrator.tsx`
 
 ---
 
