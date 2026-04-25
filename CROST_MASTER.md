@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.23  
+**Current Version:** 11.24  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Approval chip polling fix; chips now resolve within 5 s of approval execution (v11.23).
+**Deployment Status:** ✅ COMPLETE — /tool slash commands now execute end-to-end; suggested actions generated and shown in CommandThread (v11.24).
+
+---
+
+## Session v11.24 — /tool Slash Command End-to-End Fix
+**Date:** April 25, 2026  **Status:** ✅  
+**Impact:** `/knowledge_base_search` and `/gmail.send_email` (and all /tool commands) now execute correctly end-to-end; suggested actions appear in the War Room CommandThread after task completion.
+### What Was Built
+1. `execute-tool-call.ts`: Expanded internal tool bypass to recognise `knowledge_base_search` by service name (not just `service='internal'`); added `params.text` fallback so raw `/knowledge_base_search <text>` parses correctly
+2. `execute-tool-call.ts`: Changed `goalId: string` → `string | null` throughout; fixed storage path for null goalId (`direct/<userId>/`); `handleToolResultArchiving` now returns `{ artifactId }` and calls `generateAndInsertSuggestedActions` after artifact creation
+3. `invoke/route.ts`: Fixed `goal_id ?? ''` → `goal_id || null` (empty string caused UUID type error in `tool_executions`); returns `artifact_id` in response
+4. `WarRoom.tsx`: Added `goal_id` and `artifact_id` to `InlineMessage`; stores them from @dept / /tool responses; added `DeferredMissionReportChips` component (polls every 3 s for mission report by goal_id, then renders chips); CommandThread renders chips once response loads
+### Files Changed
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/app/api/tools/invoke/route.ts`
+- `frontend/components/war-room/WarRoom.tsx`
 
 ---
 

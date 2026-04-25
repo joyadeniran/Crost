@@ -273,6 +273,9 @@ type InlineMessage = {
   input: string
   response?: string
   isLoading: boolean
+  // Populated after completion so CommandThread can show mission report chips
+  goal_id?: string
+  artifact_id?: string
   // Approval state — set when dept returns approval_requested: true
   approvalPending?: boolean
   approvalDecision?: 'approved' | 'rejected'
@@ -289,6 +292,41 @@ type InlineMessage = {
 }
 
 const COMMAND_MESSAGES_STORAGE_KEY = 'crost-war-room-pending-approvals'
+
+// Polls for the mission report memo created by runOrcReport, then shows chips.
+// Only mounts when a goal_id is available and the response has loaded.
+function DeferredMissionReportChips({ goalId }: { goalId: string }) {
+  const [reportId, setReportId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let attempts = 0
+    const MAX_ATTEMPTS = 10 // poll for up to ~30 s
+
+    async function poll() {
+      if (cancelled || attempts >= MAX_ATTEMPTS) return
+      attempts++
+      try {
+        const { data } = await supabaseClient
+          .from('company_memos')
+          .select('id')
+          .eq('goal_id', goalId)
+          .or('title.ilike.[Mission Report]%,title.ilike.[ORC REPORT]%')
+          .maybeSingle()
+        if (data?.id) {
+          if (!cancelled) setReportId(data.id)
+          return
+        }
+      } catch { /* ignore */ }
+      setTimeout(poll, 3000)
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [goalId])
+
+  if (!reportId) return null
+  return <SuggestedActionChips entityType="mission_report" entityId={reportId} />
+}
 
 // Inline approve/reject card — shown instead of raw JSON when approval_requested
 function ApprovalCard({
@@ -591,6 +629,18 @@ function CommandThread({
               }}>
                 {msg.response}
               </div>
+            )}
+
+            {/* Suggested next steps — shown once response is loaded */}
+            {!msg.isLoading && !msg.approvalPending && (
+              <>
+                {msg.artifact_id && (
+                  <SuggestedActionChips entityType="artifact" entityId={msg.artifact_id} />
+                )}
+                {msg.goal_id && !msg.artifact_id && (
+                  <DeferredMissionReportChips goalId={msg.goal_id} />
+                )}
+              </>
             )}
           </div>
         )
@@ -1859,7 +1909,7 @@ export function WarRoom() {
           } : m))
         } else {
           const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${json.error}` : JSON.stringify(json))
-          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false, goal_id: json.goal_id ?? undefined } : m))
         }
       } catch (err: any) {
         setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
@@ -1899,7 +1949,10 @@ export function WarRoom() {
           } else {
             response = typeof json.result === 'string' ? json.result : JSON.stringify(json.result, null, 2)
           }
-          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false } : m))
+          setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
+            ...m, response, isLoading: false,
+            artifact_id: json.artifact_id ?? undefined,
+          } : m))
         }
       } catch (err: any) {
         setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
