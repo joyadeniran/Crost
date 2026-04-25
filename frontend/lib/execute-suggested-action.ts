@@ -147,7 +147,10 @@ export async function executeSuggestedAction(
     return { success: false, error: `Suggested action not found: ${fetchErr?.message}` }
   }
 
-  if (actionRow.status !== 'generated') {
+  // Accept both 'suggested' (default from generateAndInsertSuggestedActions)
+  // and 'generated' (legacy label) as valid start states.
+  const EXECUTABLE_STATUSES = new Set(['suggested', 'generated', 'tapped'])
+  if (!EXECUTABLE_STATUSES.has(actionRow.status)) {
     return { success: false, error: `Action already ${actionRow.status}` }
   }
 
@@ -181,24 +184,34 @@ export async function executeSuggestedAction(
       userId,
       departmentId: 'executive',
       taskId: actionRow.task_id ?? actionId,
-      goalId: goalId ?? actionRow.goal_id ?? '',
+      goalId: goalId ?? actionRow.goal_id ?? null,
       toolCall,
     })
 
     // 6. Thread outcomes back
-    if (result.status === 'requires_approval') {
+    if ((result as any).status === 'missing_connection') {
+      await markFailed(supabase, actionId, userId, (result as any).message ?? 'Tool not connected')
+      return { success: false, error: (result as any).message ?? 'Tool not connected' }
+    }
+
+    if ((result as any).status === 'permission_denied') {
+      await markFailed(supabase, actionId, userId, (result as any).message ?? 'Permission denied')
+      return { success: false, error: (result as any).message ?? 'Permission denied' }
+    }
+
+    if ((result as any).status === 'requires_approval') {
       await supabase
         .from('suggested_actions')
-        .update({ status: 'dispatched', approval_id: result.execution_id })
+        .update({ status: 'dispatched', approval_id: (result as any).execution_id })
         .eq('id', actionId)
 
       await emitEvent(userId, 'suggested_action_approval_needed', {
         action_id: actionId,
         action_slug: actionRow.action_slug,
-        approval_id: result.execution_id,
+        approval_id: (result as any).execution_id,
       })
 
-      return { success: true, result: { status: 'approval_needed', execution_id: result.execution_id } }
+      return { success: true, result: { status: 'approval_needed', execution_id: (result as any).execution_id } }
     }
 
     // Completed successfully
