@@ -28,19 +28,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieStore = cookies()
   const cookieMode = cookieStore.get('env_mode')?.value
 
-  const [pendingResult, eventsResult, configResult, modeResult, artifactCountResult] = await Promise.all([
-    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', user.id),
+  const [pendingResult, eventsResult, configResult, modeResult, artifactListResult] = await Promise.all([
+    // Check both user_id and created_by for robustness — some legacy rows may only have one column populated
+    supabase.from('approval_queue').select('id, user_id, created_by').eq('status', 'pending').or(`created_by.eq.${user.id},user_id.eq.${user.id}`),
     supabase.from('event_log').select('*').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
     supabase.from('system_config').select('key, value').in('key', ['company_name', 'company_identity']).eq('created_by', user.id),
     // Only hit DB for mode if no cookie yet
     cookieMode
       ? Promise.resolve({ data: null, error: null })
       : supabase.from('system_config').select('value').eq('key', 'env_mode').eq('created_by', user.id).single(),
-    supabase.from('artifacts').select('id', { count: 'exact', head: true }).eq('created_by', user.id),
+    // Fetch artifact titles/body so we can exclude failed tool executions (matches page.tsx filter)
+    supabase.from('artifacts').select('id, title, body').eq('created_by', user.id).limit(200),
   ])
 
+  // Log errors silently — don't crash the layout, but surface for debugging
+  if (pendingResult.error) console.error('[Layout] pending count error:', pendingResult.error.message)
+  if (artifactListResult.error) console.error('[Layout] artifact count error:', artifactListResult.error.message)
+
   const pendingCount = pendingResult.data?.length ?? 0
-  const artifactCount = artifactCountResult.count ?? 0
+  // Match the client-side filter in artifacts/page.tsx: exclude failed tool execution artifacts
+  const artifactCount = (artifactListResult.data ?? []).filter(
+    (a: any) => !a.body?.startsWith('[TOOL EXECUTION FAILED') && !a.title?.startsWith('[TOOL EXECUTION FAILED')
+  ).length
   const events = (eventsResult.data ?? []) as EventLogEntry[]
   const companyName = configResult.data?.find((row) => row.key === 'company_name')?.value
   const companyIdentity = configResult.data?.find((row) => row.key === 'company_identity')?.value

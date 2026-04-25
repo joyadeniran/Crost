@@ -40,33 +40,24 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     }
   }, [setPendingApprovalCount])
 
-  // Realtime subscription — update count from payload to avoid a REST roundtrip
-  // on every DB change. Falls back to a full re-fetch only when status is ambiguous.
+  // Realtime subscription — re-fetch on any change instead of optimistic
+  // increment/decrement. This avoids cross-user count contamination (payload
+  // does not include user_id/created_by) and race conditions from rapid changes.
   useEffect(() => {
     const channel = supabaseClient
       .channel('layout-approvals-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'approval_queue' },
-        (payload) => {
-          const newRow = payload.new as { status?: string } | null
-          const oldRow = payload.old as { status?: string } | null
-          const current = useCrostStore.getState().pendingApprovalCount
-          if (payload.eventType === 'INSERT' && newRow?.status === 'pending') {
-            setPendingApprovalCount(current + 1)
-          } else if (payload.eventType === 'DELETE' && oldRow?.status === 'pending') {
-            setPendingApprovalCount(Math.max(0, current - 1))
-          } else if (payload.eventType === 'UPDATE') {
-            const wasP = oldRow?.status === 'pending'
-            const isP = newRow?.status === 'pending'
-            if (wasP && !isP) setPendingApprovalCount(Math.max(0, current - 1))
-            else if (!wasP && isP) setPendingApprovalCount(current + 1)
-          }
+        () => {
+          // Always refresh — payload doesn't tell us which user owns the row,
+          // so optimistic updates would leak counts across users.
+          refreshCount()
         }
       )
       .subscribe()
     return () => { supabaseClient.removeChannel(channel) }
-  }, [setPendingApprovalCount])
+  }, [refreshCount])
 
   // 60-second fallback — reconciles count drift in envs where Realtime is unreliable
   useEffect(() => {
