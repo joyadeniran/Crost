@@ -1120,6 +1120,78 @@ function PlanCard({
 
 // ─── SynthesisReportCard (Phase 4) ────────────────────────────────────────────
 
+function renderInline(text: string) {
+  // Simple bold renderer
+  const parts = text.split(/(\*\*.*?\*\*)/)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ color: 'var(--text)', fontWeight: 600 }}>{part.slice(2, -2)}</strong>
+    }
+    return part
+  })
+}
+
+function MarkdownLite({ text }: { text: string }) {
+  if (!text) return null
+
+  // Replace legacy Post-mortem string
+  const processed = text.replace(/Post-mortem/g, 'Mission Report')
+
+  // Split by double newline for paragraphs/blocks
+  const blocks = processed.split(/\n\n+/)
+
+  return (
+    <div className="markdown-lite">
+      {blocks.map((block, i) => {
+        const trimmed = block.trim()
+        if (!trimmed) return null
+
+        // Headers
+        if (trimmed.startsWith('### ')) return <h3 key={i}>{renderInline(trimmed.slice(4))}</h3>
+        if (trimmed.startsWith('## ')) return <h2 key={i}>{renderInline(trimmed.slice(3))}</h2>
+        if (trimmed.startsWith('# ')) return <h1 key={i}>{renderInline(trimmed.slice(2))}</h1>
+
+        // Unordered Lists
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const items = trimmed.split(/\n(?=[- *])/)
+          return (
+            <ul key={i}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.trim().replace(/^[- *]\s+/, ''))}</li>
+              ))}
+            </ul>
+          )
+        }
+
+        // Ordered Lists
+        if (/^\d+\.\s/.test(trimmed)) {
+          const items = trimmed.split(/\n(?=\d+\.\s)/)
+          return (
+            <ol key={i}>
+              {items.map((item, j) => (
+                <li key={j}>{renderInline(item.trim().replace(/^\d+\.\s/, ''))}</li>
+              ))}
+            </ol>
+          )
+        }
+
+        // Regular paragraph (can contain single \n)
+        const lines = trimmed.split('\n')
+        return (
+          <p key={i}>
+            {lines.map((line, j) => (
+              <span key={j}>
+                {renderInline(line)}
+                {j < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss: () => void }) {
   const [report, setReport] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -1134,7 +1206,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
           .eq('source_type', 'orchestrator')
           .order('created_at', { ascending: false })
           .limit(1)
-        
+
         if (memos && memos.length > 0) {
           setReport(memos[0])
         }
@@ -1155,27 +1227,27 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
       {/* Background Glow */}
       <div className="synthesis-glow" />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <span style={{
             fontSize: 10,
             fontWeight: 700,
             color: 'var(--accent)',
-            letterSpacing: '0.1em',
+            letterSpacing: '0.15em',
             textTransform: 'uppercase',
             display: 'block',
-            marginBottom: 4,
+            marginBottom: 6,
             fontFamily: 'var(--font-dm-mono, monospace)',
           }}>
-            Mission Report
+            Strategic Output
           </span>
           <h3 style={{ 
             fontFamily: 'var(--font-syne, sans-serif)', 
-            fontSize: 20, 
+            fontSize: 24, 
             fontWeight: 700,
             color: 'var(--text)',
             margin: 0,
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.02em',
           }}>
             Mission Report
           </h3>
@@ -1183,52 +1255,61 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
         <button 
           onClick={onDismiss}
           className="topbar-control-btn"
-          style={{ width: '28px', height: '28px', border: 'none', background: 'var(--bg-3)' }}
+          style={{ 
+            width: '32px', 
+            height: '32px', 
+            border: 'none', 
+            background: 'var(--bg-3)',
+            borderRadius: '50%',
+            fontSize: '18px',
+            color: 'var(--text-3)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-4)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-3)'}
         >
           ×
         </button>
       </div>
 
-      <div className="markdown-content" style={{
-        fontFamily: 'var(--font-dm-sans, sans-serif)',
-        fontSize: 14,
-        color: 'var(--text-2)',
-        lineHeight: 1.7,
-        whiteSpace: 'pre-wrap',
-      }}>
-        {report.body?.replace(/Post-mortem/g, 'Mission Report')}
+      <div className="markdown-content">
+        <MarkdownLite text={report.body} />
       </div>
 
       <div style={{
-        marginTop: 24,
-        paddingTop: 16,
-        borderTop: '1px solid var(--border)',
+        marginTop: 32,
+        paddingTop: 20,
+        borderTop: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between', // Changed to split orchestrator mark and chips
+        justifyContent: 'space-between',
         gap: 12,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 32,
-            height: 32,
-            borderRadius: '10px',
+            width: 36,
+            height: 36,
+            borderRadius: '12px',
             background: 'linear-gradient(135deg, var(--accent) 0%, var(--blue) 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 14,
-            boxShadow: '0 4px 12px rgba(0, 212, 170, 0.2)',
+            fontSize: 16,
+            boxShadow: '0 4px 15px rgba(0, 212, 170, 0.25)',
           }}>
             🧠
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
-            <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Chief of Staff Pass</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
+            <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>Chief of Staff Pass</div>
           </div>
         </div>
       </div>
-      
+
       {/* Suggest Contextual Follow-ups per §6.1 */}
       {report.id && (
         <SuggestedActionChips entityType="mission_report" entityId={report.id} />
