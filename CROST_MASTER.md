@@ -3,9 +3,23 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.22  
+**Current Version:** 11.23  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Mission Report UI/formatting improved with MarkdownLite (v11.22).
+**Deployment Status:** ✅ COMPLETE — Approval chip polling fix; chips now resolve within 5 s of approval execution (v11.23).
+
+---
+
+## Session v11.23 — Approval Chip Polling Fix
+**Date:** April 25, 2026  **Status:** ✅  
+**Impact:** Chips stuck in "Pending approval" now resolve to "Action Executed" within 5 s of the approval being executed, without a page reload; completed actions flow into Mission Report via the existing approval→chain-reaction path.
+### What Was Built
+1. `SuggestedActionChips`: added 3 s polling loop (active only while `chipState === 'approval'`), removed premature `onDone` timeout, restored `approval` state on mount when DB row is `approved`, added `'approved'` to status fetch filter
+2. `approvals/[id]/route.ts`: after execution success/failure, update the linked `suggested_actions` row via `approval.tool_execution_id → suggested_actions.approval_id`
+3. `execute-tool-call.ts`: fixed `approval_queue` insertion — `action_type` is now `fullyQualifiedTool` (e.g. `GMAIL_SEND_EMAIL`) so the approval PATCH handler can resolve and re-execute the Composio action; payload flattened to `{ ...params, __service }` so Composio receives correct parameters
+### Files Changed
+- `frontend/components/suggested-actions/SuggestedActionChips.tsx`
+- `frontend/app/api/approvals/[id]/route.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
 
 ---
 

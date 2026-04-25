@@ -214,6 +214,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           }).eq('id', params.id)
           executionFinalStatus = 'executed'
 
+          // Mark the linked suggested_action chip as completed so the UI can transition
+          if (approval.tool_execution_id) {
+            await supabase.from('suggested_actions')
+              .update({ status: 'completed', resolved_at: new Date().toISOString() })
+              .eq('approval_id', approval.tool_execution_id)
+              .neq('status', 'completed')
+          }
+
           // Note: event_type 'tool_executed' is whitelisted in event_log CHECK constraint
           const { error: logErr } = await supabase.from('event_log').insert({
             department_slug: approval.department_slug,
@@ -274,6 +282,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             status: 'failed',
             execution_result: { error: executionError }
           }).eq('id', params.id)
+
+          if (approval.tool_execution_id) {
+            await supabase.from('suggested_actions')
+              .update({ status: 'failed' })
+              .eq('approval_id', approval.tool_execution_id)
+              .neq('status', 'completed')
+          }
 
           // Mark the associated goal task as failed so it doesn't stay stuck in 'running'.
           const failedTaskId = (approval.payload as any)?.__task_id
