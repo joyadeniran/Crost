@@ -3,9 +3,23 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.26  
+**Current Version:** 11.27  
 **Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Mission Report: fixed truncation, prompt tone, and markdown header output (v11.26).
+**Deployment Status:** ✅ COMPLETE — Eliminated approval_queue REST polling storm; payload-based count updates (v11.27).
+
+---
+
+## Session v11.27 — Approval Queue REST Polling Elimination
+**Date**: 2026-04-25 **Status**: ✅  
+**Impact**: Eliminated ~100% of Realtime-triggered REST calls to `approval_queue`. During active missions, every DB change previously fired a full Supabase REST roundtrip; now count is derived directly from the Realtime payload. Fallback interval extended from 15s to 60s. Removed duplicate subscription in `RealtimeProvider`.
+### What Was Built
+1. `LayoutStoreHydrator`: Realtime callback now reads INSERT/UPDATE/DELETE payload to adjust count in-place — zero REST calls on DB changes
+2. `LayoutStoreHydrator`: uses `useCrostStore.getState()` to avoid stale closure on count
+3. `LayoutStoreHydrator`: fallback `setInterval` extended from 15s → 60s
+4. `RealtimeProvider`: removed redundant `approval_queue` subscription that also fired REST queries on every change
+### Files Changed
+- `frontend/components/providers/LayoutStoreHydrator.tsx`
+- `frontend/components/providers/RealtimeProvider.tsx`
 
 ---
 

@@ -40,18 +40,37 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     }
   }, [setPendingApprovalCount])
 
-  // Realtime subscription for instant bell updates
+  // Realtime subscription — update count from payload to avoid a REST roundtrip
+  // on every DB change. Falls back to a full re-fetch only when status is ambiguous.
   useEffect(() => {
     const channel = supabaseClient
       .channel('layout-approvals-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_queue' }, refreshCount)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'approval_queue' },
+        (payload) => {
+          const newRow = payload.new as { status?: string } | null
+          const oldRow = payload.old as { status?: string } | null
+          const current = useCrostStore.getState().pendingApprovalCount
+          if (payload.eventType === 'INSERT' && newRow?.status === 'pending') {
+            setPendingApprovalCount(current + 1)
+          } else if (payload.eventType === 'DELETE' && oldRow?.status === 'pending') {
+            setPendingApprovalCount(Math.max(0, current - 1))
+          } else if (payload.eventType === 'UPDATE') {
+            const wasP = oldRow?.status === 'pending'
+            const isP = newRow?.status === 'pending'
+            if (wasP && !isP) setPendingApprovalCount(Math.max(0, current - 1))
+            else if (!wasP && isP) setPendingApprovalCount(current + 1)
+          }
+        }
+      )
       .subscribe()
     return () => { supabaseClient.removeChannel(channel) }
-  }, [refreshCount])
+  }, [setPendingApprovalCount])
 
-  // 15-second polling fallback — covers environments where Realtime isn't enabled
+  // 60-second fallback — reconciles count drift in envs where Realtime is unreliable
   useEffect(() => {
-    const poll = setInterval(refreshCount, 15_000)
+    const poll = setInterval(refreshCount, 60_000)
     return () => clearInterval(poll)
   }, [refreshCount])
 
