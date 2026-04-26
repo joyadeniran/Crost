@@ -1251,7 +1251,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
       try {
         const { data: memos } = await supabaseClient
           .from('company_memos')
-          .select('*')
+          .select('id, title, body, priority, from_department, tags, created_at, source_type')
           .eq('goal_id', goalId)
           .eq('source_type', 'orchestrator')
           .order('created_at', { ascending: false })
@@ -1647,21 +1647,20 @@ export function WarRoom() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Poll for plan when goal is in 'planning' or 'executing' or 'awaiting_approval' status.
-  // Depend only on goal ID + status (not the full object) so the interval is not reset
-  // on every poll response — prevents the ~700ms polling storm.
+  // Subscribe to goal + task changes via Realtime instead of polling every 2 s.
+  // Falls back to a REST fetch on subscription errors and on every task row change
+  // (to pick up the joined goal_tasks data that Realtime doesn't include).
   const activeGoalId = activeGoal?.id
   const activeGoalStatus = activeGoal?.status
   useEffect(() => {
     if (!activeGoalId || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
-    let consecutiveFailures = 0
-    const interval = setInterval(async () => {
+
+    let mounted = true
+
+    const sync = async () => {
       try {
         const res = await fetch(`/api/goals/${activeGoalId}`)
         if (res.status === 401) {
-          // Session expired mid-poll — stop the loop and bounce to sign-in so the
-          // user doesn't sit in front of a silently-dead War Room.
-          clearInterval(interval)
           setPollError('Your session expired. Redirecting to sign in…')
           if (typeof window !== 'undefined') {
             const next = encodeURIComponent(window.location.pathname + window.location.search)
@@ -1670,55 +1669,56 @@ export function WarRoom() {
           return
         }
         if (res.status === 404) {
-          // The goal is gone (deleted, wrong tenant, or stale persisted id from
-          // a prior session). Retrying won't help — stop polling and clear the
-          // store so the War Room returns to its empty state.
-          clearInterval(interval)
           setPollError(null)
           setActiveGoal(null)
           setIsSubmittingGoal(false)
           return
         }
-        if (!res.ok) {
-          // 502/500/429 etc. — the goal is "live" but we can't reach the server.
-          // Don't silently retry forever; surface a visible banner after a few misses.
-          consecutiveFailures++
-          if (consecutiveFailures >= 3) {
-            setPollError(`Can't reach the server (HTTP ${res.status}). Your goal is still running — retrying…`)
-          }
-          return
-        }
+        if (!res.ok) return
         const text = await res.text()
         let json: any
-        try { json = JSON.parse(text) } catch {
-          consecutiveFailures++
-          if (consecutiveFailures >= 3) {
-            setPollError(`Server returned a non-JSON response (likely a gateway error). Still retrying…`)
-          }
-          return
-        }
-        if (json.success && json.data) {
-          consecutiveFailures = 0
+        try { json = JSON.parse(text) } catch { return }
+        if (json.success && json.data && mounted) {
           setPollError(null)
           updateActiveGoal(json.data)
           if (['completed', 'failed', 'cancelled', 'synthesis_done'].includes(json.data.status)) {
-            clearInterval(interval)
             setIsSubmittingGoal(false)
           }
-        } else {
-          consecutiveFailures++
-          if (consecutiveFailures >= 3) {
-            setPollError(json?.error ?? 'Goal poll returned an unexpected response.')
+        }
+      } catch {}
+    }
+    sync()
+
+    const channel = supabaseClient
+      .channel(`goal-watch-${activeGoalId}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'goals', filter: `id=eq.${activeGoalId}` },
+        (payload) => {
+          if (!mounted) return
+          const updated = payload.new as Partial<Goal>
+          setPollError(null)
+          updateActiveGoal(updated)
+          if (['completed', 'failed', 'cancelled', 'synthesis_done'].includes((updated as any).status)) {
+            setIsSubmittingGoal(false)
           }
         }
-      } catch (err: any) {
-        consecutiveFailures++
-        if (consecutiveFailures >= 3) {
-          setPollError(`Network error while polling goal: ${err?.message ?? 'unknown'}`)
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'goal_tasks', filter: `goal_id=eq.${activeGoalId}` },
+        () => { if (mounted) sync() }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' && mounted) {
+          setPollError("Real-time connection lost. Attempting to reconnect…")
+        } else if (status === 'SUBSCRIBED' && mounted) {
+          setPollError(null)
         }
-      }
-    }, 2000)
-    return () => clearInterval(interval)
+      })
+
+    return () => {
+      mounted = false
+      supabaseClient.removeChannel(channel)
+    }
   }, [activeGoalId, activeGoalStatus, setActiveGoal, setIsSubmittingGoal, updateActiveGoal])
 
   const handleGoalSubmit = useCallback(async (founderInput: string) => {

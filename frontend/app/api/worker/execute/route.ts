@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     if (normalizedToolName === 'COMPANY_MEMOS') {
       const { data: memos, error: memoErr } = await supabase
         .from('company_memos')
-        .select('title, body, priority, from_department, created_at')
+        .select('title, priority, from_department, created_at')
         .eq('goal_id', task.goal_id)
         .order('created_at', { ascending: false })
         .limit(args.limit || 10);

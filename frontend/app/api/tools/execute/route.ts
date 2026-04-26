@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       company_memos: async (p, ctx) => {
         const query = supabase
           .from('company_memos')
-          .select('title, body, from_department, priority, created_at')
+          .select('title, from_department, priority, created_at')
           .order('created_at', { ascending: false })
           .limit(p.limit || 5)
         

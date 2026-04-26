@@ -72,7 +72,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
     const lastEvent = events[events.length - 1]
     const { data, error } = await supabaseClient
       .from('event_log')
-      .select('*')
+      .select('id, created_at, event_type, description, department_slug, department_id, goal_id, tokens_used')
       .lt('created_at', lastEvent.created_at)
       .order('created_at', { ascending: false })
       .limit(50)

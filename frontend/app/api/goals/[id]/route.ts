@@ -21,7 +21,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('goals')
-      .select('*, goal_tasks(*)')
+      .select(`
+        id, title, founder_input, orchestrator_plan, risk_note, status, outcome,
+        orc_conversation, created_at, updated_at, env_mode_snapshot, orc_session_id,
+        last_status_check, supervision_interval_seconds,
+        goal_tasks (
+          id, goal_id, task_id, dept_slug, action, label, reasoning, params,
+          risk_level, depends_on, model, status, assigned_at, completed_at,
+          orc_notes, created_at, updated_at
+        )
+      `)
       .eq('id', params.id)
       .eq('created_by', user.id)
       .single()

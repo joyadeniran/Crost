@@ -123,26 +123,23 @@ export default async function DashboardPage() {
   )
 
   if (needsHealing.length > 0) {
+    const healedIds = new Set<string>()
     for (const dept of needsHealing) {
       try {
         await supabase
           .from('departments')
           .update({ orc_persona_id: `direct_llm:${dept.slug}` })
           .eq('id', dept.id)
+        healedIds.add(dept.id)
       } catch (e) {
         // Fail silently — DB constraint prevents duplicate direct_llm:slug IDs across different users
         console.warn(`[dashboard] Failed to heal dept ${dept.slug}:`, e)
       }
     }
-    // Re-fetch once to have clean local state for the first render
-    const { data: healed } = await supabase
-      .from('departments')
-      .select('*')
-      .eq('created_by', currentUser.id)
-      .neq('activation_stage', 'deprecated')
-      .neq('slug', 'orchestrator')
-      .order('created_at')
-    deptResult.data = healed
+    // Patch in-memory — avoids a full re-fetch of the departments table
+    deptResult.data = rawDepartments.map(d =>
+      healedIds.has(d.id) ? { ...d, orc_persona_id: `direct_llm:${d.slug}` } : d
+    )
   }
 
   // Also heal the orchestrator specifically (it is excluded from the list query above)

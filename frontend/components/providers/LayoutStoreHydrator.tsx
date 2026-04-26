@@ -68,11 +68,5 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     return () => { supabaseClient.removeChannel(channel) }
   }, [setPendingApprovalCount])
 
-  // 60-second fallback — reconciles count drift in envs where Realtime is unreliable
-  useEffect(() => {
-    const poll = setInterval(refreshCount, 60_000)
-    return () => clearInterval(poll)
-  }, [refreshCount])
-
   return null
 }

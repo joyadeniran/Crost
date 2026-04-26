@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('company_memos')
-      .select('id, title, body, priority, from_department, from_department_id, tags, created_at, read_by, source_type')
+      .select('id, title, priority, from_department, from_department_id, tags, created_at, read_by, source_type')
       .eq('created_by', user.id)
       .order('created_at', { ascending: false })
       .limit(50)

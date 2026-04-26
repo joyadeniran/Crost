@@ -95,29 +95,27 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
     if (chipState === 'needs_input') inputRef.current?.focus()
   }, [chipState])
 
-  // Poll DB every 3 s while waiting for an approval to be executed
+  // Subscribe to status changes while waiting for an approval to be executed
   useEffect(() => {
     if (chipState !== 'approval') return
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await supabaseClient
-          .from('suggested_actions')
-          .select('status')
-          .eq('id', action.id)
-          .single()
-        if (data?.status === 'completed') {
-          clearInterval(interval)
-          setChipState('done')
-          setMessage('Action Executed')
-          onDoneRef.current()
-        } else if (data?.status === 'failed') {
-          clearInterval(interval)
-          setChipState('error')
-          setMessage('Execution failed')
+    const channel = supabaseClient
+      .channel(`chip-watch-${action.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'suggested_actions', filter: `id=eq.${action.id}` },
+        (payload) => {
+          const status = (payload.new as any)?.status
+          if (status === 'completed') {
+            setChipState('done')
+            setMessage('Action Executed')
+            onDoneRef.current()
+          } else if (status === 'failed') {
+            setChipState('error')
+            setMessage('Execution failed')
+          }
         }
-      } catch { /* ignore transient poll errors */ }
-    }, 3000)
-    return () => clearInterval(interval)
+      )
+      .subscribe()
+    return () => { supabaseClient.removeChannel(channel) }
   }, [chipState, action.id])
 
   const isCompleted = action.status === 'completed'
