@@ -33,6 +33,12 @@ This file provides guidance to Claude Code when working with this repository.
 | Orc behaviour rules | §4 |
 | Departments, activation, skills loading | §5 |
 
+### API.md — update protocol
+
+After modifying any route in `frontend/app/api/` — adding, removing, or changing a request/response shape — update `frontend/app/api/API.md` in the same commit.
+
+---
+
 ### CROST_MASTER.md — append protocol
 
 After every session where code is changed, append a new entry:
