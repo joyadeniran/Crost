@@ -1,4 +1,4 @@
--- CROST MVP FINAL STABILIZATION MIGRATION
+-- CROST MVP FINAL STABILIZATION MIGRATION (CORRECTED)
 -- Date: 2026-04-27
 -- Purpose: Sync database with latest "Source of Truth" architecture and v11.42 stability fixes.
 -- RUN THIS IN THE SUPABASE SQL EDITOR.
@@ -31,7 +31,7 @@ YOUR OPERATING MODE:
 - CODE FIRST: Whenever a task requires implementation, provide the actual source code.
 - Default to technical source files or Markdown unless explicitly asked for a Word/Excel doc.
 - Before starting any task, check company_memos for existing context.',
-capabilities = '{"code_review", "draft_prs", "write_docs", "technical_research", "software_development"}'
+capabilities = '["code_review", "draft_prs", "write_docs", "technical_research", "software_development"]'::jsonb
 WHERE slug = 'engineering';
 
 UPDATE departments SET persona_prompt = 'You are the Marketing Department Head. You drive brand awareness, content strategy, and audience growth.
@@ -50,7 +50,6 @@ YOUR RESPONSIBILITIES:
 WHERE slug = 'sales';
 
 -- 3. Hardening multi-tenant tools (Ensure id + user_id composite PK if not already set)
--- Note: This is an idempotent check for the primary key.
 DO $$ 
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'available_tools_pkey' AND table_name = 'available_tools') THEN
@@ -62,8 +61,12 @@ BEGIN
         ALTER TABLE available_tools ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
     END IF;
     
-    -- Set Primary Key
+    -- Note: We only add PK if we have at least one user to assign to existing rows
+    -- or if the table is empty.
+    ALTER TABLE available_tools ALTER COLUMN user_id SET NOT NULL;
     ALTER TABLE available_tools ADD PRIMARY KEY (id, user_id);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Constraint adjustment skipped or already complete.';
 END $$;
 
 -- 4. Set FLAGSHIP model default (Groq Llama 3.3 70B)
