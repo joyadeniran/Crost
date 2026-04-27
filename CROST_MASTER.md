@@ -9,6 +9,36 @@
 
 ---
 
+## Session v11.36 — Resilient Multi-Model Fallback Logic
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Dramatically improved system reliability. A single provider outage (e.g., Groq) no longer crashes the application; the system now automatically falls back to secondary cloud or local providers.
+
+### What Was Built
+1. **Resilient Fallback Chain** (`llm-client.ts`): Implemented a `RESILIENT_FALLBACK_CHAIN` constants list: `Groq Llama 3.3 70B` → `Gemini 2.5 Flash` → `Local Gemma3`.
+2. **Auto-Retry Loop** (`callLLM`): Updated the core LLM wrapper to catch provider errors (rate limits, timeouts, outages) and automatically attempt the next model in the chain, up to 3 total attempts.
+3. **Smart Error Handling**: Ensured that `SYSTEM_LIMIT_EXCEEDED` (quota) errors bypass the retry loop to avoid redundant system calls.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+
+---
+
+## Session v11.35 — Systematic Verification Complete & Model Defaults
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Completed full system verification and established high-performance model defaults.
+
+### What Was Built
+1. **Full Verification**: Completed all 9 sections of the `COMPREHENSIVE_TESTING_LIST.md` via code-level audit.
+2. **Premium Model Defaults**: Updated `model-routing.ts` to use **Groq Llama 3.3 70B** as the flagship model for planning, execution, and utility.
+3. **Context Injection**: Finished the plumbing for Strategic Context in `buildFinalPrompt`, ensuring agents see structured Company Profile and Recent Decisions from the `company_memo` table.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/model-routing.ts`
+- `COMPREHENSIVE_TESTING_LIST.md`
+
+---
+
 ## Session v11.34 — Company Memo Migration & UI Polish
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Established the `company_memo` (singular) table as the structured source of truth (Spec §8) and eliminated all remaining raw JSON leakage in the UI.
