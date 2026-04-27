@@ -201,11 +201,73 @@ export async function addTaskLog(
   }
 
   return data as CompanyMemo
-}
+  }
 
-/**
- * Update department notes
- */
+  /**
+  * Add a decision entry
+  */
+  export async function logDecision(
+  supabase: SupabaseClient,
+  userId: string,
+  decision: DecisionEntry
+  ): Promise<CompanyMemo | null> {
+  const memo = await initializeCompanyMemo(supabase, userId)
+  if (!memo) return null
+
+  const updated = [...(memo.decisions || []), decision]
+
+  const { data, error } = await supabase
+    .from('company_memo')
+    .update({
+      decisions: updated,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[Log Decision Error]', error)
+    return null
+  }
+
+  return data as CompanyMemo
+  }
+
+  /**
+  * Add a strategy entry
+  */
+  export async function addStrategy(
+  supabase: SupabaseClient,
+  userId: string,
+  strategy: StrategyEntry
+  ): Promise<CompanyMemo | null> {
+  const memo = await initializeCompanyMemo(supabase, userId)
+  if (!memo) return null
+
+  const updated = [...(memo.strategies || []), strategy]
+
+  const { data, error } = await supabase
+    .from('company_memo')
+    .update({
+      strategies: updated,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[Add Strategy Error]', error)
+    return null
+  }
+
+  return data as CompanyMemo
+  }
+
+  /**
+  * Get department notes
+  */
 export async function updateDepartmentNotes(
   supabase: SupabaseClient,
   userId: string,

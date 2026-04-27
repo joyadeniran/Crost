@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { updateCompanyProfile } from '@/lib/company-memo'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,14 @@ export async function POST(req: NextRequest) {
     const step = typeof body.step === 'string' ? body.step : 'complete'
 
     if (Object.keys(identity).length > 0) {
+      // DUAL-WRITE: Populate structured company_memo (Spec §8)
+      await updateCompanyProfile(supabase, user.id, {
+        name: identity.companyName || null,
+        industry: identity.businessCategory || null,
+        location: identity.city ? `${identity.city}, ${identity.country}` : identity.country || null,
+        description: identity.businessDescription || null
+      }).catch(err => console.error('[Onboarding-Final] company_memo dual-write failed:', err))
+
       await supabase
         .from('company_profile')
         .upsert({

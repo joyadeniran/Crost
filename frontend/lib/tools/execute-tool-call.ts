@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { runComposioTool, ToolResult } from "./providers/composio";
 import { detectOutputType } from "@/lib/artifact-transformers";
+import { addTaskLog, addArtifactReference } from "../company-memo";
 
 export type ToolCallPayload = {
   service: string;
@@ -312,6 +313,10 @@ async function handleToolResultArchiving({
       if (artifact) {
         artifactId = artifact.id;
         memoBody = `Executed tool: ${result.service}.${result.action}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).`;
+        
+        // DUAL-WRITE: Add artifact reference to singular company_memo (§8)
+        addArtifactReference(supabase, userId, artifact.id).catch(() => {});
+
         // Generate suggested next-step chips for this tool-output artifact (§6.1)
         try {
           const { generateAndInsertSuggestedActions } = await import('../suggested-actions')
@@ -349,7 +354,19 @@ async function handleToolResultArchiving({
     artefact_id: artifactId
   }).eq("id", executionId);
 
-  // Write to Company Memos
+  // DUAL-WRITE: Add task log to singular company_memo (§8)
+  addTaskLog(supabase, userId, {
+    id: executionId,
+    goal_id: goalId || '',
+    dept_slug: departmentId,
+    title: `Tool: ${result.service}.${result.action}`,
+    status: result.success ? 'completed' : 'failed',
+    result: result.summary || memoBody.slice(0, 200),
+    artifact_id: artifactId,
+    created_at: new Date().toISOString()
+  }).catch(() => {});
+
+  // Write to Company Memos (plural/legacy)
   await supabase.from('company_memos').insert({
     from_department: departmentId,
     goal_id: goalId,
