@@ -9,6 +9,21 @@
 
 ---
 
+## Session v11.40 — Dynamic Office-Themed Loading Messages
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Improved user experience in the War Room by replacing hardcoded "ORCHESTRATOR PLANNING" text with warm, office-themed loading copies per spec §2 Beat 8.
+
+### What Was Built
+1. **Dynamic Loading UI** (`WarRoom.tsx`):
+    - Integrated `getRandomProcessingMessage` into the `GoalInput` header and the `PlanningIndicator` overlay.
+    - Implemented stable state management to ensure a single, consistent warm message is displayed per loading session (preventing flickering on re-renders).
+    - Hardcoded technical messages like "Querying departments" have been retired in favor of professional, founder-first copy.
+
+### Files Changed
+- `frontend/components/war-room/WarRoom.tsx`
+
+---
+
 ## Session v11.39 — TypeScript Build Fix (llm-client)
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved fatal TypeScript error during production build on Render.
