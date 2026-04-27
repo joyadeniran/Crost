@@ -1586,7 +1586,7 @@ export function WarRoom() {
       }
     }
     setDecisions(synced)
-  }, [activeGoal?.id])
+  }, [activeGoal?.id, activeGoal?.goal_tasks])
 
   // One-shot: when the active goal flips to 'failed', fetch the last 3 error-level
   // events for that goal so we can surface useful detail inline without making

@@ -4,8 +4,9 @@
 import { Logo } from '@/components/ui/Logo'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get('email')
 
@@ -43,5 +44,21 @@ export default function VerifyEmailPage() {
         </footer>
       </div>
     </main>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={
+      <main className="login-root">
+        <div className="login-container">
+          <div className="login-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+            <div className="loading-spinner" />
+          </div>
+        </div>
+      </main>
+    }>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }
