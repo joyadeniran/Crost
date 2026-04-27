@@ -2,11 +2,12 @@ import { transformToEmail } from './email-transformer';
 import { transformToMarkdownPlan, transformToMarkdownResearch } from './markdown-transformer';
 import { transformToDocument } from './document-transformer';
 import { transformToExcel } from './excel-transformer';
+import { transformToCode } from './code-transformer';
 
 export interface OutputDetection {
   sourceFormat: 'json' | 'text' | 'array';
-  contentType: 'email' | 'document' | 'plan' | 'research' | 'generic';
-  targetFormat: 'txt' | 'docx' | 'md' | 'xlsx' | 'json' | 'csv';
+  contentType: 'email' | 'document' | 'plan' | 'research' | 'code' | 'generic';
+  targetFormat: 'txt' | 'docx' | 'md' | 'xlsx' | 'json' | 'csv' | 'py' | 'sql' | 'ts' | 'js';
   transformer?: (data: any) => Promise<string | Buffer>;
 }
 
@@ -34,6 +35,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   const hintDemandsPptx = /\b(pptx|powerpoint|pitch deck|slide deck|slides|keynote)\b/.test(hintLower);
   const hintDemandsPdf = /\b(pdf|pdf report|export pdf)\b/.test(hintLower);
   const hintDemandsDocx = /\b(docx|word document|word doc|memo|brief|letter|one[- ]pager|word report)\b/.test(hintLower);
+  const hintDemandsCode = /\b(code|script|sql|css|typescript|javascript|python|develop|implement|logic|feature|refactor|component|schema)\b/.test(hintLower);
 
   if (!isJson) {
     // Founder explicitly asked for a typed artefact but LLM returned narrative —
@@ -41,6 +43,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     if (hintDemandsXlsx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
     if (hintDemandsPptx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument }; // pptx transformer not in scope here — fall back to docx
     if (hintDemandsDocx) return { sourceFormat: 'text', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
+    if (hintDemandsCode) return { sourceFormat: 'text', contentType: 'code', targetFormat: 'txt' }; // raw code string
     // Plain text: only use txt for truly unstructured text
     return {
       sourceFormat: 'text',
@@ -62,6 +65,10 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   if (hintDemandsDocx) {
     return { sourceFormat: 'json', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
   }
+  if (hintDemandsCode) {
+    // Technical departments producing JSON should often be using the 'code' transformer
+    return { sourceFormat: 'json', contentType: 'code', targetFormat: 'txt', transformer: transformToCode };
+  }
 
   // Strip markdown fences that LLMs often wrap JSON in
   const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
@@ -75,13 +82,18 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   }
 
   // ── CHECK 0a: Skill contract (highest priority — LLM followed SKILL.md) ─
-  // The xlsx / docx skills instruct the LLM to set "skill": "xlsx" | "docx"
+  // The xlsx / docx / code skills instruct the LLM to set "skill": "xlsx" | "docx" | "code"
   // at the root of the JSON. Match this before any heuristic check.
   if (parsed?.skill === 'xlsx') {
     return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
   }
   if (parsed?.skill === 'docx') {
     return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
+  }
+  if (parsed?.skill === 'code') {
+    // For code, derive extension from file_name if possible
+    const ext = parsed.file_name?.split('.').pop() || 'txt';
+    return { sourceFormat: 'json', contentType: 'code', targetFormat: ext as any, transformer: transformToCode };
   }
 
   // ── CHECK 0: Explicit format field set by department prompt ─────────────

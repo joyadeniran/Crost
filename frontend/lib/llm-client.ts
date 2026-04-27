@@ -852,7 +852,9 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
 
 {
   "is_valid_goal": boolean,
-  "clarification_question": "string or null",
+  "is_direct_response": boolean,
+  "direct_response": "string or null — use ONLY if is_direct_response is true",
+  "clarification_question": "string or null — use ONLY if is_valid_goal is false",
   "plan": {
     "goal": "string",
     "risk_note": "string — mandatory one-sentence risk assessment",
@@ -864,24 +866,28 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
         "action": "snake_case_action_string",
         "label": "Human readable label",
         "reasoning": "Mandatory non-empty explanation of why this task is needed",
-        "expected_deliverable": "Specific outcome this task must produce",
-        "params": {},
+        "expected_deliverable": "description of what this task produces",
+        "params": { "key": "value" },
         "risk_level": "low | medium | high | critical",
-        "model": "cloud",
-        "depends_on": []
+        "depends_on": ["uuid_of_blocker_task"],
+        "model": "cloud | local"
       }
     ]
   }
 }
 
 Rules: 
-1. if is_valid_goal is true, plan must be fully populated. If is_valid_goal is false, clarification_question must be non-empty. reasoning on every task is mandatory.
-2. You MUST ONLY assign tasks to the PROVIDED list of departments.
-3. CENTRALIZED RESEARCH: Insert a "Master Research Task" at the start for any market/external data needs.
-4. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.
-5. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
-6. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
-7. Never refer to yourself as the founder or use the founder's personal identity as your own.`
+1. If the goal is clear but requires multiple steps or different departments, set is_valid_goal=true and is_direct_response=false and provide a plan.
+2. If the goal is a simple question you can answer immediately (e.g. "Who are you?", "What is our current mission?"), set is_valid_goal=true and is_direct_response=true and provide the direct_response.
+3. If the goal is ambiguous, set is_valid_goal=false and provide a clarification_question.
+4. NEVER provide both a plan and a direct_response.
+5. ALWAYS provide a risk_note in the plan.
+6. You MUST ONLY assign tasks to the PROVIDED list of departments.
+7. CENTRALIZED RESEARCH: Insert a "Master Research Task" at the start for any market/external data needs.
+8. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.
+9. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
+10. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
+11. Never refer to yourself as the founder or use the founder's personal identity as your own.`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1014,6 +1020,40 @@ export async function runOrchestratorTask(
   if (result.is_valid_goal === false) {
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: result.clarification_question, ts: new Date().toISOString() }]
     await supabase.from('goals').update({ status: 'clarifying', orc_conversation: updatedHistory }).eq('id', goalId)
+    return result
+  }
+
+  // Case 2: Direct Response (Assistant mode)
+  if (result.is_direct_response === true) {
+    const directResponse = result.direct_response || 'I have processed your request.'
+    const updatedHistory = [...conversationHistory, { role: 'assistant', content: directResponse, ts: new Date().toISOString() }]
+    
+    await supabase.from('goals').update({ 
+      status: 'completed', 
+      outcome: directResponse,
+      orc_conversation: updatedHistory 
+    }).eq('id', goalId)
+
+    // Also create a memo so it shows up in the UI (SynthesisReportCard)
+    await supabase.from('company_memos').insert({
+      goal_id: goalId,
+      from_department: 'Orchestrator',
+      title: `Direct Response: ${goalRow?.founder_input?.slice(0, 50) || 'Assistant Action'}`,
+      body: directResponse,
+      priority: 'normal',
+      source_type: 'orchestrator',
+      created_by: userId
+    })
+
+    await logEvent({
+      event_type: 'goal_completed',
+      department_slug: 'orchestrator',
+      goal_id: goalId,
+      description: `Direct response provided: "${directResponse.slice(0, 100)}..."`,
+      tokens_used: tokensUsed,
+      created_by: userId
+    })
+
     return result
   }
 

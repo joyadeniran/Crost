@@ -9,6 +9,34 @@
 
 ---
 
+## Session v11.38 — Skills Layer Expansion & Orc Assistant Mode
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved issue where Engineering produced wrong file types (Word docs instead of code) and enabled Orc to function as a direct assistant for simple queries.
+
+### What Was Built
+1. **`code` Skill & Transformer** (`frontend/lib/skills/code`):
+    - Created a new technical skill with a JSON contract for source code and scripts.
+    - Implemented `code-transformer.ts` to convert technical JSON into downloadable source files.
+    - Updated `detectOutputType` to prioritize technical file extensions (py, ts, sql, etc.) based on task hints and skill usage.
+2. **Skills Layer Hardening** (`skills/index.ts`):
+    - Implemented a "Hijack Protection" for Engineering: the `docx` skill now only loads if explicitly requested via params, preventing generic "reports" from defaulting to Word docs.
+3. **Orc Assistant Mode** (`llm-client.ts`):
+    - Updated `ORCHESTRATOR_SYSTEM_NOTE` to support `is_direct_response`.
+    - Refactored `runOrchestratorTask` to handle direct responses, enabling Orc to answer simple questions without creating a multi-task plan.
+4. **Persona Alignment** (`seed-departments.ts`):
+    - Refined the Engineering persona to be "Code-First."
+    - Removed legacy hardcoded JSON contracts from Marketing, Sales, Finance, and Ops, delegating all formatting to the unified Skills Layer.
+
+### Files Changed
+- `frontend/lib/skills/index.ts`
+- `frontend/lib/skills/code/SKILL.md` (NEW)
+- `frontend/lib/artifact-transformers/code-transformer.ts` (NEW)
+- `frontend/lib/artifact-transformers/index.ts`
+- `frontend/lib/llm-client.ts`
+- `scripts/seed-departments.ts`
+
+---
+
 ## Session v11.37 — Render Deployment & CSR Fixes
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved fatal production build error on Render caused by Next.js CSR bailout requirements.
