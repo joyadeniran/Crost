@@ -215,12 +215,16 @@ export async function executeSuggestedAction(
     }
 
     // Completed successfully
+    const resultSummary = typeof result.data === 'string' 
+      ? result.data.slice(0, 500) 
+      : (result.summary || `Success: ${mapping.action} completed.`);
+
     await supabase
       .from('suggested_actions')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        result_summary: typeof result.data === 'string' ? result.data : JSON.stringify(result.data),
+        result_summary: resultSummary,
       })
       .eq('id', actionId)
 

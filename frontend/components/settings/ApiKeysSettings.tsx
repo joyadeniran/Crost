@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatErrorMessage } from '@/lib/utils'
 
 interface KeyStatus {
   [provider: string]: boolean // provider → is_valid
@@ -94,7 +95,7 @@ export function ApiKeysSettings() {
         // Refresh usage in case they now have a BYOK key
         fetchUsage()
       } else {
-        alert('API key validation failed. Check the key and try again.')
+        alert(formatErrorMessage(json.error ?? 'API key validation failed. Check the key and try again.'))
       }
     } finally {
       setSaving(null)

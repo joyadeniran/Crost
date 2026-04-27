@@ -424,7 +424,7 @@ function ApprovalCard({
             {expanded ? '▲ hide details' : '▼ show details'}
           </button>
           {expanded && (
-            <pre style={{
+            <div style={{
               fontSize: 10,
               background: 'var(--bg-3)',
               color: 'var(--text-2)',
@@ -434,9 +434,17 @@ function ApprovalCard({
               overflow: 'auto',
               maxHeight: 120,
               fontFamily: 'var(--font-dm-mono, monospace)',
+              border: '1px solid rgba(255,255,255,0.05)',
             }}>
-              {JSON.stringify(msg.approvalPayload, null, 2)}
-            </pre>
+              {Object.entries(msg.approvalPayload).map(([key, val]) => (
+                <div key={key} style={{ marginBottom: 4, display: 'flex', gap: 8 }}>
+                  <span style={{ color: 'var(--accent)', opacity: 0.8, flexShrink: 0 }}>{key}:</span>
+                  <span style={{ wordBreak: 'break-word' }}>
+                    {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}
@@ -1599,6 +1607,32 @@ export function WarRoom() {
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGoal?.status, activeGoal?.id])
+
+  // Automatically clear SYSTEM_LIMIT_EXCEEDED errors once the reset time has passed.
+  // This ensures the "limit reached" banner doesn't persist across days.
+  useEffect(() => {
+    if (activeGoal?.status !== 'failed' || !activeGoal.outcome) return
+
+    let outcomeObj: any = null
+    try {
+      outcomeObj = typeof activeGoal.outcome === 'string' ? JSON.parse(activeGoal.outcome) : activeGoal.outcome
+    } catch {
+      return
+    }
+
+    if (outcomeObj?.code === 'SYSTEM_LIMIT_EXCEEDED' && outcomeObj.resetAt) {
+      const resetTime = new Date(outcomeObj.resetAt).getTime()
+      const now = Date.now()
+      const delay = resetTime - now
+
+      if (delay <= 0) {
+        setActiveGoal(null)
+      } else {
+        const timer = setTimeout(() => setActiveGoal(null), delay)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [activeGoal?.status, activeGoal?.outcome, setActiveGoal])
 
   // On mount: pick up any pending goal left by the onboarding flow.
   // The handoff ALWAYS wins over any persisted activeGoal — a stale goal from a

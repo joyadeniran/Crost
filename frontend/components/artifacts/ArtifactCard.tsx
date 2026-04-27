@@ -217,7 +217,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
                   <summary style={{ fontSize: 11, color: 'var(--text-4)', cursor: 'pointer', listStyle: 'none' }}>
                     details ▾
                   </summary>
-                  <pre style={{
+                  <div style={{
                     marginTop: 8,
                     background: 'rgba(0,0,0,0.3)',
                     borderRadius: 6,
@@ -227,9 +227,23 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
                     overflow: 'auto',
                     border: '1px solid rgba(255,255,255,0.06)',
                     maxHeight: 140,
+                    fontFamily: 'var(--font-dm-mono, monospace)',
                   }}>
-                    {JSON.stringify(sources!.tool_calls, null, 2)}
-                  </pre>
+                    {sources!.tool_calls.map((tc: any, i) => (
+                      <div key={i} style={{ 
+                        paddingBottom: i < toolCount - 1 ? 6 : 0,
+                        marginBottom: i < toolCount - 1 ? 6 : 0,
+                        borderBottom: i < toolCount - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                      }}>
+                        <div style={{ color: 'rgba(255,180,0,0.8)', fontWeight: 600 }}>
+                          {tc.service ? `${tc.service}.${tc.action || 'call'}` : (typeof tc === 'string' ? tc : 'unnamed_tool')}
+                        </div>
+                        {tc.executed_at && (
+                          <div style={{ opacity: 0.5, fontSize: 9 }}>{new Date(tc.executed_at).toLocaleTimeString()}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </details>
               </div>
             )}

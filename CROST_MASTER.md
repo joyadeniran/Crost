@@ -9,6 +9,34 @@
 
 ---
 
+## Session v11.34 — Company Memo Migration & UI Polish
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Established the `company_memo` (singular) table as the structured source of truth (Spec §8) and eliminated all remaining raw JSON leakage in the UI.
+
+### What Was Built
+1. **Dual-Write Architecture**:
+    - Updated `llm-client.ts` and `execute-tool-call.ts` to populate the structured `company_memo` table whenever a task completes, a tool is run, or a mission report is generated.
+    - Added typed helpers (`logDecision`, `addTaskLog`) to `company-memo.ts`.
+2. **Strategic Awareness**:
+    - Refactored `buildFinalPrompt` to include **Strategic Context** (Company Profile + Recent Decisions) directly from the singular memo table, enriching agent performance.
+3. **UI/UX Refinement**:
+    - **Usage Limit Auto-Clear**: Added a `useEffect` in `WarRoom.tsx` to automatically clear the "Free limit reached" banner once the reset time (midnight UTC) has passed.
+    - **JSON Elimination**: Replaced raw JSON dumps with structured lists in the Artefacts Citation drawer and the Approval Queue cards.
+    - **Unified Error Handling**: Applied `formatErrorMessage` to suggested actions and API key validation.
+
+### Files Changed
+- `frontend/lib/company-memo.ts`
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/lib/execute-suggested-action.ts`
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/components/settings/ApiKeysSettings.tsx`
+- `frontend/app/api/onboarding/complete/route.ts`
+- `frontend/app/api/onboarding/complete-final/route.ts`
+
+---
+
 ## Session v11.33 — Error Message Humanization (JSON Fix)
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Eliminated raw JSON error leakage in the UI. Structured errors like `SYSTEM_LIMIT_EXCEEDED` are now parsed and displayed as user-friendly messages with reset times.
