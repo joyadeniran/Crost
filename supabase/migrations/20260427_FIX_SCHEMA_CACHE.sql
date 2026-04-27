@@ -62,4 +62,4 @@ $$;
 
 -- 5. FORCE SCHEMA CACHE RELOAD
 -- This tells Supabase API to instantly recognise the newly created tables
-NOTIFY pgrst, reload schema;
+NOTIFY pgrst, 'reload schema';

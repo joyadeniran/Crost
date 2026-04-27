@@ -9,6 +9,22 @@
 
 ---
 
+## Session v11.54 — ID Mismatch Fix: Tool Execution vs Approval Queue
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved persistent "Approval not found in database" 404 error during direct tool invocation.
+
+### What Was Fixed
+1. **ID Mapping Correction** (`execute-tool-call.ts` & `invoke/route.ts`):
+    - Discovered that direct slash commands were incorrectly returning the `tool_execution_id` as the `approval_id`. 
+    - Updated the tool execution gateway to capture and return the actual `approval_queue` record ID.
+    - This ensures the frontend PATCH request points to the correct database table, resolving the 404 error.
+
+### Files Changed
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/app/api/tools/invoke/route.ts`
+
+---
+
 ## Session v11.53 — Resync State Reset & Mobile Auth Fixes
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved issue where departments remained in a "stuck" error state after goal failure and fixed Google Sign-In failures on mobile browsers.

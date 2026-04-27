@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         requires_approval: true,
-        approval_id: (result as any).execution_id,
+        approval_id: (result as any).approval_id, // THE FIX: Use actual approval_id
         message: (result as any).message,
       })
     }
