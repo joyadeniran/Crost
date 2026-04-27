@@ -73,11 +73,27 @@ export async function executeToolCall(options: ExecuteOptions) {
           category: params.category, 
           limit: params.limit || 5,
           // For read:
-          file_id: params.file_id || params.id
+          file_id: params.file_id || params.id || (isRead ? params.text : null)
         })
       }
     );
-    return searchResult.json();
+    const json = await searchResult.json();
+
+    // Humanize search results for the UI
+    if (json.matches && Array.isArray(json.matches)) {
+      if (json.matches.length === 0) return { result: 'No matching documents found in Knowledge Base.' };
+      const list = json.matches.map((m: any) => 
+        `📄 **${m.title}** (${m.category})\nID: \`${m.file_id || 'available'}\`\nRelevance: ${Math.round(m.relevance * 100)}%\nSummary: ${m.summary}\n`
+      ).join('\n---\n\n');
+      return { result: `I found ${json.matches.length} relevant documents:\n\n${list}` };
+    }
+
+    // Humanize read results
+    if (isRead && json.success) {
+      return { result: `### Content of ${json.title}\n\n${json.content}\n\n---` };
+    }
+
+    return json;
   }
 
   // 2. Connection Guard: Does the user have this service hooked up?
