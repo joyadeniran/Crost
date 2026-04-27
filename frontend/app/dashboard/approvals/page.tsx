@@ -15,7 +15,7 @@ export default async function ApprovalsPage() {
   const { data } = await supabase
     .from('approval_queue')
     .select('*')
-    .eq('created_by', user.id)
+    .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
     .order('requested_at', { ascending: false })
     .limit(50)
 
