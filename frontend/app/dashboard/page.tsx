@@ -95,7 +95,7 @@ export default async function DashboardPage() {
 
   let deptResult = await supabase
     .from('departments')
-    .select('*')
+    .select('id, name, slug, persona_prompt, tone_override, capabilities, restrictions, tools, model_provider, model_name, icon, color, is_orchestrator, orc_persona_id, activation_stage, status, created_at')
     .eq('created_by', currentUser.id)
     .neq('activation_stage', 'deprecated')
     .neq('slug', 'orchestrator')
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
     if (provisioned) {
       deptResult = await supabase
         .from('departments')
-        .select('*')
+        .select('id, name, slug, persona_prompt, tone_override, capabilities, restrictions, tools, model_provider, model_name, icon, color, is_orchestrator, orc_persona_id, activation_stage, status, created_at')
         .eq('created_by', currentUser.id)
         .neq('activation_stage', 'deprecated')
         .neq('slug', 'orchestrator')
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
     // Re-fetch once to have clean local state for the first render
     const { data: healed } = await supabase
       .from('departments')
-      .select('*')
+      .select('id, name, slug, persona_prompt, tone_override, capabilities, restrictions, tools, model_provider, model_name, icon, color, is_orchestrator, orc_persona_id, activation_stage, status, created_at')
       .eq('created_by', currentUser.id)
       .neq('activation_stage', 'deprecated')
       .neq('slug', 'orchestrator')

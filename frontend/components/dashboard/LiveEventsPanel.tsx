@@ -43,19 +43,34 @@ export function LiveEventsPanel({ initial, isHidden }: Props) {
 
   useEffect(() => {
     setMounted(true)
-    const channel = supabaseClient
-      .channel('event-log-live')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'event_log' },
-        (payload) => {
-          const entry = payload.new as EventLogEntry
-          setNewId(entry.id)
-          setEvents(prev => [entry, ...prev.slice(0, 19)])
-        }
-      )
-      .subscribe()
-    return () => { supabaseClient.removeChannel(channel) }
+    let channel: any;
+
+    ;(async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session?.user) return
+
+      channel = supabaseClient
+        .channel('event-log-live')
+        .on(
+          'postgres_changes',
+          { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'event_log',
+            filter: `created_by=eq.${session.user.id}`
+          },
+          (payload) => {
+            const entry = payload.new as EventLogEntry
+            setNewId(entry.id)
+            setEvents(prev => [entry, ...prev.slice(0, 19)])
+          }
+        )
+        .subscribe()
+    })()
+
+    return () => { 
+      if (channel) supabaseClient.removeChannel(channel) 
+    }
   }, [])
 
   return (
