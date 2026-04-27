@@ -83,17 +83,36 @@ This manual guides you through a full "Founder Journey" to verify that the appli
 - **Action:** Go to **Knowledge Base** and upload a PDF or DOCX.
 - **Verify:** The file appears in the list and shows "Extracted" status after a few seconds.
 
-### **5.2 Source of Truth (Spec §8 / v11.34)**
+### **5.2 Deep Reading (v11.46)**
+- **Action:** In the War Room, ask: `@orc what is in the document [filename]?` or `@orc read my latest upload`.
+- **Verify:** Orc should invoke `KNOWLEDGE_BASE_SEARCH` to find the ID and then `KNOWLEDGE_BASE_READ` to fetch the text, successfully summarizing the actual content.
+
+### **5.3 Source of Truth (Spec §8 / v11.34)**
 - **Action:** Go to **War Room** and ask: `@orc What is our current business stage?`
 - **Verify:** Orc correctly identifies your stage from the **Strategic Context** (fetched from the singular `company_memo` table).
 
 ---
 
-## Phase 6: System Stability
+## Phase 6: Integration Tools
 
-### **6.1 Quota & Reset (v11.33)**
+### **6.1 GitHub Pipeline (v11.46)**
+- **Prerequisite:** Ensure GitHub is connected in Settings.
+- **Action:** Click "Sync All" in Settings → Integrations.
+- **Action:** In the War Room, type `/github.list_repositories`.
+- **Verify:** It generates an Approval Card with the normalized `GITHUB_LIST_REPOSITORIES` action.
+
+---
+
+## Phase 7: System Performance & Egress
+
+### **7.1 Egress Monitoring (v11.44)**
+- **Verify:** Open the browser Network tab.
+- **Verify:** Realtime subscriptions should now include a `user_id` filter in the payload.
+- **Verify:** Navigate away from the Dashboard (e.g., to the Landing page). Realtime activity should stop.
+
+### **7.2 Quota & Reset (v11.33)**
 - **Verify:** The API Keys page shows a **Usage Bar**.
-- **Edge Case:** If you hit the limit, wait until midnight UTC or manually reset the date in your DB.
+- **Edge Case:** If you hit the limit, wait until midnight UTC.
 - **Verify:** The "Limit Reached" banner in the War Room disappears automatically after reset.
 
 ---
