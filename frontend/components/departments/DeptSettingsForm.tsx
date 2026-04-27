@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Department } from '@/types'
-
-const AVAILABLE_TOOLS = [
-  'web_search', 'send_email', 'post_social', 'read_crm', 'write_crm',
-  'read_calendar', 'write_calendar', 'run_query', 'call_api', 'read_docs',
-  'write_docs', 'create_document', 'send_message',
-]
+import type { Department, AvailableTool } from '@/types'
 
 const MODEL_OPTIONS: { provider: Department['model_provider']; name: string; label: string }[] = [
   { provider: 'gemini', name: 'gemini/gemini-2.5-flash',   label: 'Gemini 2.5 Flash' },
@@ -26,6 +20,7 @@ export function DeptSettingsForm({ dept }: Props) {
   const [persona, setPersona] = useState(dept.persona_prompt)
   const [toneOverride, setToneOverride] = useState(dept.tone_override ?? '')
   const [tools, setTools] = useState<string[]>(dept.tools as string[])
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([])
   const [capabilities, setCapabilities] = useState((dept.capabilities as string[]).join(', '))
   const [restrictions, setRestrictions] = useState((dept.restrictions as string[]).join(', '))
   const [modelKey, setModelKey] = useState(`${dept.model_provider}::${dept.model_name}`)
@@ -39,22 +34,13 @@ export function DeptSettingsForm({ dept }: Props) {
   const [hasDraft, setHasDraft] = useState(false)
   const [resettingTemplate, setResettingTemplate] = useState(false)
 
-  // Load draft
+  // Fetch real available tools from DB (filtered for Toolkits only)
   useEffect(() => {
-    try {
-      const d = localStorage.getItem(`crost-dept-draft-${dept.slug}`)
-      if (d) {
-        const p = JSON.parse(d)
-        setPersona(p.persona ?? dept.persona_prompt)
-        setToneOverride(p.toneOverride ?? dept.tone_override ?? '')
-        setTools(p.tools ?? dept.tools as string[])
-        setCapabilities(p.capabilities ?? (dept.capabilities as string[]).join(', '))
-        setRestrictions(p.restrictions ?? (dept.restrictions as string[]).join(', '))
-        setModelKey(p.modelKey ?? `${dept.model_provider}::${dept.model_name}`)
-        setHasDraft(true)
-      }
-    } catch {}
-  }, [dept.slug, dept.persona_prompt, dept.tone_override, dept.tools, dept.capabilities, dept.restrictions, dept.model_provider, dept.model_name])
+    fetch('/api/tools')
+      .then(r => r.json())
+      .then(j => setAvailableTools(j.data ?? []))
+      .catch(e => console.error('Failed to load tools', e))
+  }, [])
 
   // Save draft
   useEffect(() => {
@@ -278,28 +264,32 @@ export function DeptSettingsForm({ dept }: Props) {
           Tools
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {AVAILABLE_TOOLS.map(tool => {
-            const active = tools.includes(tool)
-            return (
-              <button
-                key={tool}
-                onClick={() => toggleTool(tool)}
-                style={{
-                  fontFamily: 'var(--font-dm-mono, monospace)',
-                  fontSize: 10,
-                  padding: '4px 10px',
-                  borderRadius: 8,
-                  border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-                  background: active ? 'var(--accent-dim)' : 'var(--bg-3)',
-                  color: active ? 'var(--accent)' : 'var(--text-3)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {active ? '✓ ' : ''}{tool.replace(/_/g, ' ')}
-              </button>
-            )
-          })}
+          {availableTools.length === 0 ? (
+            <p style={{ fontSize: 11, color: 'var(--text-3)' }}>No toolkits configured. Configure them in Settings → Integrations.</p>
+          ) : (
+            availableTools.map(tool => {
+              const active = tools.includes(tool.id)
+              return (
+                <button
+                  key={tool.id}
+                  onClick={() => toggleTool(tool.id)}
+                  style={{
+                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontSize: 10,
+                    padding: '4px 10px',
+                    borderRadius: 8,
+                    border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    background: active ? 'rgba(0,212,170,0.1)' : 'var(--bg-3)',
+                    color: active ? 'var(--accent)' : 'var(--text-3)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {active ? '✓ ' : ''}{tool.label}
+                </button>
+              )
+            })
+          )}
         </div>
       </section>
 

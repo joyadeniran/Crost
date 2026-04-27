@@ -424,13 +424,24 @@ export function CreateDepartmentWizard({ onClose }: Props) {
           {step === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 12 }}>
-                  Select Tools
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
+                  Integrated Services
                 </label>
+                <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 16 }}>
+                  Select the services this department is authorized to use. Crost will automatically manage specific tools within these services.
+                </p>
                 {tools.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No tools configured yet. Add them in Settings.</p>
+                  <div style={{ 
+                    padding: '20px', 
+                    background: 'var(--bg-3)', 
+                    borderRadius: 'var(--radius-sm)', 
+                    border: '1px dashed var(--border)',
+                    textAlign: 'center'
+                  }}>
+                    <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No services configured. Configure them in Settings → Integrations.</p>
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     {tools.map((tool) => {
                       const isSelected = selectedTools.includes(tool.id)
                       const isConf = tool.is_configured
@@ -440,11 +451,11 @@ export function CreateDepartmentWizard({ onClose }: Props) {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 14,
+                            gap: 12,
                             background: isSelected ? 'rgba(0, 212, 170, 0.05)' : 'var(--bg-3)',
                             border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
                             borderRadius: 'var(--radius-sm)',
-                            padding: '12px 16px',
+                            padding: '10px 14px',
                             cursor: isConf ? 'pointer' : 'not-allowed',
                             opacity: isConf ? 1 : 0.5,
                             transition: 'all 0.2s ease'
@@ -455,26 +466,11 @@ export function CreateDepartmentWizard({ onClose }: Props) {
                             checked={isSelected}
                             onChange={() => isConf && toggleTool(tool.id)}
                             disabled={!isConf}
-                            style={{ accentColor: 'var(--accent)', cursor: 'inherit', width: 16, height: 16 }}
+                            style={{ accentColor: 'var(--accent)', cursor: 'inherit', width: 14, height: 14 }}
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)', margin: 0 }}>{tool.label}</p>
-                            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {tool.description}
-                            </p>
+                            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0 }}>{tool.label}</p>
                           </div>
-                          <span style={{
-                            fontSize: 10,
-                            fontFamily: 'var(--font-dm-mono, monospace)',
-                            padding: '3px 6px',
-                            borderRadius: 4,
-                            background: tool.risk_level === 'critical' ? 'var(--red)' : 
-                                        tool.risk_level === 'high' ? 'var(--amber)' :
-                                        tool.risk_level === 'medium' ? 'var(--amber)' : 'var(--bg-2)',
-                            color: tool.risk_level !== 'low' ? '#000' : 'var(--text-3)'
-                          }}>
-                            {tool.risk_level}
-                          </span>
                         </label>
                       )
                     })}
