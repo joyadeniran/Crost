@@ -18,7 +18,7 @@ import path from 'path'
 // ─── Skill slug registry ──────────────────────────────────────────────────────
 
 /** All valid MVP skill slugs. */
-export type SkillSlug = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'pitch_deck'
+export type SkillSlug = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'pitch_deck' | 'code'
 
 /** Canonical directory for skill files. */
 const SKILLS_DIR = path.join(process.cwd(), 'lib', 'skills')
@@ -31,6 +31,24 @@ const SKILLS_DIR = path.join(process.cwd(), 'lib', 'skills')
  * pitch_deck is always co-loaded with pptx (handled in loadSkillsForTask).
  */
 const ACTION_SKILL_MAP: Array<{ keywords: string[]; slugs: SkillSlug[] }> = [
+  // Source Code / Technical
+  {
+    keywords: [
+      'write_code',
+      'develop_feature',
+      'refactor_code',
+      'create_script',
+      'configure_service',
+      'implement_logic',
+      'write_sql',
+      'create_schema',
+      'develop_component',
+      'code',
+      'script',
+      'implementation',
+    ],
+    slugs: ['code'],
+  },
   // Pitch deck — meta-skill, must come before generic pptx
   {
     keywords: [
@@ -197,6 +215,16 @@ export async function loadSkillsForTask(
     }
   }
 
+  // Refinement: Prevent docx from hijacking Engineering/Code tasks
+  // If department is engineering, only load docx if it was explicitly in params.
+  // This prevents generic "technical reports" or "briefs" from becoming Word docs.
+  if (deptSlug === 'engineering' && resolvedSlugs.has('docx')) {
+    const isExplicit = outputFormat && ['docx', 'document'].includes(outputFormat.toLowerCase())
+    if (!isExplicit) {
+      resolvedSlugs.delete('docx')
+    }
+  }
+
   // No skills matched — return empty result (no crash, no injection)
   if (resolvedSlugs.size === 0) {
     return { content: '', slugs: [] }
@@ -235,7 +263,7 @@ export async function loadSkillsForTask(
  * pptx must come before pitch_deck so the LLM reads the base contract first.
  */
 function orderSlugs(slugs: SkillSlug[]): SkillSlug[] {
-  const PRIORITY: SkillSlug[] = ['pptx', 'xlsx', 'docx', 'pdf', 'pitch_deck']
+  const PRIORITY: SkillSlug[] = ['pptx', 'xlsx', 'docx', 'pdf', 'code', 'pitch_deck']
   return PRIORITY.filter((s) => slugs.includes(s))
 }
 
@@ -249,6 +277,7 @@ export function getSkillLabel(slug: SkillSlug): string {
     docx: 'Word Document',
     xlsx: 'Excel Spreadsheet',
     pdf: 'PDF Document',
+    code: 'Source Code',
     pitch_deck: 'Founder-Grade Pitch Deck',
   }
   return labels[slug] ?? slug
