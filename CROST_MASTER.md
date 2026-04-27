@@ -9,6 +9,38 @@
 
 ---
 
+## Session v11.46 — Knowledge Base Deep Reading & GitHub Restoration
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Enabled Orc to actually "read" knowledge base documents and restored essential GitHub pipeline tools.
+
+### What Was Built
+1. **`KNOWLEDGE_BASE_READ` Tool**: A new internal tool that allows the system to fetch the full extracted text of a file from the database, enabling deep document analysis.
+2. **GitHub Restoration**: Re-enabled `List Repos`, `Get Repo Details`, `List PRs`, `Read PR`, and `Create PR` in the Lean Tool Policy.
+3. **KB Discovery Fallback**: Updated the search tool to fall back to a "latest files" list when Orc asks general "what's here?" questions.
+
+---
+
+## Session v11.45 — Tool Execution UUID & Event Visibility Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved database-level crashes for direct slash commands and improved system transparency.
+
+### What Was Built
+1. **UUID Fix**: Updated the `/api/tools/invoke` route to use `crypto.randomUUID()` for `taskId`, resolving a Postgres type mismatch that was crashing direct tool execution.
+2. **Failure Visibility**: Added robust error catching and `logEvent` reporting for direct tool calls so failures appear in the Live Events panel.
+
+---
+
+## Session v11.44 — Egress Optimization & Realtime Hardening
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Drastically reduced database egress (fixing the 2.49GB spike) and improved data isolation.
+
+### What Was Built
+1. **Surgical Realtime Subscriptions**: Added `user_id` and `created_by` filters to all Realtime channels. Browsers now only receive data relevant to the current user.
+2. **Dynamic Interval Polling**: Increased War Room mission polling from 2s to 5s.
+3. **Column Pruning**: Refactored the main dashboard and LLM context queries to select only essential columns instead of using `select(*)`.
+
+---
+
 ## Session v11.43 — MVP Final Readiness & E2E Manual
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Established a comprehensive verification framework for the final MVP deployment and consolidated all technical fixes into a single stabilization migration.
