@@ -45,16 +45,6 @@ function GoalInput({
   const [menuQuery, setMenuQuery] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)
 
-  // Pick a stable random message for this loading session
-  const [msg, setMsg] = useState(() => getRandomProcessingMessage())
-
-  // Reset the message when loading finishes so a fresh one is picked next time
-  useEffect(() => {
-    if (!isLoading) {
-      setMsg(getRandomProcessingMessage())
-    }
-  }, [isLoading])
-
   useEffect(() => {
     try {
       const d = localStorage.getItem('crost-draft-goal')
@@ -147,7 +137,7 @@ function GoalInput({
             letterSpacing: '0.05em',
             textTransform: 'uppercase',
           }}>
-            {isLoading ? msg : 'War Room'}
+            War Room
           </span>
         </div>
 
