@@ -11,6 +11,7 @@ import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
 import { formatErrorMessage, resolveIcon } from '@/lib/utils'
+import { getRandomProcessingMessage, getProcessingMessageByIndex } from '@/lib/processing-copy'
 
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
@@ -43,6 +44,16 @@ function GoalInput({
   const [menuPrefix, setMenuPrefix] = useState<'@' | '/' | null>(null)
   const [menuQuery, setMenuQuery] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)
+
+  // Pick a stable random message for this loading session
+  const [msg, setMsg] = useState(() => getRandomProcessingMessage())
+
+  // Reset the message when loading finishes so a fresh one is picked next time
+  useEffect(() => {
+    if (!isLoading) {
+      setMsg(getRandomProcessingMessage())
+    }
+  }, [isLoading])
 
   useEffect(() => {
     try {
@@ -136,7 +147,7 @@ function GoalInput({
             letterSpacing: '0.05em',
             textTransform: 'uppercase',
           }}>
-            {isLoading ? 'Orchestrator Planning' : 'War Room'}
+            {isLoading ? msg : 'War Room'}
           </span>
         </div>
 
@@ -639,6 +650,9 @@ function CommandThread({
 
 function PlanningIndicator() {
   const [dots, setDots] = useState('.')
+  // Pick a stable random message for this planning session
+  const [msg] = useState(() => getRandomProcessingMessage())
+
   useEffect(() => {
     const t = setInterval(() => setDots(d => d.length >= 3 ? '.' : d + '.'), 500)
     return () => clearInterval(t)
@@ -664,8 +678,9 @@ function PlanningIndicator() {
         fontSize: 11,
         color: '#facc15',
         letterSpacing: '0.08em',
+        textTransform: 'uppercase',
       }}>
-        ORCHESTRATOR PLANNING{dots}
+        {msg}{dots}
       </div>
       <div style={{
         fontFamily: 'var(--font-dm-sans, sans-serif)',
@@ -673,7 +688,7 @@ function PlanningIndicator() {
         color: 'var(--text-3)',
         marginTop: 6,
       }}>
-        Querying departments, drafting plan
+        Orc is coordinating departments and drafting your plan
       </div>
     </div>
   )
