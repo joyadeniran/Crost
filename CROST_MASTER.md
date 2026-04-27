@@ -9,6 +9,21 @@
 
 ---
 
+## Session v11.33 — Error Message Humanization (JSON Fix)
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Eliminated raw JSON error leakage in the UI. Structured errors like `SYSTEM_LIMIT_EXCEEDED` are now parsed and displayed as user-friendly messages with reset times.
+
+### What Was Built
+1. **`formatErrorMessage` Utility** (`lib/utils.ts`): A robust parser that detects JSON-encoded errors and translates them into founder-friendly instructions (e.g., "Add an API key or wait until midnight").
+2. **War Room UI Hardening** (`WarRoom.tsx`): Applied the utility to Goal Submit, Chat Submit, Approval Decisions, and the Goal Failure banner.
+3. **Refactoring**: Consolidated `ICON_MAP` and `resolveIcon` into `lib/utils.ts` to reduce duplication in the frontend.
+
+### Files Changed
+- `frontend/lib/utils.ts`
+- `frontend/components/war-room/WarRoom.tsx`
+
+---
+
 ## Session v11.32 — Signup OTP Leak & Existence Check Fix
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved issue where existing users were sent redundant OTPs during signup due to Supabase Email Enumeration Protection. Enforced strict Spec §15.6 compliance.
