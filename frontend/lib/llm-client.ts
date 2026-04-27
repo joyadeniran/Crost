@@ -1038,7 +1038,7 @@ export async function runOrchestratorTask(
     await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',
-      title: `Direct Response: ${goalRow?.founder_input?.slice(0, 50) || 'Assistant Action'}`,
+      title: `Direct Response: ${founderInput.slice(0, 50) || 'Assistant Action'}`,
       body: directResponse,
       priority: 'normal',
       source_type: 'orchestrator',
