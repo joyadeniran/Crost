@@ -68,11 +68,20 @@ export async function middleware(request: NextRequest) {
 
   // Block unverified email/password users from onboarding or dashboard
   if (user && user.app_metadata?.provider === 'email' && !user.email_confirmed_at) {
-    // Allow them to remain on /login (OTP entry) and auth callback pages
-    const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname.startsWith('/auth')
-    if (!isAuthPage) {
-      return NextResponse.redirect(new URL('/login?unverified=true', request.url))
+    // Allow them to remain on /login, /signup, /verify-email and auth callback pages
+    const isAllowedPage = pathname === '/login' || 
+                         pathname === '/signup' || 
+                         pathname === '/verify-email' ||
+                         pathname.startsWith('/auth')
+    
+    if (!isAllowedPage) {
+      const verifyUrl = new URL('/verify-email', request.url)
+      if (user.email) verifyUrl.searchParams.set('email', user.email)
+      return NextResponse.redirect(verifyUrl)
     }
+    
+    // If they are on an allowed page, stay there and skip subsequent redirect logic
+    return response
   }
 
   // Redirect away from Login/Onboarding if complete

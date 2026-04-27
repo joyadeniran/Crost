@@ -9,6 +9,38 @@
 
 ---
 
+## Session v11.31 — High-Priority Spec Gaps Resolved (H1, H2, H3)
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Closed all remaining critical "High" priority MVP gaps identified in `Spec_Review_v5.md` through concurrent agent execution.
+
+### What Was Built
+1. **H1 — In-browser Artefact Previews (Thumbnails)** (`ArtifactCard.tsx`): Updated the thumbnail rendering logic to use scaled-down native `iframe` renders (PDF browser viewer and Office Online embed) directly in the thumbnail area when `preview_url` is absent. This bypassed the need for brittle server-side thumbnail generation.
+2. **H2 — Auth Middleware Security Gap** (`middleware.ts`, `verify-email/page.tsx`): Unverified email/password users are now intercepted and redirected to a dedicated `/verify-email` blocking page, enforcing the "Source of Truth" security requirement.
+3. **H3 — Auth Bridge Edge Case** (`signup/page.tsx`): Verified that duplicate email signups correctly catch the `user_already_exists` error and gracefully redirect the founder to `/login?email=...` with a toast notification.
+
+### Files Changed
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/middleware.ts`
+- `frontend/app/verify-email/page.tsx` (new)
+- `Spec_Review_v5.md`
+
+---
+
+## Session v11.30 — Comprehensive Audit & Testing Framework
+**Date**: 2026-04-27 **Status**: 🛠 IN PROGRESS  
+**Impact**: Established a comprehensive testing framework and conducted a full codebase audit against `CROST_SPEC.md v2.2`. Identified post-v11.29 changes, including the migration to 'Artefacts Gallery v1' with lineage tracking.
+
+### What Was Built
+1. **COMPREHENSIVE_TESTING_LIST.md**: A master checklist of all Crost features (Onboarding, Orc Intelligence, Artefacts v1, Suggested Actions, etc.) to guide systematic manual and automated testing.
+2. **Codebase Audit**: Verified implementation of v11.17+ features (Suggested Actions HITL, Risk Modes, KB search citations) and identified remaining gaps (H1-H3).
+3. **Lineage Tracking Support**: Analyzed the April 25 migration (`file_size`, `task_id`) and its integration into the `ArtifactCard.tsx` drawer.
+
+### Next Steps
+- Generate **Spec_Review_v5.md** to track the transition to singular `company_memo` and resolve remaining high-priority gaps.
+- Begin systematic testing using the new checklist.
+
+---
+
 ## Session v11.29 — Badge Count Sync & Realtime Fix
 **Date**: 2026-04-25 **Status**: ✅  
 **Impact**: Fixed artifact badge count mismatch, hardened pending-approval queries against dual user columns, and eliminated cross-user count contamination in the realtime subscription.
