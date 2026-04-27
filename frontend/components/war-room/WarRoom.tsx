@@ -10,6 +10,7 @@ import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus } fr
 import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
+import { formatErrorMessage, resolveIcon } from '@/lib/utils'
 
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
@@ -22,29 +23,6 @@ const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string
 // Default fallback if dept not found in store
 const DEFAULT_DEPT_COLOUR = '#6366f1'
 const DEFAULT_DEPT_ICON = '🏢'
-
-// Map legacy icon-name strings → emoji for departments created before the wizard change
-const ICON_MAP: Record<string, string> = {
-  'briefcase':   '💼',
-  'code':        '💻',
-  'code-2':      '💻',
-  'megaphone':   '📣',
-  'handshake':   '🤝',
-  'bar-chart-2': '📊',
-  'chart':       '📊',
-  'settings-2':  '⚙️',
-  'ops':         '⚙️',
-  'shield':      '🛡️',
-  'flask':       '🧪',
-  'globe':       '🌐',
-  'users':       '👥',
-  'zap':         '⚡',
-  'dollar-sign': '💰',
-}
-
-function resolveIcon(icon: string): string {
-  return ICON_MAP[icon] ?? icon
-}
 
 
 // ─── GoalInput ────────────────────────────────────────────────────────────────
@@ -372,7 +350,7 @@ function ApprovalCard({
         </span>
         {isFailed && (
           <div style={{ fontSize: 11, color: '#f87171', opacity: 0.85, marginTop: 6, lineHeight: 1.45 }}>
-            {msg.approvalExecutionError}
+            {formatErrorMessage(msg.approvalExecutionError)}
           </div>
         )}
       </div>
@@ -474,7 +452,7 @@ function ApprovalCard({
           marginBottom: 8,
           lineHeight: 1.45,
         }}>
-          {msg.approvalError}
+          {formatErrorMessage(msg.approvalError)}
         </div>
       )}
 
@@ -1733,7 +1711,7 @@ export function WarRoom() {
       if (json.success && json.data) {
         setActiveGoal(json.data)
       } else {
-        alert(json.error ?? 'Failed to submit goal')
+        alert(formatErrorMessage(json.error ?? 'Failed to submit goal'))
         setIsSubmittingGoal(false)
       }
     } catch {
@@ -1829,7 +1807,7 @@ export function WarRoom() {
       console.error('[handleApprovalDecision]', err)
       setCommandMessages(msgs => msgs.map(m =>
         m.id === msgId
-          ? { ...m, approvalError: `Network error: ${err?.message ?? 'could not reach server'}` }
+          ? { ...m, approvalError: `Network error: ${formatErrorMessage(err?.message ?? 'could not reach server')}` }
           : m
       ))
     }
@@ -1889,7 +1867,7 @@ export function WarRoom() {
           setCommandMessages(msgs => msgs.map(m => m.id === msgId ? {
             ...m,
             isLoading: false,
-            response: `Error: ${json?.error ?? `Request failed (${res.status})`}`,
+            response: `Error: ${formatErrorMessage(json?.error ?? `Request failed (${res.status})`)}`,
           } : m))
           return
         }
@@ -1908,11 +1886,11 @@ export function WarRoom() {
             approvalDeptName: json.department_name,
           } : m))
         } else {
-          const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${json.error}` : JSON.stringify(json))
+          const response = json.answer ?? json.result ?? json.message ?? (json.error ? `Error: ${formatErrorMessage(json.error)}` : JSON.stringify(json))
           setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response, isLoading: false, goal_id: json.goal_id ?? undefined } : m))
         }
       } catch (err: any) {
-        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${formatErrorMessage(err.message)}`, isLoading: false } : m))
       }
       return
     }
@@ -1945,7 +1923,7 @@ export function WarRoom() {
           if (json.missing_connection) {
             response = `⚠ No connection for "${json.service}". Connect it in Settings → Integrations.`
           } else if (!json.success) {
-            response = `Error: ${json.error}`
+            response = `Error: ${formatErrorMessage(json.error)}`
           } else {
             response = typeof json.result === 'string' ? json.result : JSON.stringify(json.result, null, 2)
           }
@@ -1955,7 +1933,7 @@ export function WarRoom() {
           } : m))
         }
       } catch (err: any) {
-        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${err.message}`, isLoading: false } : m))
+        setCommandMessages(msgs => msgs.map(m => m.id === msgId ? { ...m, response: `Error: ${formatErrorMessage(err.message)}`, isLoading: false } : m))
       }
       return
     }
@@ -2214,7 +2192,7 @@ export function WarRoom() {
               wordBreak: 'break-word',
               marginBottom: goalErrorEvents.length > 0 ? 10 : 0,
             }}>
-              {activeGoal.outcome}
+              {formatErrorMessage(activeGoal.outcome)}
             </div>
           )}
 

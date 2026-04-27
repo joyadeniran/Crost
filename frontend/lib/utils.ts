@@ -80,3 +80,28 @@ export function formatMemoBody(body: string): string {
   const limit = body.includes('[Mission Report]') ? 3000 : 1000;
   return truncateString(body, limit);
 }
+
+/**
+ * Parses and humanizes error strings that might be JSON-encoded,
+ * specifically for SYSTEM_LIMIT_EXCEEDED and other structured errors.
+ */
+export function formatErrorMessage(err: string | any): string {
+  if (!err) return 'Unknown error occurred.';
+  
+  let parsed = err;
+  if (typeof err === 'string') {
+    try {
+      parsed = JSON.parse(err);
+    } catch {
+      // Not JSON, return as is
+      return err;
+    }
+  }
+
+  if (parsed.code === 'SYSTEM_LIMIT_EXCEEDED') {
+    const reset = parsed.resetAt ? new Date(parsed.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'midnight';
+    return `Daily free limit reached (${(parsed.limit || 0).toLocaleString()} tokens). Please add your own API key in Settings or wait until ${reset} for the reset.`;
+  }
+
+  return parsed.message || parsed.error || JSON.stringify(parsed);
+}
