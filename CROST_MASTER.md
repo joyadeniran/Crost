@@ -9,6 +9,32 @@
 
 ---
 
+## Session v11.53 — Resync State Reset & Mobile Auth Fixes
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved issue where departments remained in a "stuck" error state after goal failure and fixed Google Sign-In failures on mobile browsers.
+
+### What Was Built
+1. **Department Full State Reset** (`api/departments/resync`):
+    - Updated the resync logic to explicitly reset department `status` to `idle` and clear `current_task` to `null`.
+    - Clicking "Sync Departments" now effectively clears all stuck error states from prior goal failures.
+2. **Mobile Auth Reliability** (`auth/callback`):
+    - Refactored the authentication callback to use standard, environment-agnostic cookie handling.
+    - Removed hardcoded domain overrides that were causing mobile session establishment to fail.
+    - Simplified cookie transfer logic using the `Headers` object for maximum compatibility across browsers.
+
+---
+
+## Session v11.52 — Inbox Consistency & Real-time Badge Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved issue where pending approvals were missing from the Inbox and sidebar badges. Established real-time badge synchronization.
+
+### What Was Built
+1. **Real-time Badge Sync**: Refactored `SidebarNav` and `Topbar` to use the Zustand store for counts, kept live via a new `postgres_changes` subscription in `LayoutStoreHydrator`.
+2. **Query Normalization**: Updated all approval queries (Inbox, Sidebar, Dropdown) to check both `user_id` and `created_by` columns, ensuring system-generated tasks are visible.
+3. **Badge UI Refinement**: Added a subtle glowing aesthetic to red count badges for a unified, premium feel.
+
+---
+
 ## Session v11.51 — War Room UX & Logic Hardening
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved critical UX flaws and state bugs in the War Room. Restored stable branding and added dynamic, proactive loading feedback.
