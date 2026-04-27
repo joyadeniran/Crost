@@ -335,31 +335,53 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
           e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
         }}
       >
-        {/* Thumbnail area */}
-        <div style={{
-          width: '100%',
-          aspectRatio: '16/10',
-          borderRadius: 10,
-          background: 'rgba(0,0,0,0.25)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          position: 'relative',
-        }}>
-          {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
-            <Image
-              src={artifact.preview_url || artifact.file_url!}
-              fill
-              unoptimized
-              style={{ objectFit: 'cover' }}
-              alt={artifact.title}
-            />
-          ) : (
-            <FileTypeIcon ext={ext} size={48} />
-          )}
-        </div>
+          {/* Thumbnail area */}
+          <div style={{
+            width: '100%',
+            aspectRatio: '16/10',
+            borderRadius: 10,
+            background: 'rgba(0,0,0,0.25)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            position: 'relative',
+          }}>
+            {artifact.preview_url || (artifact.artifact_type === 'image' && artifact.file_url) ? (
+              <Image
+                src={artifact.preview_url || artifact.file_url!}
+                fill
+                unoptimized
+                style={{ objectFit: 'cover' }}
+                alt={artifact.title}
+              />
+            ) : artifact.artifact_type === 'pdf' && artifact.file_url ? (
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+                <iframe
+                  src={`${artifact.file_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                  style={{ width: '200%', height: '200%', transform: 'scale(0.5)', transformOrigin: '0 0', border: 'none', background: '#fff', pointerEvents: 'none' }}
+                  title="PDF Thumbnail"
+                  tabIndex={-1}
+                  scrolling="no"
+                />
+                <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }} />
+              </div>
+            ) : ['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url ? (
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+                <iframe
+                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
+                  style={{ width: '200%', height: '200%', transform: 'scale(0.5)', transformOrigin: '0 0', border: 'none', background: '#fff', pointerEvents: 'none' }}
+                  title="Office Thumbnail"
+                  tabIndex={-1}
+                  scrolling="no"
+                />
+                <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }} />
+              </div>
+            ) : (
+              <FileTypeIcon ext={ext} size={48} />
+            )}
+          </div>
 
         {/* Title */}
         <div style={{
