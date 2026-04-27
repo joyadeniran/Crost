@@ -9,6 +9,37 @@
 
 ---
 
+## Session v11.43 — MVP Final Readiness & E2E Manual
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Established a comprehensive verification framework for the final MVP deployment and consolidated all technical fixes into a single stabilization migration.
+
+### What Was Built
+1. **`TEST_MANUAL_E2E.md`**: Created a detailed 6-phase manual guide for founders and testers to verify the entire system end-to-end.
+2. **Final Stabilization Migration** (`supabase/migrations/...`): Consolidated all critical DB-level fixes (check_user_exists RPC, refined personas, flagship model defaults, and constitutional sync) into a single SQL script for production sync.
+
+---
+
+## Session v11.42 — Department Creation UX & Tools API Hardening
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Streamlined the department creation flow and resolved the "too many connections" issue.
+
+### What Was Built
+1. **Hardened Tools API**: Updated `/api/tools` to filter by `user_id` and exclude internal actions, reducing UI noise from 48+ items to ~8 clean service cards.
+2. **Refactored Wizard & Settings**: Updated `CreateDepartmentWizard.tsx` and `DeptSettingsForm.tsx` to dynamically fetch configured services from the DB, removing all hardcoded legacy lists.
+
+---
+
+## Session v11.41 — Tool Execution Unification & Dept Reset Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved tool execution failures and "stuck" departments by unifying naming conventions and state management.
+
+### What Was Built
+1. **Normalization Helper** (`utils.ts`): Created `normalizeToolName` to unify action strings for Composio (e.g., `GMAIL_SEND_EMAIL`).
+2. **Stuck State Fix** (`approvals/route.ts`): Ensured department status is reset to `idle` or `error` immediately after approved tool execution.
+3. **Tool Pruning**: Updated the prompt builder to only show departments tools they are authorized to access, preventing blocked gateway errors.
+
+---
+
 ## Session v11.40 — Dynamic Office-Themed Loading Messages
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Improved user experience in the War Room by replacing hardcoded "ORCHESTRATOR PLANNING" text with warm, office-themed loading copies per spec §2 Beat 8.
