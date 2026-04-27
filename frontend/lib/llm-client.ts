@@ -359,6 +359,7 @@ Rules:
     skillContent ? `## SKILLS GUIDANCE\n${skillContent}` : '',
     `## IDENTITY HANDLING\n${identityHandling}`,
     `## IDENTITY CONTEXT\n${identityContext || `### ASSISTANT IDENTITY\n${DEFAULT_ASSISTANT_IDENTITY}`}`,
+    strategicContext ? `## STRATEGIC CONTEXT (Source of Truth)\n${strategicContext}` : '',
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
     hitlProtocol,
