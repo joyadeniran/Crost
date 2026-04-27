@@ -126,6 +126,31 @@ export async function POST(req: NextRequest) {
         .limit(limit);
 
       if (!chunks || chunks.length === 0) {
+        // Discovery Fallback: If no matches found, check if the query is a "listing" request
+        const discoveryKeywords = ['what', 'list', 'show', 'all', 'available', 'documents', 'files', 'here', 'have'];
+        const isDiscovery = discoveryKeywords.some(k => query.toLowerCase().includes(k));
+        
+        if (isDiscovery) {
+          const { data: latestFiles } = await supabase
+            .from('knowledge_base_files')
+            .select('title, category, extracted_summary')
+            .eq('created_by', userId)
+            .eq('processing_status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+          
+          if (latestFiles && latestFiles.length > 0) {
+            return NextResponse.json({ 
+              matches: latestFiles.map(f => ({
+                title: f.title,
+                summary: f.extracted_summary || 'Available document',
+                chunk: '[Discovery Result] Listed from Knowledge Base.',
+                category: f.category,
+                relevance: 0.5
+              }))
+            });
+          }
+        }
         return NextResponse.json({ matches: [] });
       }
 
