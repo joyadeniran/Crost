@@ -9,6 +9,20 @@
 
 ---
 
+## Session v11.37 — Render Deployment & CSR Fixes
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved fatal production build error on Render caused by Next.js CSR bailout requirements.
+
+### What Was Fixed
+1. **CSR Bailout Fix** (`verify-email/page.tsx`): Wrapped the email verification page in a `<Suspense>` boundary. This is a mandatory Next.js requirement when using `useSearchParams()` in a client component to prevent build-time SSG failure.
+2. **Hook Dependency Sync** (`WarRoom.tsx`): Added `activeGoal.goal_tasks` to the decision-syncing `useEffect`. This cleared the `exhaustive-deps` warning that was surfacing in the production build log.
+
+### Files Changed
+- `frontend/app/verify-email/page.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
+
+---
+
 ## Session v11.36 — Resilient Multi-Model Fallback Logic
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Dramatically improved system reliability. A single provider outage (e.g., Groq) no longer crashes the application; the system now automatically falls back to secondary cloud or local providers.
