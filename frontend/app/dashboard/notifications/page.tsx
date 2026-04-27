@@ -17,7 +17,7 @@ export default async function NotificationsPage() {
       .from('approval_queue')
       .select('*')
       .eq('status', 'pending')
-      .eq('created_by', user.id)
+      .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
       .order('requested_at', { ascending: false }),
     supabase
       .from('event_log')

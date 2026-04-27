@@ -9,6 +9,7 @@ interface CrostStore {
   departments: Department[]
   envMode: 'local' | 'cloud'
   pendingApprovalCount: number
+  artifactCount: number
   isLoading: boolean
   showEventsPanel: boolean
 
@@ -20,6 +21,7 @@ interface CrostStore {
   setDepartments: (departments: Department[]) => void
   setEnvMode: (mode: 'local' | 'cloud') => void
   setPendingApprovalCount: (count: number) => void
+  setArtifactCount: (count: number) => void
   setIsLoading: (loading: boolean) => void
   setShowEventsPanel: (show: boolean) => void
 
@@ -44,6 +46,7 @@ export const useCrostStore = create<CrostStore>()(
       departments: [],
       envMode: 'cloud',
       pendingApprovalCount: 0,
+      artifactCount: 0,
       isLoading: true,
       showEventsPanel: true,
       activeGoal: null,
@@ -53,6 +56,7 @@ export const useCrostStore = create<CrostStore>()(
       setDepartments: (departments) => set({ departments }),
       setEnvMode: (envMode) => set({ envMode }),
       setPendingApprovalCount: (pendingApprovalCount) => set({ pendingApprovalCount }),
+      setArtifactCount: (artifactCount) => set({ artifactCount }),
       setIsLoading: (isLoading) => set({ isLoading }),
       setShowEventsPanel: (showEventsPanel) => set({ showEventsPanel }),
 

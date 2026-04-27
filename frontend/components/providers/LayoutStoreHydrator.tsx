@@ -7,6 +7,7 @@ import { useCrostStore } from '@/lib/store'
 
 interface Props {
   pendingCount: number
+  artifactCount: number
   envMode: 'local' | 'cloud'
 }
 
@@ -14,8 +15,8 @@ interface Props {
  * Seeds the Zustand store with layout-level SSR data (pending count + env mode)
  * and keeps the pending count live via Realtime — runs on every dashboard page.
  */
-export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
-  const { setPendingApprovalCount, setEnvMode } = useCrostStore()
+export function LayoutStoreHydrator({ pendingCount, artifactCount, envMode }: Props) {
+  const { setPendingApprovalCount, setArtifactCount, setEnvMode } = useCrostStore()
   const pathname = usePathname()
 
   // Only run hydrator logic on dashboard paths
@@ -24,8 +25,9 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
   // Seed from server data
   useEffect(() => {
     setPendingApprovalCount(pendingCount)
+    setArtifactCount(artifactCount)
     setEnvMode(envMode)
-  }, [pendingCount, envMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingCount, artifactCount, envMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshCount = useCallback(async () => {
     if (!isDashboard) return
@@ -34,31 +36,44 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     const { data: { session } } = await supabaseClient.auth.getSession()
     if (!session?.user) return
 
-    const { data, error } = await supabaseClient
-      .from('approval_queue')
-      .select('id')
-      .eq('status', 'pending')
-      .or(`created_by.eq.${session.user.id},user_id.eq.${session.user.id}`)
+    const [approvalRes, artifactRes] = await Promise.all([
+      supabaseClient
+        .from('approval_queue')
+        .select('id')
+        .eq('status', 'pending')
+        .or(`created_by.eq.${session.user.id},user_id.eq.${session.user.id}`),
+      supabaseClient
+        .from('artifacts')
+        .select('id, title, body')
+        .eq('created_by', session.user.id)
+        .limit(500)
+    ])
 
-    if (!error) {
-      setPendingApprovalCount(data?.length ?? 0)
-    } else {
-      console.error('[LayoutStoreHydrator] Refresh failed:', error.message)
+    if (!approvalRes.error) {
+      setPendingApprovalCount(approvalRes.data?.length ?? 0)
     }
-  }, [setPendingApprovalCount, isDashboard])
+    if (!artifactRes.error) {
+      // Filter out failed tool executions to match layout.tsx logic
+      const count = (artifactRes.data ?? []).filter(
+        (a: any) => !a.body?.startsWith('[TOOL EXECUTION FAILED') && !a.title?.startsWith('[TOOL EXECUTION FAILED')
+      ).length
+      setArtifactCount(count)
+    }
+  }, [setPendingApprovalCount, setArtifactCount, isDashboard])
 
   // Realtime subscription — re-fetch on any change instead of optimistic
   // increment/decrement. This avoids cross-user count contamination.
   useEffect(() => {
     if (!isDashboard) return
 
-    let channel: any;
+    let approvalChannel: any;
+    let artifactChannel: any;
 
     ;(async () => {
       const { data: { session } } = await supabaseClient.auth.getSession()
       if (!session?.user) return
 
-      channel = supabaseClient
+      approvalChannel = supabaseClient
         .channel('layout-approvals-realtime')
         .on(
           'postgres_changes',
@@ -68,17 +83,28 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
             table: 'approval_queue',
             filter: `user_id=eq.${session.user.id}`
           },
-          () => {
-            // Always refresh — payload doesn't tell us which user owns the row,
-            // so optimistic updates would leak counts across users.
-            refreshCount()
-          }
+          () => refreshCount()
+        )
+        .subscribe()
+
+      artifactChannel = supabaseClient
+        .channel('layout-artifacts-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'artifacts',
+            filter: `created_by=eq.${session.user.id}`
+          },
+          () => refreshCount()
         )
         .subscribe()
     })()
 
     return () => { 
-      if (channel) supabaseClient.removeChannel(channel) 
+      if (approvalChannel) supabaseClient.removeChannel(approvalChannel) 
+      if (artifactChannel) supabaseClient.removeChannel(artifactChannel)
     }
   }, [refreshCount, isDashboard])
 

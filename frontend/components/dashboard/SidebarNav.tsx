@@ -36,13 +36,16 @@ function NavItem({ href, label, Icon, badge, exact = false }: NavItemProps) {
           minWidth: 18,
           height: 18,
           background: 'var(--red)',
-          borderRadius: 9,
+          boxShadow: '0 0 8px rgba(239, 68, 68, 0.4)',
+          borderRadius: 10,
           fontFamily: 'var(--font-dm-mono, monospace)',
           fontSize: 10,
+          fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#fff',
+          padding: '0 4px',
         }}>
           {badge}
         </span>
@@ -58,9 +61,16 @@ interface Props {
 }
 
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { useCrostStore } from '@/lib/store'
 
-export function SidebarNav({ pendingCount, artifactCount, identity }: Props) {
+export function SidebarNav({ pendingCount: initialPending, artifactCount: initialArtifact, identity }: Props) {
   const router = useRouter()
+  const livePendingCount = useCrostStore(state => state.pendingApprovalCount)
+  const liveArtifactCount = useCrostStore(state => state.artifactCount)
+
+  // Use store values if available (populated by Hydrator), otherwise fall back to SSR props
+  const pendingCount = livePendingCount ?? initialPending
+  const artifactCount = liveArtifactCount ?? initialArtifact
 
   const handleLogout = async () => {
     try {

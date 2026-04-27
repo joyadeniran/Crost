@@ -73,18 +73,19 @@ export function Topbar() {
                 position: 'absolute',
                 top: -4,
                 right: -4,
-                width: 16,
-                height: 16,
+                width: 17,
+                height: 17,
                 background: 'var(--red)',
+                boxShadow: '0 0 8px rgba(239, 68, 68, 0.4)',
                 borderRadius: '50%',
                 fontSize: 9,
+                fontWeight: 700,
                 fontFamily: 'var(--font-dm-mono, monospace)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                border: '2px solid var(--bg-2)',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                border: '1.5px solid var(--bg-2)',
               }}>
                 {pendingCount}
               </span>
