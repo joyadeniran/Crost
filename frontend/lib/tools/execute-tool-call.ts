@@ -204,7 +204,16 @@ export async function executeToolCall(options: ExecuteOptions) {
     .select("id")
     .single();
 
-  if (execErr || !executionLog) throw new Error("Failed to track tool execution");
+  if (execErr || !executionLog) {
+    console.error("[executeToolCall] Failed to insert tool_execution log:", {
+      error: execErr,
+      userId,
+      service,
+      taskId,
+      goalId
+    });
+    throw new Error(`Failed to track tool execution: ${execErr?.message || 'DB Error'}`);
+  }
 
   if (requiresApproval) {
     // Generate an approval request — column names must match approval_queue schema
