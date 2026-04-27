@@ -56,7 +56,14 @@ This manual guides you through a full "Founder Journey" to verify that the appli
 - **Action:** Approve the action.
 - **Verify:** The tool executes and returns a result. The department status returns to **"Idle"**.
 
-### **3.3 Assistant Mode (Assistant Mode v11.38)**
+### **3.3 Failed Task UX (v11.49)**
+- **Prerequisite:** Cause a task to fail (e.g., @marketing "Post to a disconnected service").
+- **Verify:** 
+    - [ ] The goal **does not** automatically disappear from the War Room.
+    - [ ] The failed task shows explicit "Retry" and "Skip" buttons.
+    - [ ] The final Mission Report is **blocked** until you choose Skip or Retry.
+
+### **3.4 Assistant Mode (Assistant Mode v11.38)**
 - **Action:** Ask a simple question: `Who are you and what can you do?`
 - **Verify:** Orc responds **directly** in the chat thread without creating a multi-task plan.
 
