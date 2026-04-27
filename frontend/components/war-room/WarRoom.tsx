@@ -1188,56 +1188,79 @@ function MarkdownLite({ text }: { text: string }) {
   // Replace legacy Post-mortem string
   const processed = text.replace(/Post-mortem/g, 'Mission Report')
 
-  // Split by double newline for paragraphs/blocks
-  const blocks = processed.split(/\n\n+/)
+  // Split by newline and process blocks
+  const lines = processed.split('\n')
+  const blocks: any[] = []
+  let currentList: { type: 'ul' | 'ol', items: string[] } | null = null
+
+  const flushList = () => {
+    if (currentList) {
+      blocks.push({ type: currentList.type, items: currentList.items })
+      currentList = null
+    }
+  }
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim()
+    
+    // Headers
+    if (trimmed.startsWith('# ')) {
+      flushList()
+      blocks.push({ type: 'h1', content: trimmed.slice(2) })
+    } else if (trimmed.startsWith('## ')) {
+      flushList()
+      blocks.push({ type: 'h2', content: trimmed.slice(3) })
+    } else if (trimmed.startsWith('### ')) {
+      flushList()
+      blocks.push({ type: 'h3', content: trimmed.slice(4) })
+    } 
+    // Unordered list
+    else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!currentList || currentList.type !== 'ul') {
+        flushList()
+        currentList = { type: 'ul', items: [] }
+      }
+      currentList.items.push(trimmed.slice(2))
+    }
+    // Ordered list
+    else if (/^\d+\.\s/.test(trimmed)) {
+      if (!currentList || currentList.type !== 'ol') {
+        flushList()
+        currentList = { type: 'ol', items: [] }
+      }
+      currentList.items.push(trimmed.replace(/^\d+\.\s/, ''))
+    }
+    // Paragraph or blank
+    else if (trimmed === '') {
+      flushList()
+    } else {
+      if (currentList) {
+        // Continue list item if indented or just next line
+        currentList.items[currentList.items.length - 1] += ' ' + trimmed
+      } else {
+        blocks.push({ type: 'p', content: trimmed })
+      }
+    }
+  })
+  flushList()
 
   return (
     <div className="markdown-lite">
       {blocks.map((block, i) => {
-        const trimmed = block.trim()
-        if (!trimmed) return null
-
-        // Headers
-        if (trimmed.startsWith('### ')) return <h3 key={i}>{renderInline(trimmed.slice(4))}</h3>
-        if (trimmed.startsWith('## ')) return <h2 key={i}>{renderInline(trimmed.slice(3))}</h2>
-        if (trimmed.startsWith('# ')) return <h1 key={i}>{renderInline(trimmed.slice(2))}</h1>
-
-        // Unordered Lists
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const items = trimmed.split(/\n(?=[- *])/)
-          return (
-            <ul key={i}>
-              {items.map((item, j) => (
-                <li key={j}>{renderInline(item.trim().replace(/^[- *]\s+/, ''))}</li>
-              ))}
-            </ul>
-          )
-        }
-
-        // Ordered Lists
-        if (/^\d+\.\s/.test(trimmed)) {
-          const items = trimmed.split(/\n(?=\d+\.\s)/)
-          return (
-            <ol key={i}>
-              {items.map((item, j) => (
-                <li key={j}>{renderInline(item.trim().replace(/^\d+\.\s/, ''))}</li>
-              ))}
-            </ol>
-          )
-        }
-
-        // Regular paragraph (can contain single \n)
-        const lines = trimmed.split('\n')
-        return (
-          <p key={i}>
-            {lines.map((line, j) => (
-              <span key={j}>
-                {renderInline(line)}
-                {j < lines.length - 1 && <br />}
-              </span>
-            ))}
-          </p>
+        if (block.type === 'h1') return <h1 key={i}>{renderInline(block.content)}</h1>
+        if (block.type === 'h2') return <h2 key={i}>{renderInline(block.content)}</h2>
+        if (block.type === 'h3') return <h3 key={i}>{renderInline(block.content)}</h3>
+        if (block.type === 'ul') return (
+          <ul key={i}>
+            {block.items.map((item: string, j: number) => <li key={j}>{renderInline(item)}</li>)}
+          </ul>
         )
+        if (block.type === 'ol') return (
+          <ol key={i}>
+            {block.items.map((item: string, j: number) => <li key={j}>{renderInline(item)}</li>)}
+          </ol>
+        )
+        return <p key={i}>{renderInline(block.content)}</p>
       })}
     </div>
   )
@@ -1824,6 +1847,14 @@ export function WarRoom() {
             await new Promise(r => setTimeout(r, 2500))
             try {
               const r = await fetch(`/api/approvals/${approvalId}`)
+              if (r.status === 404) {
+                setCommandMessages(msgs => msgs.map(m =>
+                  m.id === msgId
+                    ? { ...m, approvalExecuted: true, approvalExecutionError: 'Approval request is missing or was deleted.' }
+                    : m
+                ))
+                return
+              }
               if (!r.ok) continue
               const j = await r.json()
               const st = j?.data?.status
@@ -2111,20 +2142,7 @@ export function WarRoom() {
   const isClarifying = activeGoal?.status === 'clarifying'
   const isCompleted = activeGoal?.status === 'completed'
 
-  // Automatically clear active goal ONLY when all tasks are actioned AND it's not completed/clarifying
-  useEffect(() => {
-    if (!hasPlan || !activeGoal.orchestrator_plan || isCompleted || isClarifying) return
-    const pending = activeGoal.orchestrator_plan.tasks.filter(t => !decisions[t.id]).length
-    if (pending === 0 && Object.keys(decisions).length > 0) {
-      const timer = setTimeout(() => {
-        // Only clear if still in executing or awaiting_approval (don't clear if it's about to hit completed)
-        if (['executing', 'awaiting_approval'].includes(activeGoal.status)) {
-          setActiveGoal(null)
-        }
-      }, 8000) 
-      return () => clearTimeout(timer)
-    }
-  }, [hasPlan, activeGoal?.orchestrator_plan, activeGoal?.status, decisions, setActiveGoal, isCompleted, isClarifying])
+  // Removed buggy auto-dismiss logic that cleared the goal prematurely when tasks failed or were executing.
 
   return (
     <div style={{ marginBottom: 24 }}>
