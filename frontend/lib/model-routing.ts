@@ -6,9 +6,9 @@ import type { ModelRole } from '@/types'
 // Fallback models if no user assignment exists
 // These must match LiteLLM config.yaml model_list entries
 const FALLBACK_MODELS: Record<ModelRole, string> = {
-  'reasoning': 'anthropic/claude-opus-4.6',
+  'reasoning': 'groq/llama-3.3-70b-versatile',
   'execution': 'groq/llama-3.3-70b-versatile',
-  'utility': 'gemini/gemini-2.5-flash'
+  'utility': 'groq/llama-3.3-70b-versatile'
 }
 
 // Task type → role mapping
