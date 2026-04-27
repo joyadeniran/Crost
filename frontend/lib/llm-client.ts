@@ -663,6 +663,16 @@ async function callLiteLLM(
   }
 }
 
+// ─── Resilient Fallback Logic ────────────────────────────────────────────────
+
+// Canonical fallback chain for high-reliability operations.
+// Evaluated in order if the primary model fails.
+const RESILIENT_FALLBACK_CHAIN = [
+  'groq/llama-3.3-70b-versatile', // Smartest/Fastest (Primary)
+  'gemini/gemini-2.5-flash',       // Reliable Backup
+  'local/gemma3'                  // Emergency Local Fallback
+]
+
 export async function callLLM(
   model: string,
   prompt: string,
@@ -671,7 +681,50 @@ export async function callLLM(
   providerOverride?: string,
   isBootstrap?: boolean
 ): Promise<{ content: string; tokensUsed: number }> {
-  return callLiteLLM(model, prompt, systemNote, userId, providerOverride, isBootstrap)
+  // Start with the requested model
+  let currentModel = model
+  let attempts = 0
+  const maxAttempts = 3
+
+  // Identify if we should use the fallback chain.
+  // We only use the chain if the requested model is part of our known reliable stack,
+  // or if it's the default 'cloud' sentinel.
+  const useFallbackChain = RESILIENT_FALLBACK_CHAIN.includes(model) || model === 'cloud'
+
+  while (attempts < maxAttempts) {
+    try {
+      return await callLiteLLM(currentModel, prompt, systemNote, userId, providerOverride, isBootstrap)
+    } catch (err: any) {
+      attempts++
+
+      // NEVER retry on system limit exceeded (billing/quota logic)
+      if (err.message?.includes('SYSTEM_LIMIT_EXCEEDED')) {
+        throw err
+      }
+
+      console.warn(`[callLLM] Attempt ${attempts} failed for ${currentModel}:`, err.message)
+
+      if (attempts >= maxAttempts || !useFallbackChain) {
+        throw err // Exhausted retries or non-fallbackable model
+      }
+
+      // Select the next model in the chain
+      // If the current model failed, find its index and move to the next one
+      const currentIndex = RESILIENT_FALLBACK_CHAIN.indexOf(currentModel)
+      if (currentIndex !== -1 && currentIndex < RESILIENT_FALLBACK_CHAIN.length - 1) {
+        currentModel = RESILIENT_FALLBACK_CHAIN[currentIndex + 1]
+        console.info(`[callLLM] Falling back to: ${currentModel}`)
+      } else if (currentIndex === -1 && attempts === 1) {
+        // If it wasn't in the chain (e.g. a custom user model), fallback to the first reliable one
+        currentModel = RESILIENT_FALLBACK_CHAIN[0]
+        console.info(`[callLLM] Falling back to primary reliable: ${currentModel}`)
+      } else {
+        throw err // No more fallback options in the chain
+      }
+    }
+  }
+
+  throw new Error('LLM call failed after multiple fallback attempts.')
 }
 
 export async function callEmbeddings(
