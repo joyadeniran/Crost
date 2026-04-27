@@ -20,6 +20,18 @@ export default function SignUpPage() {
     e.preventDefault()
     setLoading(true)
     try {
+      // Spec §15.6: Check if user already exists BEFORE signup 
+      // This bypasses Supabase's Enumeration Protection which sends redundant OTPs to existing users.
+      const { data: exists, error: checkError } = await supabaseClient.rpc('check_user_exists', {
+        email_to_check: email
+      })
+
+      if (!checkError && exists) {
+        toast('An account already exists with this email. Redirecting to sign in…', 'info')
+        window.location.href = `/login?email=${encodeURIComponent(email)}`
+        return
+      }
+
       const { error } = await supabaseClient.auth.signUp({
         email,
         password,
@@ -28,7 +40,7 @@ export default function SignUpPage() {
         },
       })
       if (error) {
-        // Spec §15.6: duplicate email → redirect to /login, not /signup
+        // Fallback for native error handling if RPC is missing or disabled
         if (error.code === 'user_already_exists' || error.message?.toLowerCase().includes('already registered')) {
           toast('An account already exists with this email. Redirecting to sign in…', 'info')
           window.location.href = `/login?email=${encodeURIComponent(email)}`
