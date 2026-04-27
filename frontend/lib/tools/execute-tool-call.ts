@@ -56,15 +56,25 @@ export async function executeToolCall(options: ExecuteOptions) {
 
   // 1. Internal tool bypass — handles both service='internal' (worker path)
   //    and service='knowledge_base_search' (/ command path from ChatCommandMenu).
-  const INTERNAL_TOOL_SLUGS = new Set(['knowledge_base_search'])
-  if (service.toLowerCase() === 'internal' || INTERNAL_TOOL_SLUGS.has(service.toLowerCase())) {
+  const INTERNAL_TOOL_SLUGS = new Set(['knowledge_base_search', 'knowledge_base_read'])
+  if (service.toLowerCase() === 'internal' || INTERNAL_TOOL_SLUGS.has(service.toLowerCase()) || action.toLowerCase() === 'knowledge_base_read') {
+    const isRead = action.toLowerCase() === 'knowledge_base_read' || service.toLowerCase() === 'knowledge_base_read';
+    const apiPath = isRead ? '/api/knowledge/read' : '/api/knowledge/search';
+    
     const searchResult = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/knowledge/search`,
+      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${apiPath}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // params.text is the raw string when invoked via /knowledge_base_search <text>
-        body: JSON.stringify({ userId, query: params.query || params.text || params.q || '', category: params.category, limit: params.limit || 5 })
+        body: JSON.stringify({ 
+          userId, 
+          // For search:
+          query: params.query || params.text || params.q || '', 
+          category: params.category, 
+          limit: params.limit || 5,
+          // For read:
+          file_id: params.file_id || params.id
+        })
       }
     );
     return searchResult.json();
