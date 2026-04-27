@@ -449,22 +449,14 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
       .gte('created_at', sevenDaysAgo)
       .order('created_at', { ascending: false })
       .limit(8)
-// LIGHTWEIGHT CONTEXT: Only fetch metadata for the brief to save egress.
-// Full bodies are only fetched for specific goal contexts.
-if (userId) {
-  const { data: recentMemos } = await supabase
-    .from('company_memos')
-    .select('title, from_department, priority')
-    .in('priority', ['normal', 'low'])
-    .eq('is_foundational', false)
-    .eq('is_current_context', false)
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  if (recentMemos && recentMemos.length > 0) {
-    memoBrief = recentMemos.map(m => `[MEMO] ${m.title} (${m.from_department})`).join('\n')
-  }
-}
+    const { data: optionalMemos } = await supabase
+      .from('company_memos')
+      .select('title, from_department, priority')
+      .in('priority', ['normal', 'low'])
+      .eq('is_foundational', false)
+      .eq('is_current_context', false)
+      .order('created_at', { ascending: false })
+      .limit(5)
 
     const sections: string[] = []
 
@@ -491,7 +483,7 @@ if (userId) {
 
     if (optionalMemos && optionalMemos.length > 0) {
       const tier4 = optionalMemos
-        .map(m => `- [${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})`)
+        .map((m: any) => `- [${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})`)
         .join('\n')
       sections.push(`### RECENT MEMOS (Summary Only)\n${tier4}`)
     }

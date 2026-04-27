@@ -6,20 +6,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeToolCall } from '@/lib/tools/execute-tool-call'
+import { logEvent } from '@/lib/llm-client'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  const authClient = await createSupabaseServerComponentClient()
+  const { data: { user }, error: authErr } = await authClient.auth.getUser()
+  
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await req.json()
+  const { service, action, params = {}, goal_id, task_id } = body
+
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user }, error: authErr } = await authClient.auth.getUser()
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await req.json()
-    const { service, action, params = {}, goal_id, task_id } = body
-
     if (!service || !action) {
       return NextResponse.json(
         { error: 'service and action are required' },
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
     const result = await executeToolCall({
       userId: user.id,
       departmentId: 'executive', // chat-invoked tools run under executive permissions
-      taskId: task_id ?? `chat-${Date.now()}`,
+      taskId: task_id ?? crypto.randomUUID(), // Use UUID for DB compatibility
       goalId: goal_id || null,
       toolCall: {
         service,
@@ -71,6 +73,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, result, artifact_id: (result as any).artifact_id ?? null })
   } catch (err: any) {
     console.error('[POST /api/tools/invoke]', err)
+    
+    // Log failure in Live Events (Spec §7)
+    await logEvent({
+      event_type: 'task_failed',
+      department_slug: 'executive',
+      goal_id: goal_id || null,
+      description: `Direct tool invocation failed: /${service}.${action}. ${err.message || ''}`,
+      created_by: user.id
+    })
+
     return NextResponse.json(
       { success: false, error: err.message ?? 'Tool invocation failed' },
       { status: 500 },
