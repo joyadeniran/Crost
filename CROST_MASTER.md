@@ -9,6 +9,42 @@
 
 ---
 
+## Session v11.49 — Stop Auto-Dismiss & Endless Polling Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved major egress drain caused by frontend endlessly polling deleted approvals. Fixed UX issue where failed tasks auto-dismissed the goal prematurely.
+
+### What Was Built
+1. **Removed Auto-Dismiss** (`WarRoom.tsx`): Active goals no longer disappear automatically if tasks are still running or if they failed. The user is now forced to manually dismiss or choose to retry/skip failed tasks.
+2. **Halted Polling Loops** (`WarRoom.tsx`): Approval polling now breaks out immediately if it receives a `404 Not Found`, stopping runaway network requests and massive egress drains.
+3. **Failed Task Blockers** (`worker.ts`): Removed `failed` from the list of terminal statuses for goals. A failed task now halts the goal's completion until the founder explicitly clicks "Skip" or "Retry", ensuring failed work doesn't sneak by.
+4. **Emergency Cancellation SQL**: Provided `20260427_CANCEL_PENDING_POLLING.sql` to manually clean up the database of stuck tasks and approvals that are causing current endless loops.
+
+---
+
+## Session v11.49 — Stop Auto-Dismiss & Endless Polling Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved major egress drain caused by frontend endlessly polling deleted approvals. Fixed UX issue where failed tasks auto-dismissed the goal prematurely.
+
+### What Was Built
+1. **Removed Auto-Dismiss** (`WarRoom.tsx`): Active goals no longer disappear automatically if tasks are still running or if they failed. The user is now forced to manually dismiss or choose to retry/skip failed tasks.
+2. **Halted Polling Loops** (`WarRoom.tsx`): Approval polling now breaks out immediately if it receives a `404 Not Found`, stopping runaway network requests and massive egress drains.
+3. **Failed Task Blockers** (`worker.ts`): Removed `failed` from the list of terminal statuses for goals. A failed task now halts the goal's completion until the founder explicitly clicks "Skip" or "Retry", ensuring failed work doesn't sneak by.
+4. **Emergency Cancellation SQL**: Provided `20260427_CANCEL_PENDING_POLLING.sql` to manually clean up the database of stuck tasks and approvals that are causing current endless loops.
+
+---
+
+## Session v11.49 — Stop Auto-Dismiss & Endless Polling Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved major egress drain caused by frontend endlessly polling deleted approvals. Fixed UX issue where failed tasks auto-dismissed the goal prematurely.
+
+### What Was Built
+1. **Removed Auto-Dismiss** (`WarRoom.tsx`): Active goals no longer disappear automatically if tasks are still running or if they failed. The user is now forced to manually dismiss or choose to retry/skip failed tasks.
+2. **Halted Polling Loops** (`WarRoom.tsx`): Approval polling now breaks out immediately if it receives a `404 Not Found`, stopping runaway network requests and massive egress drains.
+3. **Failed Task Blockers** (`worker.ts`): Removed `failed` from the list of terminal statuses for goals. A failed task now halts the goal's completion until the founder explicitly clicks "Skip" or "Retry", ensuring failed work doesn't sneak by.
+4. **Emergency Cancellation SQL**: Provided `20260427_CANCEL_PENDING_POLLING.sql` to manually clean up the database of stuck tasks and approvals that are causing current endless loops.
+
+---
+
 ## Session v11.46 — Knowledge Base Deep Reading & GitHub Restoration
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Enabled Orc to actually "read" knowledge base documents and restored essential GitHub pipeline tools.
