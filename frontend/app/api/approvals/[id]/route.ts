@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       .from('approval_queue')
       .select('*')
       .eq('id', params.id)
-      .eq('created_by', user.id)
+      .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
       .maybeSingle()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('approval_queue')
       .select('*')
       .eq('id', params.id)
-      .eq('created_by', user.id)
+      .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
       .single()
 
     if (fetchErr || !approval) {
@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .from('approval_queue')
       .update({ status: decision, decided_at: new Date().toISOString(), decided_by })
       .eq('id', params.id)
-      .eq('created_by', user.id)
+      .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
       .select()
       .single()
 
