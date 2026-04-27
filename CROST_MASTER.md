@@ -9,6 +9,28 @@
 
 ---
 
+## Session v11.51 — War Room UX & Logic Hardening
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved critical UX flaws and state bugs in the War Room. Restored stable branding and added dynamic, proactive loading feedback.
+
+### What Was Built
+1. **Stable Header Restoration**: Fixed the `GoalInput` header to consistently show "War Room" for existing users, removing the incorrect "Preparing your first mission" override.
+2. **Dynamic Loading Messages**: Implemented a rotating message system in the `PlanningIndicator`. Warm, office-themed copies (e.g., "Sketching the strategy") now automatically rotate every 3.5 seconds during planning, making the UI feel active and intelligent.
+3. **Cancellation State Fix**: Hardened the `handleCancelGoal` logic to immediately and explicitly clear all loading (`isSubmittingGoal`) and active goal states, preventing the UI from being stuck in "planning" after a mission is aborted.
+
+---
+
+## Session v11.50 — Premium Mission Report UI Overhaul
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Transformed technical "Post-mortem" logs into professional, beautifully formatted executive briefs.
+
+### What Was Built
+1. **Advanced Markdown Parser** (`MarkdownLite`): Overhauled the inline parser to properly handle headers and multi-line list structures. Mission reports no longer appear as a "wall of text."
+2. **Typography & Spacing**: Refined the `.markdown-lite` CSS with 1.8x line height and generous block-level margins to ensure reports look like high-end strategic documents.
+3. **Terminology Scrub**: Standardized all founder-facing text to use "Mission Report" instead of legacy "Post-mortem" strings.
+
+---
+
 ## Session v11.49 — Stop Auto-Dismiss & Endless Polling Fix
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved major egress drain caused by frontend endlessly polling deleted approvals. Fixed UX issue where failed tasks auto-dismissed the goal prematurely.
