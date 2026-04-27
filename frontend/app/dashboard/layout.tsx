@@ -29,16 +29,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieMode = cookieStore.get('env_mode')?.value
 
   const [pendingResult, eventsResult, configResult, modeResult, artifactListResult] = await Promise.all([
-    // Check both user_id and created_by for robustness — some legacy rows may only have one column populated
-    supabase.from('approval_queue').select('id, user_id, created_by').eq('status', 'pending').or(`created_by.eq.${user.id},user_id.eq.${user.id}`),
-    supabase.from('event_log').select('*').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
+    // Check both user_id and created_by for robustness
+    supabase.from('approval_queue').select('id').eq('status', 'pending').or(`created_by.eq.${user.id},user_id.eq.${user.id}`),
+    // PRUNED: Fetch only what LiveEventsPanel needs for display
+    supabase.from('event_log').select('id, description, event_type, created_at, department_slug').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
     supabase.from('system_config').select('key, value').in('key', ['company_name', 'company_identity']).eq('created_by', user.id),
     // Only hit DB for mode if no cookie yet
     cookieMode
       ? Promise.resolve({ data: null, error: null })
       : supabase.from('system_config').select('value').eq('key', 'env_mode').eq('created_by', user.id).single(),
-    // Fetch artifact titles/body so we can exclude failed tool executions (matches page.tsx filter)
-    supabase.from('artifacts').select('id, title, body').eq('created_by', user.id).limit(200),
+    // Fetch only essential fields for count
+    supabase.from('artifacts').select('id, title, body').eq('created_by', user.id).limit(500),
   ])
 
   // Log errors silently — don't crash the layout, but surface for debugging

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { useCrostStore } from '@/lib/store'
 
@@ -15,6 +16,10 @@ interface Props {
  */
 export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
   const { setPendingApprovalCount, setEnvMode } = useCrostStore()
+  const pathname = usePathname()
+
+  // Only run hydrator logic on dashboard paths
+  const isDashboard = pathname?.startsWith('/dashboard') || pathname?.startsWith('/onboarding')
 
   // Seed from server data
   useEffect(() => {
@@ -23,6 +28,8 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
   }, [pendingCount, envMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshCount = useCallback(async () => {
+    if (!isDashboard) return
+
     // Get session to filter by user ID (prevents wide scans and timeouts)
     const { data: { session } } = await supabaseClient.auth.getSession()
     if (!session?.user) return
@@ -38,11 +45,13 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     } else {
       console.error('[LayoutStoreHydrator] Refresh failed:', error.message)
     }
-  }, [setPendingApprovalCount])
+  }, [setPendingApprovalCount, isDashboard])
 
   // Realtime subscription — re-fetch on any change instead of optimistic
   // increment/decrement. This avoids cross-user count contamination.
   useEffect(() => {
+    if (!isDashboard) return
+
     let channel: any;
 
     ;(async () => {
@@ -71,13 +80,14 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
     return () => { 
       if (channel) supabaseClient.removeChannel(channel) 
     }
-  }, [refreshCount])
+  }, [refreshCount, isDashboard])
 
   // 60-second fallback — reconciles count drift in envs where Realtime is unreliable
   useEffect(() => {
+    if (!isDashboard) return
     const poll = setInterval(refreshCount, 60_000)
     return () => clearInterval(poll)
-  }, [refreshCount])
+  }, [refreshCount, isDashboard])
 
   return null
 }
