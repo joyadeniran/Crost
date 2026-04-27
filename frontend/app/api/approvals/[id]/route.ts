@@ -3,7 +3,7 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { Composio } from "@composio/core"
-import { cleanLargePayload } from "@/lib/utils"
+import { cleanLargePayload, normalizeToolName } from "@/lib/utils"
 
 export const dynamic = 'force-dynamic'
 
@@ -131,8 +131,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const rawComposioAction: string | null =
         (approval.payload as any)?.__tool_action
         ?? (approval.action_type !== 'tool_call' ? approval.action_type : null)
-      const composioActionForCall = rawComposioAction ?? approval.action_type
-      const normalizedAction = (composioActionForCall || '').toLowerCase()
+      const composioActionForCall = normalizeToolName(rawComposioAction ?? approval.action_type)
+      const normalizedAction = composioActionForCall.toLowerCase()
       // Derive the composio toolkit slug from the action (e.g. GMAIL_SEND_EMAIL → gmail)
       const composioService = SUPPORTED_TOOLKITS.find(kit => normalizedAction.startsWith(kit + '_'))
         ?? ((approval.payload as any)?.__service ?? null)
@@ -256,6 +256,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             }).catch(e => console.error('[Approval Execution] Chain reaction failed:', e))
           }
 
+          // RESET DEPARTMENT STATUS (Spec §11)
+          if (approval.department_id) {
+            await supabase.from('departments').update({ 
+              status: 'idle', 
+              current_task: null 
+            }).eq('id', approval.department_id)
+          }
+
           // Synthetic single-dept goals (from /api/departments/[slug]/task) have
           // no goal_tasks rows — the chain-reaction flow won't fire runOrcReport
           // for them. Detect that case and synthesize the Mission Report inline.
@@ -278,6 +286,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           console.error(`[Approval Execution Failure]`, execErr)
           executionError = execErr?.message ?? 'Unknown execution failure'
           executionFinalStatus = 'failed'
+
+          // RESET DEPARTMENT STATUS ON FAILURE
+          if (approval.department_id) {
+            await supabase.from('departments').update({ 
+              status: 'error', 
+              current_task: null 
+            }).eq('id', approval.department_id)
+          }
+
           await supabase.from('approval_queue').update({
             status: 'failed',
             execution_result: { error: executionError }

@@ -105,3 +105,12 @@ export function formatErrorMessage(err: string | any): string {
 
   return parsed.message || parsed.error || JSON.stringify(parsed);
 }
+
+/**
+ * Unifies tool action names (e.g. 'gmail.send_email' or 'gmail_send_email' -> 'GMAIL_SEND_EMAIL')
+ * as required by the Composio SDK.
+ */
+export function normalizeToolName(str: string): string {
+  if (!str) return '';
+  return str.replace(/\./g, '_').toUpperCase();
+}

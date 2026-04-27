@@ -16,10 +16,11 @@ import type {
   WorkerResult,
   WorkerDept,
 } from '@/types'
-import { truncateString, cleanLargePayload, formatMemoBody } from './utils'
+import { truncateString, cleanLargePayload, formatMemoBody, normalizeToolName } from './utils'
 import { loadSkillsForTask } from './skills'
 import { generateAndInsertSuggestedActions } from './suggested-actions'
 import { addTaskLog, logDecision, addArtifactReference } from './company-memo'
+import { DEPARTMENT_TOOL_RULES } from './tools/execute-tool-call'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -287,6 +288,11 @@ export async function buildFinalPrompt(
     ? `RESTRICTIONS\n${restrictions.map(r => `- ${r}`).join('\n')}`
     : ''
 
+  // Tool definitions filtered by department-specific permission rules (Spec §11)
+  const allowedServices = departmentSlug 
+    ? (DEPARTMENT_TOOL_RULES[departmentSlug.toLowerCase()] || DEPARTMENT_TOOL_RULES['executive'])
+    : DEPARTMENT_TOOL_RULES['executive']
+
   const toolsQuery = supabase
     .from('available_tools')
     .select('id, label, description')
@@ -298,16 +304,20 @@ export async function buildFinalPrompt(
     toolsQuery.is('user_id', null)
   }
 
-  toolsQuery.or('is_action.eq.true,requires_config.eq.false,id.eq.supabase_query')
-  const { data: tools } = await toolsQuery
+  // Filter tools to only those the department is authorized to use
+  const { data: allTools } = await toolsQuery.or('is_action.eq.true,requires_config.eq.false,id.eq.supabase_query')
+  const permittedTools = (allTools ?? []).filter(t => {
+    const service = t.id.split('_')[0].toLowerCase()
+    return allowedServices.includes(service) || t.id === 'supabase_query'
+  })
 
   const toolDefinitions = [
     `### INTERNAL TOOLS (Always Available)`,
     `- COMPANY_MEMOS: Fetch recent company communications. Args: { "limit": number }`,
-    `- SUPABASE_QUERY: Execute read-only SQL queries against the database schema. Args: { "query": "SELECT ..." }`,
-    `- KNOWLEDGE_BASE_SEARCH: Search the founder's uploaded knowledge base (documents, reports, handbooks, pitch decks, etc.). Use this whenever the founder references an uploaded file, asks about company documents, or when grounding the response in founder-provided context would help. Args: { "service": "internal", "action": "knowledge_base_search", "query": "<search terms>", "category": "<optional: company_profile|pitch_deck|financial_report|handbook|meeting_notes|research|legal|marketing|sales|product|operations>", "limit": 5 }`,
-    ...(tools ?? []).map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
-  ].join('\n')
+    allowedServices.includes('internal') ? `- KNOWLEDGE_BASE_SEARCH: Search the founder's uploaded knowledge base (documents, reports, handbooks, pitch decks, etc.). Use this whenever the founder references an uploaded file, asks about company documents, or when grounding the response in founder-provided context would help. Args: { "service": "internal", "action": "knowledge_base_search", "query": "<search terms>", "category": "<optional: company_profile|pitch_deck|financial_report|handbook|meeting_notes|research|legal|marketing|sales|product|operations>", "limit": 5 }` : '',
+    permittedTools.some(t => t.id === 'supabase_query') ? `- SUPABASE_QUERY: Execute read-only SQL queries against the database schema. Args: { "query": "SELECT ..." }` : '',
+    ...permittedTools.filter(t => t.id !== 'supabase_query').map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
+  ].filter(Boolean).join('\n')
 
   const identityHandling = departmentSlug === 'orchestrator'
     ? [
@@ -337,7 +347,7 @@ You MUST request founder approval before taking ANY external action (sending ema
 When you need to take an external action, OUTPUT ONLY this block and STOP — do not also narrate or describe the action:
 
 REQUEST_APPROVAL: {
-  "action_type": "<category: email_send | slack_post | github_push | data_write | calendar_event | other>",
+  "action_type": "<ACTUAL_TOOL_NAME, e.g. GMAIL_SEND_EMAIL | SLACK_POST_MESSAGE | GITHUB_CREATE_PULL_REQUEST | KNOWLEDGE_BASE_SEARCH>",
   "action_label": "<short human-readable description of what you are about to do>",
   "reasoning": "<why this action is necessary for the task>",
   "payload": { <all parameters needed to execute the action once approved> },
@@ -1051,7 +1061,8 @@ export async function runOrchestratorTask(
       goal_id: goalId,
       description: `Direct response provided: "${directResponse.slice(0, 100)}..."`,
       tokens_used: tokensUsed,
-      created_by: userId
+      created_by: userId,
+      metadata: { direct_response: directResponse }
     })
 
     return result
@@ -1162,7 +1173,7 @@ export async function runWorkerTask(
       action_type: approvalRequest.action_type,
       action_label: approvalRequest.action_label,
       reasoning: approvalRequest.reasoning,
-      payload: { ...approvalRequest.payload, __task_id: task.id },
+      payload: { ...approvalRequest.payload, __task_id: task.id, __tool_action: normalizeToolName(approvalRequest.action_type) },
       context: approvalRequest.context,
       risk_level: 'medium',
       goal_id: goalId ?? null,
