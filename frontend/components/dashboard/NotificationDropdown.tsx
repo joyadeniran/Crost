@@ -15,10 +15,18 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const fetchPending = async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session?.user) {
+        setItems([])
+        setLoading(false)
+        return
+      }
+
       const { data } = await supabaseClient
         .from('approval_queue')
         .select('*')
         .eq('status', 'pending')
+        .or(`user_id.eq.${session.user.id},created_by.eq.${session.user.id}`)
         .order('requested_at', { ascending: false })
         .limit(5)
       setItems(data as ApprovalQueueItem[] || [])

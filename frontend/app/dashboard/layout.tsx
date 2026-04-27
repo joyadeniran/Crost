@@ -90,7 +90,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <SidebarNav pendingCount={pendingCount} artifactCount={artifactCount} identity={identity} />
 
         {/* Seeds Zustand + keeps pending count live across all pages */}
-        <LayoutStoreHydrator pendingCount={pendingCount} envMode={envMode} />
+        <LayoutStoreHydrator pendingCount={pendingCount} artifactCount={artifactCount} envMode={envMode} />
       </aside>
 
       {/* ── MAIN ── */}
