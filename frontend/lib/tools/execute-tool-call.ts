@@ -233,7 +233,7 @@ export async function executeToolCall(options: ExecuteOptions) {
 
   if (requiresApproval) {
     // Generate an approval request — column names must match approval_queue schema
-    const { error: aqErr } = await supabase.from("approval_queue").insert({
+    const { data: approvalRow, error: aqErr } = await supabase.from("approval_queue").insert({
       goal_id: goalId,
       task_id: taskId,
       user_id: userId,
@@ -246,7 +246,7 @@ export async function executeToolCall(options: ExecuteOptions) {
       context: toolCall.reasoning || `HITL approval required for ${fullyQualifiedTool}`,
       risk_level: risk || "high",
       status: "pending",
-    });
+    }).select('id').single();
 
     if (aqErr) {
       console.error("[HITL] Failed to insert approval_queue row:", aqErr.message, aqErr.details);
@@ -266,6 +266,7 @@ export async function executeToolCall(options: ExecuteOptions) {
     return {
       status: "requires_approval",
       execution_id: executionLog.id,
+      approval_id: approvalRow?.id, // THE FIX: Return actual approval ID
       service,
       action,
       message: `Execution paused. HITL approval required for ${fullyQualifiedTool}`

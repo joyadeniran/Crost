@@ -30,24 +30,24 @@ export async function POST(req: NextRequest) {
     let syncedCount = 0
     const results = []
 
-    // 2. Standardize to DIRECT_LLM state
+    // 2. Standardize to DIRECT_LLM state and RESET status (Spec §11)
     for (const dept of depts || []) {
       const targetId = `direct_llm:${dept.slug}`
       
-      if (dept.orc_persona_id !== targetId) {
-        const { error: updateErr } = await supabase
-          .from('departments')
-          .update({ orc_persona_id: targetId })
-          .eq('id', dept.id)
+      const { error: updateErr } = await supabase
+        .from('departments')
+        .update({ 
+          orc_persona_id: targetId,
+          status: 'idle',           // Reset stuck states
+          current_task: null        // Clear failed task descriptions
+        })
+        .eq('id', dept.id)
 
-        if (!updateErr) {
-          syncedCount++
-          results.push({ slug: dept.slug, status: 'synced', mode: 'direct_llm' })
-        } else {
-          results.push({ slug: dept.slug, status: 'failed', error: updateErr.message })
-        }
+      if (!updateErr) {
+        syncedCount++
+        results.push({ slug: dept.slug, status: 'synced', mode: 'direct_llm' })
       } else {
-        results.push({ slug: dept.slug, status: 'ok', mode: 'direct_llm' })
+        results.push({ slug: dept.slug, status: 'failed', error: updateErr.message })
       }
     }
 

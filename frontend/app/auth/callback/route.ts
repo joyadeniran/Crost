@@ -17,14 +17,11 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
   
-  // Use NEXT_PUBLIC_APP_URL if available to avoid internal proxy issues (e.g. localhost:10000 on Render)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin
-  const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
-  const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
 
   if (code) {
-    // Create a temporary response to hold cookies
-    const response = NextResponse.redirect(`${baseUrl}/dashboard`) // Default target, will refine below
+    // Create a temporary response to hold headers
+    const response = new NextResponse()
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,35 +38,28 @@ export async function GET(request: Request) {
             return cookies[name]
           },
           set(name: string, value: string, options: CookieOptions) {
-            response.cookies.set(name, value, { ...options, ...cookieOptions })
+            response.cookies.set({ name, value, ...options })
           },
           remove(name: string, options: CookieOptions) {
-            response.cookies.set(name, '', { ...options, ...cookieOptions })
+            response.cookies.delete({ name, ...options })
           },
         },
       }
     )
     
-    // Exchange the code for a session
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error && data.user) {
       const step = data.user.user_metadata?.onboarding_step
       const target = getOnboardingTarget(step)
-
-      // Return a new redirect to the correct target, but we MUST keep the cookies from the previous response
+      
       const finalResponse = NextResponse.redirect(`${baseUrl}${target}`)
       
-      // Copy cookies from our temporary 'response' to 'finalResponse'
-      response.cookies.getAll().forEach(cookie => {
-        finalResponse.cookies.set(cookie.name, cookie.value, {
-          domain: cookie.domain,
-          path: cookie.path,
-          maxAge: cookie.maxAge,
-          secure: cookie.secure,
-          sameSite: cookie.sameSite as any,
-          httpOnly: cookie.httpOnly,
-        })
+      // Transfer the cookies from the helper response to the redirect response
+      response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'set-cookie') {
+          finalResponse.headers.append(key, value)
+        }
       })
 
       return finalResponse
@@ -78,6 +68,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // Return the user to an error page with instructions
   return NextResponse.redirect(`${baseUrl}/login?error=auth-callback-failed`)
 }

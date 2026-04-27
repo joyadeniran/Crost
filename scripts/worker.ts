@@ -242,7 +242,7 @@ async function tryCloseGoal(goalId: string) {
   const { data: tasks } = await supabase.from('goal_tasks').select('*').eq('goal_id', goalId)
   if (!tasks || tasks.length === 0) return
 
-  const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired'])
+  const terminalStatuses = new Set(['completed', 'rejected', 'expired'])
   const allTerminal = tasks.every(t => terminalStatuses.has(t.status))
   if (!allTerminal) return
 
