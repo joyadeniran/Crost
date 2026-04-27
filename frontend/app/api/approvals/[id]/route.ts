@@ -51,17 +51,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { decision, decided_by } = DecisionSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
-    // Fetch the approval to validate it's pending and belongs to user
+    // 1. Fetch by ID only to see if the record exists at all (Service Role bypasses RLS)
     const { data: approval, error: fetchErr } = await supabase
       .from('approval_queue')
       .select('*')
       .eq('id', params.id)
-      .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
-      .single()
+      .maybeSingle()
 
-    if (fetchErr || !approval) {
-      return NextResponse.json({ error: 'Approval not found' }, { status: 404 })
+    if (fetchErr) throw fetchErr
+    if (!approval) {
+      console.error(`[PATCH /api/approvals] Record ${params.id} not found in DB.`)
+      return NextResponse.json({ error: 'Approval not found in database' }, { status: 404 })
     }
+
+    // 2. Manual ownership check for debugging
+    const isOwner = approval.user_id === user.id || approval.created_by === user.id
+    if (!isOwner) {
+      console.error(`[PATCH /api/approvals] Ownership mismatch. Record owner: ${approval.user_id || approval.created_by}, Requestor: ${user.id}`)
+      return NextResponse.json({ error: 'You do not have permission to decide on this approval' }, { status: 403 })
+    }
+
     if (approval.status !== 'pending') {
       return NextResponse.json(
         { error: `Cannot decide on approval with status "${approval.status}"` },
@@ -69,12 +78,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       )
     }
 
-    // Update approval status
+    // 3. Update approval status
     const { data: updated, error: updateErr } = await supabase
       .from('approval_queue')
       .update({ status: decision, decided_at: new Date().toISOString(), decided_by })
       .eq('id', params.id)
-      .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
       .select()
       .single()
 
