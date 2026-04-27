@@ -1744,7 +1744,7 @@ export function WarRoom() {
           setPollError(`Network error while polling goal: ${err?.message ?? 'unknown'}`)
         }
       }
-    }, 2000)
+    }, 5000)
     return () => clearInterval(interval)
   }, [activeGoalId, activeGoalStatus, setActiveGoal, setIsSubmittingGoal, updateActiveGoal])
 

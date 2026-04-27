@@ -41,22 +41,36 @@ export function LayoutStoreHydrator({ pendingCount, envMode }: Props) {
   }, [setPendingApprovalCount])
 
   // Realtime subscription — re-fetch on any change instead of optimistic
-  // increment/decrement. This avoids cross-user count contamination (payload
-  // does not include user_id/created_by) and race conditions from rapid changes.
+  // increment/decrement. This avoids cross-user count contamination.
   useEffect(() => {
-    const channel = supabaseClient
-      .channel('layout-approvals-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'approval_queue' },
-        () => {
-          // Always refresh — payload doesn't tell us which user owns the row,
-          // so optimistic updates would leak counts across users.
-          refreshCount()
-        }
-      )
-      .subscribe()
-    return () => { supabaseClient.removeChannel(channel) }
+    let channel: any;
+
+    ;(async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session?.user) return
+
+      channel = supabaseClient
+        .channel('layout-approvals-realtime')
+        .on(
+          'postgres_changes',
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'approval_queue',
+            filter: `user_id=eq.${session.user.id}`
+          },
+          () => {
+            // Always refresh — payload doesn't tell us which user owns the row,
+            // so optimistic updates would leak counts across users.
+            refreshCount()
+          }
+        )
+        .subscribe()
+    })()
+
+    return () => { 
+      if (channel) supabaseClient.removeChannel(channel) 
+    }
   }, [refreshCount])
 
   // 60-second fallback — reconciles count drift in envs where Realtime is unreliable
