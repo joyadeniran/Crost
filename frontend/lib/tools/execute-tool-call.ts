@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { runComposioTool, ToolResult } from "./providers/composio";
 import { detectOutputType } from "@/lib/artifact-transformers";
 import { addTaskLog, addArtifactReference } from "../company-memo";
+import { normalizeToolName } from "@/lib/utils";
 
 export type ToolCallPayload = {
   service: string;
@@ -21,7 +22,7 @@ type ExecuteOptions = {
 };
 
 // Department Permission Mask
-const DEPARTMENT_TOOL_RULES: Record<string, string[]> = {
+export const DEPARTMENT_TOOL_RULES: Record<string, string[]> = {
   marketing: ["gmail", "slack", "notion", "internal"],
   engineering: ["github", "linear", "slack", "internal"],
   sales: ["gmail", "hubspot", "apollo", "slack", "notion", "internal"],
@@ -206,7 +207,7 @@ export async function executeToolCall(options: ExecuteOptions) {
       department_slug: departmentId,
       action_type: fullyQualifiedTool,
       action_label: `${service}.${action}`,
-      payload: { ...params, __service: service },
+      payload: { ...params, __service: service, __tool_action: normalizeToolName(fullyQualifiedTool) },
       context: toolCall.reasoning || `HITL approval required for ${fullyQualifiedTool}`,
       risk_level: risk || "high",
       status: "pending",
