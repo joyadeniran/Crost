@@ -9,6 +9,18 @@
 
 ---
 
+## Session v11.39 — TypeScript Build Fix (llm-client)
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved fatal TypeScript error during production build on Render.
+
+### What Was Fixed
+1. **Prop Error Fix** (`llm-client.ts`): Fixed a property access error on the `goalRow` object by using the existing `founderInput` parameter directly. This ensured the `SynthesisReportCard` title generates correctly without triggering a build-time type error.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+
+---
+
 ## Session v11.38 — Skills Layer Expansion & Orc Assistant Mode
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Resolved issue where Engineering produced wrong file types (Word docs instead of code) and enabled Orc to function as a direct assistant for simple queries.
