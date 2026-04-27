@@ -9,6 +9,20 @@
 
 ---
 
+## Session v11.32 — Signup OTP Leak & Existence Check Fix
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Resolved issue where existing users were sent redundant OTPs during signup due to Supabase Email Enumeration Protection. Enforced strict Spec §15.6 compliance.
+
+### What Was Built
+1. **`check_user_exists` RPC** (`supabase/migrations/...`): A `SECURITY DEFINER` function that allows the signup page to safely query `auth.users` for email existence without exposing the full table.
+2. **Signup Logic Hardening** (`signup/page.tsx`): Integrated the RPC into the `handleSignUp` flow. Existing users are now intercepted and redirected to `/login` *before* the Supabase `signUp` call is made.
+
+### Files Changed
+- `supabase/migrations/20260427140000_check_user_exists_rpc.sql` (new)
+- `frontend/app/signup/page.tsx`
+
+---
+
 ## Session v11.31 — High-Priority Spec Gaps Resolved (H1, H2, H3)
 **Date**: 2026-04-27 **Status**: ✅ COMPLETE  
 **Impact**: Closed all remaining critical "High" priority MVP gaps identified in `Spec_Review_v5.md` through concurrent agent execution.
