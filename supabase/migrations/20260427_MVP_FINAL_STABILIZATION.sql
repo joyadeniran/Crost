@@ -49,22 +49,39 @@ YOUR RESPONSIBILITIES:
 - Research potential partners and compile shortlists.'
 WHERE slug = 'sales';
 
--- 3. Hardening multi-tenant tools (Ensure id + user_id composite PK if not already set)
+-- 3. Hardening multi-tenant tools (Ensure id + user_id composite PK)
 DO $$ 
 BEGIN
+    -- 3a. Update available_tools Primary Key
     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'available_tools_pkey' AND table_name = 'available_tools') THEN
+        -- We MUST drop any FKs that point to this PK first
+        IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'tool_executions_tool_slug_fkey' AND table_name = 'tool_executions') THEN
+            ALTER TABLE tool_executions DROP CONSTRAINT tool_executions_tool_slug_fkey;
+        END IF;
+        
         ALTER TABLE available_tools DROP CONSTRAINT available_tools_pkey CASCADE;
     END IF;
     
-    -- Ensure user_id column exists
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'available_tools' AND column_name = 'user_id') THEN
         ALTER TABLE available_tools ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
     END IF;
     
-    -- Note: We only add PK if we have at least one user to assign to existing rows
-    -- or if the table is empty.
+    -- Ensure user_id is populated (best-effort for migration)
+    UPDATE available_tools SET user_id = (SELECT id FROM auth.users LIMIT 1) WHERE user_id IS NULL;
+    
     ALTER TABLE available_tools ALTER COLUMN user_id SET NOT NULL;
     ALTER TABLE available_tools ADD PRIMARY KEY (id, user_id);
+
+    -- 3b. Update tool_executions to use COMPOSITE foreign key
+    -- This is critical: because available_tools has a composite PK, 
+    -- children must reference BOTH columns.
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'tool_executions_tool_slug_user_id_fkey' AND table_name = 'tool_executions') THEN
+        ALTER TABLE tool_executions 
+        ADD CONSTRAINT tool_executions_tool_slug_user_id_fkey 
+        FOREIGN KEY (tool_slug, user_id) 
+        REFERENCES available_tools(id, user_id) ON DELETE CASCADE;
+    END IF;
+
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Constraint adjustment skipped or already complete.';
 END $$;
