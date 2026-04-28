@@ -232,7 +232,12 @@ export async function executeToolCall(options: ExecuteOptions) {
   }
 
   if (requiresApproval) {
-    // Generate an approval request — column names must match approval_queue schema
+    // Generate an approval request — column names must match approval_queue schema.
+    // action_type must satisfy approval_queue_action_type_check (only enum values
+    // are allowed). The fully-qualified tool name (e.g. "gmail.send_email") is
+    // not a valid enum, so we always store 'tool_call' and stash the real
+    // composio action name in payload.__tool_action — the PATCH executor reads
+    // it from there (see frontend/app/api/approvals/[id]/route.ts).
     const { data: approvalRow, error: aqErr } = await supabase.from("approval_queue").insert({
       goal_id: goalId,
       task_id: taskId,
@@ -240,16 +245,22 @@ export async function executeToolCall(options: ExecuteOptions) {
       created_by: userId,           // Required for RLS and pending count queries
       tool_execution_id: executionLog.id,
       department_slug: departmentId,
-      action_type: fullyQualifiedTool,
-      action_label: `${service}.${action}`,
+      action_type: 'tool_call',
+      action_label: fullyQualifiedTool,
       payload: { ...params, __service: service, __tool_action: normalizeToolName(fullyQualifiedTool) },
       context: toolCall.reasoning || `HITL approval required for ${fullyQualifiedTool}`,
       risk_level: risk || "high",
       status: "pending",
     }).select('id').single();
 
-    if (aqErr) {
-      console.error("[HITL] Failed to insert approval_queue row:", aqErr.message, aqErr.details);
+    if (aqErr || !approvalRow?.id) {
+      console.error("[HITL] Failed to insert approval_queue row:", aqErr?.message, aqErr?.details);
+      // Roll back the execution skeleton so we don't leave an orphaned 'blocked'
+      // tool_executions row that the UI can never resolve.
+      await supabase.from('tool_executions')
+        .update({ status: 'failed', result_summary: `Failed to create approval: ${aqErr?.message ?? 'no row returned'}` })
+        .eq('id', executionLog.id);
+      throw new Error(`Failed to create approval request: ${aqErr?.message ?? 'approval_queue insert returned no row'}`);
     }
 
     // Write a system memo so there's a paper trail

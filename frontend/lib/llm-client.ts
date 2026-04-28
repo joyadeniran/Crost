@@ -1168,20 +1168,30 @@ export async function runWorkerTask(
   const approvalRequest = parseApprovalRequest(content)
   if (approvalRequest === 'BLOCKED') throw new Error('APPROVAL_PARSE_BLOCKED')
   if (approvalRequest) {
-    await supabase.from('approval_queue').insert({
+    // action_type is constrained to a fixed enum (see approval_queue_action_type_check).
+    // Worker-issued REQUEST_APPROVAL blocks emit raw tool names like GMAIL_SEND_EMAIL,
+    // which are not in the enum. Always store 'tool_call' and stash the real
+    // composio action in payload.__tool_action — the PATCH executor reads it from
+    // there. The original action name is preserved as action_label for UI.
+    const { error: aqInsertErr } = await supabase.from('approval_queue').insert({
       department_id: deptRow.id,
       department_name: deptRow.name,
       department_slug: dept,
-      action_type: approvalRequest.action_type,
-      action_label: approvalRequest.action_label,
+      action_type: 'tool_call',
+      action_label: approvalRequest.action_label || approvalRequest.action_type,
       reasoning: approvalRequest.reasoning,
       payload: { ...approvalRequest.payload, __task_id: task.id, __tool_action: normalizeToolName(approvalRequest.action_type) },
       context: approvalRequest.context,
       risk_level: 'medium',
       goal_id: goalId ?? null,
+      user_id: userId,
       status: 'pending',
       created_by: userId
     })
+    if (aqInsertErr) {
+      console.error('[runWorkerTask] approval_queue insert failed:', aqInsertErr.message, aqInsertErr.details)
+      throw new Error(`Failed to create approval request: ${aqInsertErr.message}`)
+    }
     await supabase.from('departments').update({ status: 'awaiting_approval' }).eq('id', deptRow.id)
     return { task_id: task.id, status: 'needs_approval', result: {}, memo_summary: '', errors: [] }
   }
