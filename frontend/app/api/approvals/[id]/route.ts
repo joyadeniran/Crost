@@ -171,12 +171,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             console.log(`[Approval Execution] Executing Composio action "${composioActionForCall}" for user ${user.id}`)
             const { Composio } = await import("@composio/core")
             const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
-            const entity = await composio.create(user.id)
             // Strip internal metadata keys before sending to composio
             const execPayload = { ...(approval.payload as any) }
             delete execPayload.__tool_action
             delete execPayload.__service
-            result = await (entity as any).executeAction(composioActionForCall, execPayload)
+            result = await composio.tools.execute(composioActionForCall, {
+              userId: user.id,
+              arguments: execPayload,
+              dangerouslySkipVersionCheck: true
+            })
           } else {
             console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)
             // Call our own internal tool execution endpoint
