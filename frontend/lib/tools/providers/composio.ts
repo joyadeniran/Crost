@@ -33,11 +33,15 @@ export async function runComposioTool({
   const toolName = `${service}_${action}`.toUpperCase();
 
   try {
-    const execution = await composio.tools.execute(toolName, {
+    const execution: any = await composio.tools.execute(toolName, {
       userId,
       arguments: params,
       dangerouslySkipVersionCheck: true,
     });
+
+    if (execution && (execution.successful === false || execution.is_success === false)) {
+      throw new Error(execution.error || `Execution failed: ${JSON.stringify(execution.data || execution)}`);
+    }
 
     return {
       success: true,
@@ -52,12 +56,16 @@ export async function runComposioTool({
     if (err.message?.includes('401') || err.status === 401) {
       console.warn(`[Composio] Token potentially expired (401) for ${service}. Retrying...`);
       try {
-        const retryExecution = await composio.tools.execute(toolName, {
+        const retryExecution: any = await composio.tools.execute(toolName, {
           userId,
           arguments: params,
           dangerouslySkipVersionCheck: true,
         });
         
+        if (retryExecution && (retryExecution.successful === false || retryExecution.is_success === false)) {
+          throw new Error(retryExecution.error || `Execution failed on retry: ${JSON.stringify(retryExecution.data || retryExecution)}`);
+        }
+
         return {
           success: true,
           service,
