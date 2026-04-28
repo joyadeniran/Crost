@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.62  
+**Current Version:** 11.63  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.63 — Composio SDK Deprecation Fix (`executeAction`)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes the `n.executeAction is not a function` error which caused tool executions (like sending an email) to fail silently after approval. 
+
+### What Was Built
+1. **SDK Alignment** (`api/approvals/[id]/route.ts`):
+    - Discovered that the manual approval route was still using the legacy SDK method `entity.executeAction(...)`.
+    - Refactored the route to use the modern `composio.tools.execute(..., { userId })` interface, matching the rest of the application's execution logic.
+    - Removed the unnecessary entity creation step entirely, optimizing the route's performance.
+
+### Files Changed
+- frontend/app/api/approvals/[id]/route.ts
 
 ---
 
