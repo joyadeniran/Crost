@@ -3,6 +3,7 @@ import { transformToMarkdownPlan, transformToMarkdownResearch } from './markdown
 import { transformToDocument } from './document-transformer';
 import { transformToExcel } from './excel-transformer';
 import { transformToCode } from './code-transformer';
+import { transformToPresentation } from './pptx-transformer';
 
 export interface OutputDetection {
   sourceFormat: 'json' | 'text' | 'array';
@@ -41,7 +42,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     // Founder explicitly asked for a typed artefact but LLM returned narrative —
     // transform the narrative into that type anyway rather than dropping to .txt.
     if (hintDemandsXlsx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
-    if (hintDemandsPptx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument }; // pptx transformer not in scope here — fall back to docx
+    if (hintDemandsPptx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'docx', transformer: transformToPresentation };
     if (hintDemandsDocx) return { sourceFormat: 'text', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
     if (hintDemandsCode) return { sourceFormat: 'text', contentType: 'code', targetFormat: 'txt' }; // raw code string
     // Plain text: only use txt for truly unstructured text
@@ -57,6 +58,9 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   // heuristic — this is what fixes "prompt asked for Excel, got DOCX".
   if (hintDemandsXlsx) {
     return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
+  }
+  if (hintDemandsPptx) {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToPresentation };
   }
   if (hintDemandsPdf) {
     // No dedicated PDF transformer yet — produce markdown so downstream can convert.
@@ -89,6 +93,9 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   }
   if (parsed?.skill === 'docx') {
     return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
+  }
+  if (parsed?.skill === 'pptx') {
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToPresentation };
   }
   if (parsed?.skill === 'code') {
     // For code, derive extension from file_name if possible

@@ -3,9 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.60  
+**Current Version:** 11.61  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.61 — PPT Skill Restoration (Transformer Fix)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes "PPT skill failed" errors by implementing a dedicated presentation transformer. Restores the ability to produce structured slide decks.
+
+### What Was Built
+1. **Presentation Transformer** (`lib/artifact-transformers/pptx-transformer.ts`):
+    - Implemented a specialized transformer that converts the `pptx` skill's JSON slide manifest into a professionally formatted "Presentation Deck Document" (.docx).
+    - Supports multiple layouts: `title`, `content`, `two_column`, and `quote`.
+    - Automatically includes a "Sources & Citations" section per Spec §9.5.
+2. **Format Detection Upgrade** (`lib/artifact-transformers/index.ts`):
+    - Updated `detectOutputType` to recognize the `pptx` skill and keywords (powerpoint, pitch deck, slides).
+    - Replaced the previous generic `docx` fallback with the specialized `transformToPresentation` logic.
+3. **Skill Alignment**: Ensured the transformer correctly handles the schema defined in `pptx/SKILL.md`, including theme colors and speaker notes.
+
+### Files Changed
+- frontend/lib/artifact-transformers/pptx-transformer.ts (New)
+- frontend/lib/artifact-transformers/index.ts
+- CROST_MASTER.md
 
 ---
 
