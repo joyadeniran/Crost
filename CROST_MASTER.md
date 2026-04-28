@@ -3,9 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.63  
+**Current Version:** 11.64  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.64 — Composio Silent Execution Failure Fix
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes a critical silent failure where tool calls via Composio (like `/gmail.send_email`) would return `{ successful: false }` due to schema mismatches but were improperly marked as "✓ ACTION EXECUTED" in the UI.
+
+### What Was Built
+1. **Explicit Failure Detection** (`providers/composio.ts` & `approvals/[id]/route.ts`):
+    - Discovered that the modern `composio.tools.execute()` SDK does not throw a JavaScript error when an integration API returns a 4xx error (e.g., missing required parameters like `To:` for an email). Instead, it returns an object with `successful: false`.
+    - Added explicit checks for `result.successful === false || result.is_success === false` in both the manual approval execution route and the autonomous worker execution wrapper.
+    - If detected, an actual Error is now thrown, properly routing the failure to the `catch` block so the UI displays "✗ EXECUTION FAILED" and surfaces the actionable API error to the founder.
+
+### Files Changed
+- frontend/app/api/approvals/[id]/route.ts
+- frontend/lib/tools/providers/composio.ts
 
 ---
 

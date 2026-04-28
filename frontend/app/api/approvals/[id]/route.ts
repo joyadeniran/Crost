@@ -180,6 +180,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
               arguments: execPayload,
               dangerouslySkipVersionCheck: true
             })
+            if (result && (result.successful === false || result.is_success === false)) {
+              throw new Error(result.error || `Composio execution failed: ${JSON.stringify(result.data || result)}`)
+            }
           } else {
             console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)
             // Call our own internal tool execution endpoint
