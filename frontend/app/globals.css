@@ -2463,4 +2463,69 @@ le { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: r
 .kb-drawer-footer { padding: 20px 28px; border-top: 1px solid rgba(255,255,255,0.06); }
 .kb-drawer-delete { width: 100%; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .kb-drawer-delete:hover { background: rgba(239,68,68,0.2); }
-`n/* --- Premium Activity Animations ------------------------------------------ */`n`n@keyframes crost-breathing {`n  0%, 100% { transform: scale(1); opacity: 0.6; }`n  50% { transform: scale(1.4); opacity: 1; }`n}`n`n@keyframes crost-intervention-slide {`n  from { transform: translateX(-10px); opacity: 0; }`n  to { transform: translateX(0); opacity: 1; }`n}`n`n.event-dot-breathing {`n  animation: crost-breathing 3s ease-in-out infinite;`n}`n`n.intervention-block {`n  margin-top: 8px;`n  padding: 12px 14px;`n  background: rgba(251, 146, 60, 0.04);`n  border: 1px solid rgba(251, 146, 60, 0.15);`n  border-left: 3px solid #fb923c;`n  border-radius: 8px;`n  animation: crost-intervention-slide 0.3s ease-out;`n}`n`n.intervention-title {`n  font-family: var(--font-syne, Syne), sans-serif;`n  font-size: 9px;`n  font-weight: 800;`n  color: #fb923c;`n  text-transform: uppercase;`n  letter-spacing: 0.08em;`n  margin-bottom: 4px;`n}`n`n.intervention-msg {`n  font-size: 11px;`n  color: var(--text);`n  line-height: 1.4;`n  margin-bottom: 8px;`n}`n`n.intervention-action {`n  font-family: var(--font-dm-mono, monospace);`n  font-size: 9px;`n  font-weight: 700;`n  color: var(--accent);`n  text-decoration: none;`n  cursor: pointer;`n  display: inline-block;`n}`n`n.intervention-action:hover {`n  text-decoration: underline;`n}`n`n.intervention-code {`n  font-family: var(--font-dm-mono, monospace);`n  font-size: 8px;`n  color: var(--text-4);`n  margin-top: 4px;`n  opacity: 0.6;`n}
+
+/* ─── Premium Activity Animations ────────────────────────────────────────── */
+
+@keyframes crost-breathing {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.4); opacity: 1; }
+}
+
+@keyframes crost-intervention-slide {
+  from { transform: translateX(-10px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.event-dot-breathing {
+  animation: crost-breathing 3s ease-in-out infinite;
+}
+
+.intervention-block {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: rgba(251, 146, 60, 0.04);
+  border: 1px solid rgba(251, 146, 60, 0.15);
+  border-left: 3px solid #fb923c;
+  border-radius: 8px;
+  animation: crost-intervention-slide 0.3s ease-out;
+}
+
+.intervention-title {
+  font-family: var(--font-syne, Syne), sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  color: #fb923c;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.intervention-msg {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.intervention-action {
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.intervention-action:hover {
+  text-decoration: underline;
+}
+
+.intervention-code {
+  font-family: var(--font-dm-mono, monospace);
+  font-size: 8px;
+  color: var(--text-4);
+  margin-top: 4px;
+  opacity: 0.6;
+}
+
