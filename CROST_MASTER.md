@@ -3,9 +3,26 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.61  
+**Current Version:** 11.62  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.62 — JIT Sync Schema Mismatch Fix
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes a lingering "GMAIL is not connected" issue where `checkConnectionWithJIT` failed to heal the database record due to querying against deprecated schema column names.
+
+### What Was Built
+1. **Schema Alignment** (`composio-connection.ts` & `connect/sync/route.ts`):
+    - Discovered that the `connections` table schema had been unified during `CONSOLIDATED_STABILIZATION.sql` (Version 3.0) to use `created_by`, `service_name`, and `connection_id` instead of the legacy `user_id`, `tool_slug`, and `composio_connection_id`.
+    - Updated `checkConnectionWithJIT` and `GET /api/connect/sync` to query and upsert using the correct column names.
+2. **TypeScript Typings**: Fixed an unrelated `IParagraphOptions` type issue in `pptx-transformer.ts` for clean build pipelines.
+
+### Files Changed
+- frontend/lib/composio-connection.ts
+- frontend/app/api/connect/sync/route.ts
+- frontend/lib/artifact-transformers/pptx-transformer.ts
 
 ---
 

@@ -12,11 +12,12 @@ export async function checkConnectionWithJIT(userId: string, service: string): P
   const { data: connection, error: connErr } = await supabase
     .from("connections")
     .select("*")
-    .eq("user_id", userId)
-    .eq("tool_slug", serviceLower)
+    .eq("created_by", userId)
+    .eq("service_name", serviceLower)
     .maybeSingle();
 
-  if (!connErr && connection && connection.status === "connected") {
+  // If we found a record, it's connected (this table doesn't use a status column)
+  if (!connErr && connection) {
     return { isConnected: true };
   }
 
@@ -40,12 +41,11 @@ export async function checkConnectionWithJIT(userId: string, service: string): P
     if (isConnected) {
       // Heal the DB record for connections
       await supabase.from("connections").upsert({
-        user_id: userId,
-        tool_slug: serviceLower,
-        composio_connection_id: toolkit.connection.connectedAccount?.id || 'managed',
-        status: 'connected',
+        created_by: userId,
+        service_name: serviceLower,
+        connection_id: toolkit.connection.connectedAccount?.id || 'managed',
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id, tool_slug' });
+      }, { onConflict: 'created_by, service_name' });
 
       // Heal available_tools too (the toolkit and its actions)
       await supabase.from("available_tools").update({ is_configured: true })
