@@ -76,11 +76,9 @@ const ACTION_SLUG_MAP: Record<
   },
   save_to_kb: {
     service: 'internal',
-    action: 'save_document',
+    action: 'knowledge_base_import',
     buildParams: (ctx) => ({
-      title: ctx.title ?? 'KB Entry',
-      content: ctx.body ?? '',
-      category: 'knowledge_base',
+      artifact_id: ctx.artifact_id,
     }),
   },
   schedule_recurring: {

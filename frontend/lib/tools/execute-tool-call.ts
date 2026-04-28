@@ -27,7 +27,7 @@ export const DEPARTMENT_TOOL_RULES: Record<string, string[]> = {
   engineering: ["github", "linear", "slack", "internal"],
   sales: ["gmail", "hubspot", "apollo", "slack", "notion", "internal"],
   finance: ["gmail", "googlesheets", "internal"],
-  executive: ["gmail", "slack", "notion", "googlecalendar", "internal"] // Default orchestrator/executive access
+  executive: ["gmail", "slack", "notion", "googlecalendar", "internal", "github", "hubspot", "linear", "apollo", "googlesheets", "web_search", "file_reader", "supabase_query"] // God-mode for orchestrator/executive/founder access
 };
 
 // Auto-run rules
@@ -47,6 +47,36 @@ const CRITICAL_TOOLS = [
   "gmail.delete_email",
   "hubspot.delete_contact"
 ];
+
+/**
+ * Humanizes tool results with actionable deep links (Gmail, GitHub, etc.)
+ */
+function humanizeToolResult(result: ToolResult): string {
+  if (!result.success) return result.summary || "Execution failed.";
+  
+  const data = result.data as any;
+  const service = result.service.toLowerCase();
+  const action = result.action.toLowerCase();
+
+  // Gmail Deep Links
+  if (service === 'gmail') {
+    if ((action === 'send_email' || action === 'create_draft') && data?.id) {
+      return `${result.summary} [View in Gmail](https://mail.google.com/mail/u/0/#all/${data.id})`;
+    }
+  }
+
+  // GitHub Deep Links
+  if (service === 'github') {
+    if (data?.html_url) {
+      return `${result.summary} [View on GitHub](${data.html_url})`;
+    }
+    if (data?.url && data.url.includes('github.com')) {
+      return `${result.summary} [View on GitHub](${data.url})`;
+    }
+  }
+
+  return result.summary || "Action completed successfully.";
+}
 
 export async function executeToolCall(options: ExecuteOptions) {
   const { userId, departmentId, taskId, goalId, toolCall } = options;
@@ -353,9 +383,10 @@ async function handleToolResultArchiving({
   }
 
   // Update Execution Log completion
+  const humanSummary = humanizeToolResult(result);
   await supabase.from("tool_executions").update({
     status: result.success ? "success" : "failed",
-    result_summary: result.summary,
+    result_summary: humanSummary,
     raw_result: result.rawResponse,
     artefact_id: artifactId
   }).eq("id", executionId);
@@ -367,7 +398,7 @@ async function handleToolResultArchiving({
     dept_slug: departmentId,
     title: `Tool: ${result.service}.${result.action}`,
     status: result.success ? 'completed' : 'failed',
-    result: result.summary || memoBody.slice(0, 200),
+    result: result.summary || humanSummary.slice(0, 200),
     artifact_id: artifactId,
     created_at: new Date().toISOString()
   }).catch(() => {});
@@ -377,7 +408,7 @@ async function handleToolResultArchiving({
     from_department: departmentId,
     goal_id: goalId,
     title: `Tool Result: ${result.service}.${result.action}`,
-    body: memoBody,
+    body: humanSummary || memoBody,
     tags: ['tool_output', `task_${taskId}`],
     priority: 'normal',
     created_by: userId,

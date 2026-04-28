@@ -100,6 +100,19 @@ export async function POST(req: NextRequest) {
           sources: { memo_ids: [], kb_file_ids: [], tool_calls: [{ tool: 'save_document', executed_at: new Date().toISOString() }] },
         }).select().single()
         return { status: 'success', document_id: data?.id }
+      },
+      knowledge_base_import: async (p, ctx) => {
+        if (!p.artifact_id) throw new Error('artifact_id is required')
+        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/knowledge/import`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': req.headers.get('cookie') || ''
+          },
+          body: JSON.stringify({ artifact_id: p.artifact_id })
+        })
+        if (!res.ok) throw new Error(`KB Import failed: ${await res.text()}`)
+        return await res.json()
       }
     }
 

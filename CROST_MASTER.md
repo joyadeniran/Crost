@@ -3,9 +3,138 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.64  
+**Current Version:** 11.70  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.70 — Upload & Resume Workflow
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Streamlines the "Missing Data" recovery process. Founders can now jump directly from a blocked task to the Knowledge Base to provide data and resume their mission without getting lost in navigation.
+
+### What Was Built
+1. **Direct Upload Link** (`WarRoom.tsx`):
+    - Added a conditional **"↑ Upload Data"** action button to `TaskApprovalItem`.
+    - Only appears when a task is in the `needs_data` (❓ BLOCKED) state.
+    - Deep-links directly to `/dashboard/knowledge` in a new browser tab.
+2. **Context Preservation**:
+    - By opening the Knowledge Base in a new tab, the main Dashboard remains active and the goal stays in its "paused" state.
+    - Founder can finish the upload, close the tab, and immediately hit "↻ Retry" to proceed.
+
+### Files Changed
+- frontend/components/war-room/WarRoom.tsx
+
+---
+
+## Session v11.69 — War Room UX & Department Sync Fixes
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Resolved several lingering UX friction points in the War Room and department management, making the system feel more reactive and reliable.
+
+### What Was Built
+1. **Dynamic Action Copy Rotation** (`WarRoom.tsx`):
+    - Updated `PlanningIndicator` to rotate through warm office-themed messages (e.g., "Sketching the strategy") every 3.5 seconds using a `setInterval` loop.
+    - Added a `minHeight` constraint to prevent layout shifts during copy rotation.
+2. **Cancellation State Reset** (`WarRoom.tsx`):
+    - Hardened `handleCancelGoal` to explicitly reset `isSubmittingGoal` to `false`.
+    - This ensures the "PLANNING" overlay and button state disappear immediately when a goal is aborted, even if the backend request is still in flight.
+3. **Reactive Department Sync** (`SyncAllButton.tsx`, `DashboardActions.tsx`):
+    - Updated the sync department actions to proactively fetch fresh department data and update the global Zustand store.
+    - This ensures that stuck "error" states on department cards are cleared immediately after a successful resync, without requiring a manual page reload.
+
+### Files Changed
+- frontend/components/war-room/WarRoom.tsx
+- frontend/components/departments/SyncAllButton.tsx
+- frontend/components/departments/DashboardActions.tsx
+
+---
+
+## Session v11.68 — Missing Data Strategy (C-D-A Pipeline)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Orc now handles missing documents/data gracefully instead of cascade-failing. Founders can intervene mid-mission or skip missing steps without halting the mission.
+
+### What Was Built
+1. **Recovery Protocol** (`llm-client.ts`):
+    - Injected a new "Non-negotiable Recovery Protocol" into all worker prompts.
+    - Instructs workers to return `needs_more_data: true` when data is missing (Option C).
+    - Instructs workers to generate Templates with placeholders if upstream data was skipped (Option A).
+2. **Waterfall Resilience** (`scripts/worker.ts`):
+    - Updated `unblockDependentTasks` to allow tasks to run if their dependencies are `completed` OR `skipped` (Option D).
+    - Relaxed memo verification for skipped tasks.
+3. **Chain Reaction Unblocking** (`api/goals/[id]/tasks/[taskId]/route.ts`):
+    - Added support for the `skipped` status in the task patch API.
+    - Triggered an internal dispatch call on skip to immediately unblock downstream tasks.
+4. **Resilient UI** (`WarRoom.tsx`):
+    - Added UI handling for the `needs_data` state (❓ BLOCKED).
+    - Surfaced Orc's internal "missing data notes" to the founder.
+    - Provided Skip/Retry buttons for blocked tasks to keep momentum.
+
+### Files Changed
+- frontend/lib/llm-client.ts
+- scripts/worker.ts
+- frontend/app/api/goals/[id]/tasks/[taskId]/route.ts
+- frontend/components/war-room/WarRoom.tsx
+
+---
+
+## Session v11.67 — Knowledge Base Suggested Action
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Enables founders to "save to knowledge base" any generated artifact with one tap, ensuring high-quality work is reusable and searchable in future missions.
+
+### What Was Built
+1. **KB Import Tool** (`api/knowledge/import/route.ts`):
+    - Implemented a new internal endpoint that clones an artifact from the `artifacts` storage bucket to `knowledge-base`.
+    - Automatically creates a `knowledge_base_files` record with `source_artifact_id` for traceability.
+    - Triggers the async extraction pipeline (text extraction, LLM summarization, and chunking) so the file is immediately useful for Orc.
+2. **Unified Execution Wiring** (`api/tools/execute/route.ts`):
+    - Added `knowledge_base_import` to the internal mock tools registry.
+    - Ensured it respects the founder's session cookies for secure storage operations.
+3. **Suggested Action Alignment** (`lib/execute-suggested-action.ts` & `lib/suggested-actions.ts`):
+    - Refactored the `save_to_kb` action slug to use the new `internal.knowledge_base_import` tool.
+    - Updated the action generator to pass the required `artifact_id` in the context payload.
+
+### Files Changed
+- frontend/app/api/knowledge/import/route.ts (New)
+- frontend/app/api/tools/execute/route.ts
+- frontend/lib/execute-suggested-action.ts
+- frontend/lib/suggested-actions.ts
+
+---
+
+## Session v11.66 — MVP Hardening: Citations & Strategic Context
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Closes several simulation-critical gaps by implementing automated citation propagation and deepening Orc's strategic grounding.
+
+### What Was Built
+1. **Citation Propagation** (`llm-client.ts`):
+    - Workers now capture the `sources` JSON object from LLM responses and merge them directly into the `artifacts.sources` database column.
+    - This ensures that if a department uses Knowledge Base files or Tool results, they are permanently cited on the resulting artefact, fulfilling Spec §9.5.
+2. **Deep Links for Tool Results** (`execute-tool-call.ts`):
+    - Added `humanizeToolResult` helper that generates actionable deep links for tool successes.
+    - Gmail actions now include `[View in Gmail]` links (using message IDs).
+    - GitHub actions now include `[View on GitHub]` links (using HTML URLs).
+3. **Strategic Context Hardening** (`llm-client.ts`):
+    - Updated `buildOrcContext` to query and inject the last 10 mission outcomes from the singular `company_memo` table.
+    - This gives Orc a "Strategic Memory" of recent goal results, improving planning accuracy and grounding.
+
+### Files Changed
+- frontend/lib/llm-client.ts
+- frontend/lib/tools/execute-tool-call.ts
+
+---
+
+## Session v11.65 — Executive Department Tool Permission Fix
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes a permission block where Orc (acting as the "Executive" department) or direct founder slash-commands (like `/github.list_repos`) were blocked from using domain-specific tools.
+
+### What Was Built
+1. **Expanded Executive Permissions** (`frontend/lib/tools/execute-tool-call.ts`):
+    - Discovered that the `executive` pseudo-department (which handles Orc's direct actions and founder slash-commands) was restricted to a narrow set of communication tools.
+    - Updated `DEPARTMENT_TOOL_RULES['executive']` to include all currently supported services: `github`, `hubspot`, `linear`, `apollo`, `googlesheets`, `web_search`, `file_reader`, and `supabase_query`.
+    - This enables the "magic moment" where a founder can invoke any connected tool directly from the chat while still being protected by the mandatory HITL approval gate.
+
+### Files Changed
+- frontend/lib/tools/execute-tool-call.ts
 
 ---
 

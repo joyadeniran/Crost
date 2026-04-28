@@ -197,41 +197,48 @@ async function unblockDependentTasks(goalId: string) {
     .from('goal_tasks')
     .select('task_id, dept_slug, label, depends_on')
     .eq('goal_id', goalId)
-    .eq('status', 'planned')
+    .in('status', ['planned', 'pending']) // Process both planned and pending with dependencies
 
   for (const blocked of blockedTasks ?? []) {
     const dependencies = blocked.depends_on as string[] || []
     if (dependencies.length === 0) continue
 
-    // 1. Check if all dependent tasks are 'completed'
+    // 1. Check if all dependent tasks are 'completed' or 'skipped'
     const { data: depTasks } = await supabase
       .from('goal_tasks')
       .select('task_id, status')
       .eq('goal_id', goalId)
       .in('task_id', dependencies)
 
-    const allTasksComplete = (depTasks ?? []).every((d: any) => d.status === 'completed')
-    if (!allTasksComplete) continue
+    const RESOLVED_STATUSES = new Set(['completed', 'skipped'])
+    const allTasksResolved = (depTasks ?? []).every((d: any) => RESOLVED_STATUSES.has(d.status))
+    if (!allTasksResolved) continue
 
-    // 2. Strict Waterfall: Check if all dependencies have actually posted a memo
-    // This ensures data exists before unblocking
-    const { data: memos } = await supabase
-      .from('company_memos')
-      .select('task_id')
-      .eq('goal_id', goalId)
-      .in('task_id', dependencies)
+    // 2. Waterfall Verification: Ensure 'completed' dependencies have posted memos.
+    // 'skipped' tasks obviously won't have memos, so we don't wait for them.
+    const completedDepIds = (depTasks ?? []).filter((d: any) => d.status === 'completed').map((d: any) => d.task_id)
+    
+    if (completedDepIds.length > 0) {
+      const { data: memos } = await supabase
+        .from('company_memos')
+        .select('task_id')
+        .eq('goal_id', goalId)
+        .in('task_id', completedDepIds)
 
-    const postedMemos = new Set((memos ?? []).map(m => m.task_id))
-    const allMemosExist = dependencies.every(depId => postedMemos.has(depId))
+      const postedMemos = new Set((memos ?? []).map(m => m.task_id))
+      const allCompletedMemosExist = completedDepIds.every(depId => postedMemos.has(depId))
 
-    if (allMemosExist) {
-      await dispatchTask(blocked.task_id, goalId)
-      log(`Dependencies resolved & memos verified — auto-dispatching task "${blocked.task_id}"`, { goalId })
-      await writeEvent('orc_rebalance', `Task "${blocked.label}" auto-dispatched after dependency verification`, goalId)
-    } else {
-      const missing = dependencies.filter(id => !postedMemos.has(id))
-      log(`Task "${blocked.task_id}" still waiting for memos from: ${missing.join(', ')}`, { goalId })
+      if (!allCompletedMemosExist) {
+        const missing = completedDepIds.filter(id => !postedMemos.has(id))
+        log(`Task "${blocked.task_id}" still waiting for memos from completed tasks: ${missing.join(', ')}`, { goalId })
+        continue
+      }
     }
+
+    // If we reach here, all deps are either skipped or completed-with-memos.
+    await dispatchTask(blocked.task_id, goalId)
+    log(`Dependencies resolved — auto-dispatching task "${blocked.task_id}"`, { goalId })
+    await writeEvent('orc_rebalance', `Task "${blocked.label}" auto-dispatched after dependency resolution (completed/skipped)`, goalId)
   }
 }
 
@@ -242,11 +249,11 @@ async function tryCloseGoal(goalId: string) {
   const { data: tasks } = await supabase.from('goal_tasks').select('*').eq('goal_id', goalId)
   if (!tasks || tasks.length === 0) return
 
-  const terminalStatuses = new Set(['completed', 'rejected', 'expired'])
+  const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired', 'skipped'])
   const allTerminal = tasks.every(t => terminalStatuses.has(t.status))
   if (!allTerminal) return
 
-  const allSucceeded = tasks.every(t => t.status === 'completed')
+  const allSucceeded = tasks.every(t => t.status === 'completed' || t.status === 'skipped')
   const outcome = allSucceeded 
     ? 'All tasks completed successfully.' 
     : `${tasks.filter(t => t.status === 'failed').length} failed, ${tasks.filter(t => t.status === 'completed').length} completed.`

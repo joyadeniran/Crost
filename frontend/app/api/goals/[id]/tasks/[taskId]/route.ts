@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 type Params = { params: { id: string; taskId: string } }
 
 const PatchTaskSchema = z.object({
-  status: z.enum(['rejected', 'completed']),
+  status: z.enum(['rejected', 'completed', 'skipped']),
 })
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -46,6 +46,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    // Trigger chain reaction so downstream tasks can proceed (Option D)
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${params.id}/dispatch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+      },
+      body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
+    }).catch(e => console.error('[Task Patch] Chain reaction failed:', e))
 
     await supabase.from('event_log').insert({
       goal_id: params.id,
