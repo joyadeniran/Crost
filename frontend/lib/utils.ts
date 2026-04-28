@@ -114,3 +114,14 @@ export function normalizeToolName(str: string): string {
   if (!str) return '';
   return str.replace(/\./g, '_').toUpperCase();
 }
+
+/**
+ * Formats bytes into a human-readable string (KB, MB, GB).
+ */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}

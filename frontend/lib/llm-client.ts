@@ -827,6 +827,7 @@ interface LogEventInput {
   description: string
   tokens_used?: number
   model_used?: string | null
+  error_code?: string | null
   metadata?: Record<string, unknown>
   created_by?: string | null
 }
@@ -848,6 +849,7 @@ export async function logEvent(input: LogEventInput): Promise<void> {
       description: truncateString(input.description, 200),
       tokens_used: input.tokens_used ?? 0,
       model_used: input.model_used ?? null,
+      error_code: input.error_code ?? null,
       metadata: cleanLargePayload(input.metadata ?? {}),
       created_by: input.created_by ?? null
     })

@@ -3,9 +3,41 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.29  
-**Last Updated:** April 25, 2026  
-**Deployment Status:** ✅ COMPLETE — Badge count sync, cross-user realtime fix, error handling.
+**Current Version:** 11.55  
+**Last Updated:** April 27, 2026  
+**Deployment Status:** ✅ COMPLETE — Ship-Ready MVP.
+
+---
+
+## Session v11.56 — Artifacts Page Search & Filter Restoration
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Restored full search and filtering capabilities to the Company Artifacts page.
+
+### What Was Built
+1. **`ArtifactsGrid` Client Component** (`frontend/components/artifacts/ArtifactsGrid.tsx`):
+    - Implemented real-time search for artifact titles and parent goal titles.
+    - Added a premium filter bar for all artifact types: Documents, Spreadsheets, PDFs, Images, etc.
+    - Optimized rendering with `useMemo` for smooth performance with large file lists.
+2. **`formatFileSize` Utility** (`frontend/lib/utils.ts`):
+    - Added a robust utility to format bytes into human-readable strings (KB, MB, GB, TB).
+3. **`ArtifactsPage` Refactor** (`frontend/app/dashboard/artifacts/page.tsx`):
+    - Transitioned the artifacts grid to use the new client component while preserving efficient server-side data fetching.
+
+### Files Changed
+- `frontend/app/dashboard/artifacts/page.tsx`
+- `frontend/components/artifacts/ArtifactsGrid.tsx` (NEW)
+- `frontend/lib/utils.ts`
+
+---
+
+## Session v11.55 — Foundational Mandates & E2E Readiness
+**Date**: 2026-04-27 **Status**: ✅ COMPLETE  
+**Impact**: Established official workflow mandates for the Gemini CLI and finalized all technical foundations for launch.
+
+### What Was Built
+1. **`GEMINI.md` Foundational Mandates**: Created a primary reference document for Gemini CLI's core workflows, ensuring 100% compliance with master log updates, frontend testing protocols, and E2E maintenance rules.
+2. **Technical Grounding**: Successfully ran final type-checks and linting across the entire frontend.
+3. **E2E Test Handover**: Prepared the environment for a clean, end-to-end founder journey walkthrough.
 
 ---
 
