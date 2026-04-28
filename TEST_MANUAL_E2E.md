@@ -124,5 +124,22 @@ This manual guides you through a full "Founder Journey" to verify that the appli
 
 ---
 
+## Phase 8: Premium Activity Feed & Monitoring
+
+### **8.1 The Executive Heartbeat (v11.57)**
+- **Action:** Initiate any mission or tool call.
+- **Verify:**
+    - [ ] **Breathing Dot:** The active event dot (e.g., "task_started") has a "breathing" scale animation.
+    - [ ] **Glow:** The active dot has a subtle glow matching its category color.
+
+### **8.2 Intervention Required (v11.57)**
+- **Action:** Trigger a known failure (e.g., use a tool without a valid key).
+- **Verify:**
+    - [ ] **Intervention Block:** The failure appears as a boxed "Intervention Required" alert.
+    - [ ] **Premium Error Code:** A code like `CR-TOOL-GITHUB` is visible.
+    - [ ] **Action Link:** A clear CTA (e.g., "FIX CONNECTION →") is displayed if applicable.
+
+---
+
 ### **Success Criteria for Deployment**
-If all the above steps pass without raw JSON "leaks" or "stuck" departments, the build is **MVP-READY**.
+If all the above steps pass without raw JSON "leaks", "stuck" departments, or unstyled error blocks, the build is **SHIP-READY**.
