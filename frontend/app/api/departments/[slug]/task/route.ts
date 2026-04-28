@@ -323,13 +323,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       if (requiredService && SUPPORTED_TOOLKITS.includes(requiredService)) {
-        const { data: connRow } = await supabase
-          .from('connections')
-          .select('status')
-          .eq('user_id', user.id)
-          .eq('tool_slug', requiredService)
-          .maybeSingle()
-        if (!connRow || connRow.status !== 'connected') {
+        const { checkConnectionWithJIT } = await import('@/lib/composio-connection')
+        const { isConnected, error: connError } = await checkConnectionWithJIT(user.id, requiredService)
+        
+        if (!isConnected) {
           // Reset department status and return a clear error — no stuck approval row
           await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', dept.id)
           await supabase.from('event_log').insert({
@@ -341,7 +338,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             created_by: user.id,
           })
           return NextResponse.json({
-            error: `${requiredService.toUpperCase()} is not connected. Connect it in Settings → Integrations, then retry.`,
+            error: connError || `${requiredService.toUpperCase()} is not connected. Connect it in Settings → Integrations, then retry.`,
             missing_connection: true,
             service: requiredService,
           }, { status: 409 })

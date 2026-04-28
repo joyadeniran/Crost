@@ -160,14 +160,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             const serviceSlug = composioService
               ?? (approval.action_type.split('_')[0] ?? '').toLowerCase()
             if (serviceSlug) {
-              const { data: connRow } = await supabase
-                .from('connections')
-                .select('status')
-                .eq('user_id', user.id)
-                .eq('tool_slug', serviceSlug)
-                .maybeSingle()
-              if (!connRow || connRow.status !== 'connected') {
-                throw new Error(`${serviceSlug.toUpperCase()} is not connected. Connect it in Settings → Integrations, then re-run this action.`)
+              const { checkConnectionWithJIT } = await import('@/lib/composio-connection')
+              const { isConnected, error: connError } = await checkConnectionWithJIT(user.id, serviceSlug)
+              
+              if (!isConnected) {
+                throw new Error(connError || `${serviceSlug.toUpperCase()} is not connected. Connect it in Settings → Integrations, then re-run this action.`)
               }
             }
 
