@@ -143,15 +143,15 @@ export async function transformToPresentation(data: any): Promise<Buffer> {
     const { memo_ids = [], kb_file_ids = [], tool_calls = [] } = data.sources;
 
     if (memo_ids.length > 0) {
-      children.push(new Paragraph({ text: "Company Memos:", bold: true }));
+      children.push(new Paragraph({ children: [new TextRun({ text: "Company Memos:", bold: true })] }));
       for (const m of memo_ids) children.push(new Paragraph({ text: String(m), bullet: { level: 0 } }));
     }
     if (kb_file_ids.length > 0) {
-      children.push(new Paragraph({ text: "Knowledge Base:", bold: true }));
+      children.push(new Paragraph({ children: [new TextRun({ text: "Knowledge Base:", bold: true })] }));
       for (const k of kb_file_ids) children.push(new Paragraph({ text: String(k), bullet: { level: 0 } }));
     }
     if (tool_calls.length > 0) {
-      children.push(new Paragraph({ text: "Tools Used:", bold: true }));
+      children.push(new Paragraph({ children: [new TextRun({ text: "Tools Used:", bold: true })] }));
       for (const t of tool_calls) {
         const desc = typeof t === 'string' ? t : `${t.service}.${t.action}`;
         children.push(new Paragraph({ text: desc, bullet: { level: 0 } }));
