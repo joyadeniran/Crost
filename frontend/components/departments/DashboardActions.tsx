@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useCrostStore } from '@/lib/store'
 
 export function DashboardActions() {
   const [syncing, setSyncing] = useState(false)
@@ -16,6 +17,16 @@ export function DashboardActions() {
       const res = await fetch('/api/departments/resync', { method: 'POST' })
       const json = await res.json()
       setSyncMsg(json.synced === 0 ? 'All synced' : `${json.synced} synced`)
+      
+      // Spec §11: Proactively fetch fresh departments to update global store
+      const deptRes = await fetch('/api/departments?active_only=true')
+      if (deptRes.ok) {
+        const { data } = await deptRes.json()
+        if (data) {
+          useCrostStore.getState().setDepartments(data)
+        }
+      }
+
       router.refresh()
     } catch {
       setSyncMsg('Sync failed')

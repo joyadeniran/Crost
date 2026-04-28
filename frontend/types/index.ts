@@ -273,6 +273,7 @@ export type GoalTaskStatus =
   | 'completed'
   | 'failed'
   | 'needs_data'
+  | 'skipped'
 
 export interface GoalTask {
   id: string

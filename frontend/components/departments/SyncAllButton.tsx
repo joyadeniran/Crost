@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCrostStore } from '@/lib/store'
 
 interface SyncResult {
   slug: string
@@ -22,7 +23,18 @@ export function SyncAllButton() {
       const res = await fetch('/api/departments/resync', { method: 'POST' })
       const json = await res.json() as { synced?: number; results?: SyncResult[]; error?: string; message?: string }
       if (!res.ok) throw new Error(json.error ?? 'Sync failed')
+      
       setResult({ synced: json.synced ?? 0, results: json.results ?? [] })
+      
+      // Spec §11: Proactively fetch fresh departments to update global store
+      const deptRes = await fetch('/api/departments?active_only=true')
+      if (deptRes.ok) {
+        const { data } = await deptRes.json()
+        if (data) {
+          useCrostStore.getState().setDepartments(data)
+        }
+      }
+      
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed')

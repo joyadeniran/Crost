@@ -361,6 +361,15 @@ Rules:
 - Do NOT include any text after the REQUEST_APPROVAL block. It will be parsed automatically.`
     : ''
 
+  const recoveryProtocol = departmentSlug && departmentSlug !== 'orchestrator'
+    ? `## RECOVERY & FALLBACK PROTOCOL (Non-negotiable)
+
+1. MISSING DATA (Option C): If you are asked to gather data from the knowledge base, memos, or external tools and it DOES NOT EXIST, do not hallucinate or guess. You MUST return this JSON immediately:
+   { "needs_more_data": true, "missing_data": ["description of what is missing"], "summary": "I couldn't find the necessary data to proceed." }
+
+2. TEMPLATE FALLBACK (Option A): If you are drafting a document (report, projection, plan) and upstream data gathering tasks were skipped (indicated by empty context or explicit notes), DO NOT FAIL. Instead, generate a high-quality TEMPLATE or SAMPLE based on industry standards, using placeholders like "[Insert Revenue Data]" or "[Add Marketing Goal]" where data is missing.`
+    : ''
+
   return [
     `## CROST CONSTITUTION (Non-negotiable)\n${constitution}`,
     `## YOUR ROLE\n${departmentPrompt}`,
@@ -373,6 +382,7 @@ Rules:
     strategicContext ? `## STRATEGIC CONTEXT (Source of Truth)\n${strategicContext}` : '',
     (capLine || restLine) ? `## CAPABILITY BOUNDARIES\n${[capLine, restLine].filter(Boolean).join('\n\n')}` : '',
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
+    recoveryProtocol,
     hitlProtocol,
     memoBrief ? `## COMPANY MEMOS (recent, high priority)\n<trusted_internal_memos>\n${memoBrief}\n</trusted_internal_memos>` : '',
     `## TASK\n${task}`,
@@ -456,13 +466,20 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
         .eq('is_foundational', false)
         .eq('is_current_context', false)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(5),
+      // Spec §8 Structured context from the singular company_memo table
+      supabase
+        .from('company_memo')
+        .select('title, status, result, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
     ])
 
     const tier1Memos = tier1Res.data
     const criticalMemos = criticalRes.data
     const highMemos = highRes.data
     const optionalMemos = optionalRes.data
+    const structuredMemos = (arguments[0] as any)?.structuredRes?.data || [] // Adjusted for destructuring context if needed, but let's use proper destructuring below
 
     const sections: string[] = []
 
@@ -1237,11 +1254,11 @@ export async function runWorkerTask(
         task_id: task.id,
         // Spec §9.5: record which skill slugs were loaded when producing this artefact.
         skills_used: loadedSkillSlugs,
-        // Spec §9: citations — populated with worker provenance data where available.
+      // Spec §9: citations — populated with worker provenance data where available.
         sources: {
-          memo_ids: [],
-          kb_file_ids: [],
-          tool_calls: [],
+          memo_ids: Array.from(new Set([...((workerResult.result as any)?.sources?.memo_ids || [])])),
+          kb_file_ids: Array.from(new Set([...((workerResult.result as any)?.sources?.kb_file_ids || [])])),
+          tool_calls: (workerResult.result as any)?.sources?.tool_calls || [],
         },
         metadata: {
           task_id: task.id,

@@ -640,12 +640,15 @@ function CommandThread({
 
 function PlanningIndicator() {
   const [dots, setDots] = useState('.')
-  // Pick a stable random message for this planning session
-  const [msg] = useState(() => getRandomProcessingMessage())
+  const [msg, setMsg] = useState(() => getRandomProcessingMessage())
 
   useEffect(() => {
-    const t = setInterval(() => setDots(d => d.length >= 3 ? '.' : d + '.'), 500)
-    return () => clearInterval(t)
+    const dInterval = setInterval(() => setDots(d => d.length >= 3 ? '.' : d + '.'), 500)
+    const mInterval = setInterval(() => setMsg(getRandomProcessingMessage()), 3500)
+    return () => {
+      clearInterval(dInterval)
+      clearInterval(mInterval)
+    }
   }, [])
   return (
     <div style={{
@@ -669,6 +672,7 @@ function PlanningIndicator() {
         color: '#facc15',
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
+        minHeight: '1.2em'
       }}>
         {msg}{dots}
       </div>
@@ -686,7 +690,7 @@ function PlanningIndicator() {
 
 // ─── TaskApprovalItem ─────────────────────────────────────────────────────────
 
-type TaskDecision = 'approved' | 'rejected' | 'held' | null
+type TaskDecision = 'approved' | 'rejected' | 'held' | 'skipped' | null
 
 function TaskApprovalItem({
   task,
@@ -730,11 +734,12 @@ function TaskApprovalItem({
     failed:    '⚠ FAILED',
     planned:   '⏳ WAITING',
     needs_data: '❓ BLOCKED',
+    skipped:    '↷ SKIPPED',
   }
 
   // Use DB status if it's more "advanced" than the local decision.
   // DB statuses that mean work is already in flight or done take priority over null local decision.
-  const DB_ACTIONED_STATUSES: GoalTaskStatus[] = ['approved', 'running', 'completed', 'failed']
+  const DB_ACTIONED_STATUSES: GoalTaskStatus[] = ['approved', 'running', 'completed', 'failed', 'skipped', 'needs_data']
   const isDbActioned = !!dbTask && DB_ACTIONED_STATUSES.includes(dbTask.status)
   const resolvedStatus = dbTask?.status || decision
   const statusLabel = decisionLabel[resolvedStatus || ''] || ''
@@ -862,23 +867,38 @@ function TaskApprovalItem({
             color: resolvedStatus === 'completed' ? '#4ade80' :
                    resolvedStatus === 'failed' ? '#f87171' :
                    (resolvedStatus === 'running' || resolvedStatus === 'dispatched') ? '#60a5fa' :
+                   resolvedStatus === 'needs_data' ? '#fb923c' :
+                   resolvedStatus === 'skipped' ? 'var(--text-4)' :
                    resolvedStatus === 'held' ? '#facc15' : 'var(--text-3)',
             letterSpacing: '0.06em',
           }}>
             {statusLabel}
           </div>
-          {resolvedStatus === 'failed' && (
+          {(resolvedStatus === 'failed' || resolvedStatus === 'needs_data') && (
             <div style={{ marginTop: 8 }}>
               <div style={{
                 fontFamily: 'var(--font-dm-sans, sans-serif)',
                 fontSize: 11,
-                color: '#f87171',
+                color: resolvedStatus === 'failed' ? '#f87171' : '#fb923c',
                 opacity: 0.8,
                 marginBottom: 6,
+                lineHeight: 1.4,
               }}>
-                This task failed. Retry or skip to continue.
+                {resolvedStatus === 'failed' 
+                  ? "This task failed. Retry or skip to continue."
+                  : `Orc needs: ${dbTask?.orc_notes || 'More information to proceed.'}`}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
+                {resolvedStatus === 'needs_data' && (
+                  <a 
+                    href="/dashboard/knowledge" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={{...btnStyle('#60a5fa', '#60a5fa22'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center'}}
+                  >
+                    ↑ Upload Data
+                  </a>
+                )}
                 {onRetry && (
                   <button onClick={onRetry} style={btnStyle('#facc15', '#facc1522')}>
                     ↻ Retry
@@ -892,6 +912,18 @@ function TaskApprovalItem({
               </div>
             </div>
           )}
+          {resolvedStatus === 'skipped' && (
+            <div style={{ 
+              marginTop: 6, 
+              fontSize: 11, 
+              color: 'var(--text-4)', 
+              fontStyle: 'italic',
+              fontFamily: 'var(--font-dm-sans, sans-serif)'
+            }}>
+              Task skipped by founder. Downstream tasks will proceed with partial context.
+            </div>
+          )}
+
           {(resolvedStatus === 'dispatched' || resolvedStatus === 'running') && onMarkDone && (
             <div style={{ marginTop: 8 }}>
               <div style={{
@@ -2088,8 +2120,9 @@ export function WarRoom() {
       console.error('[WarRoom] cancel goal failed', err)
     } finally {
       setActiveGoal(null)
+      setIsSubmittingGoal(false)
     }
-  }, [activeGoal, setActiveGoal])
+  }, [activeGoal, setActiveGoal, setIsSubmittingGoal])
 
   const handleRetryTask = useCallback(async (taskId: string) => {
     if (!activeGoal) return
@@ -2100,16 +2133,15 @@ export function WarRoom() {
 
   const handleSkipTask = useCallback(async (taskId: string) => {
     if (!activeGoal) return
-    setDecisions(d => ({ ...d, [taskId]: 'rejected' }))
+    setDecisions(d => ({ ...d, [taskId]: 'skipped' }))
     try {
       await fetch(`/api/goals/${activeGoal.id}/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'rejected' }),
+        body: JSON.stringify({ status: 'skipped' }),
       })
     } catch (err) {
       console.error('[WarRoom] skip task failed', err)
-      // Keep decision as rejected even on network error — UI stays consistent
     }
   }, [activeGoal])
 
