@@ -3,9 +3,29 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.59  
+**Current Version:** 11.60  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.60 — JIT Connection Sync (Gmail Fix)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes "GMAIL is not connected" errors by implementing Just-In-Time (JIT) synchronization between Composio and the Crost database across all execution paths.
+
+### What Was Built
+1. **Shared JIT Connection Library** (`lib/composio-connection.ts`): Created a centralized helper that verifies service connections against the local database, and if missing/stale, proactively checks Composio to "heal" the local record.
+2. **Unified Path Protection**: Integrated JIT Sync into:
+    - `POST /api/departments/[slug]/task`: Prevents dispatching tasks that will fail due to missing tool connections.
+    - `PATCH /api/approvals/[id]`: Heals connections when a founder clicks "Approve" even if the initial sync was missed.
+    - `executeToolCall`: Refactored to use the shared library, reducing code duplication.
+3. **Connection Healing**: When JIT Sync succeeds, it automatically updates both the `connections` and `available_tools` tables, ensuring the UI and the LLM prompt stay in sync for subsequent calls.
+
+### Files Changed
+- frontend/lib/composio-connection.ts (New)
+- frontend/app/api/departments/[slug]/task/route.ts
+- frontend/app/api/approvals/[id]/route.ts
+- frontend/lib/tools/execute-tool-call.ts
 
 ---
 
