@@ -424,40 +424,45 @@ export function parseApprovalRequest(response: string): ApprovalRequest | null |
 export async function buildOrcContext(userId: string | null): Promise<string> {
   try {
     const supabase = createServerSupabaseClient()
-
-    const { data: tier1Memos } = await supabase
-      .from('company_memos')
-      .select('title, body, from_department, priority, is_foundational, is_current_context')
-      .or('is_foundational.eq.true,is_current_context.eq.true')
-      .order('created_at', { ascending: true })
-
-    const { data: criticalMemos } = await supabase
-      .from('company_memos')
-      .select('title, body, from_department, priority, confidence, source_type')
-      .eq('priority', 'urgent')
-      .eq('is_foundational', false)
-      .eq('is_current_context', false)
-      .order('created_at', { ascending: false })
-      .limit(10)
-
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: highMemos } = await supabase
-      .from('company_memos')
-      .select('title, body, from_department, priority, confidence, source_type')
-      .eq('priority', 'high')
-      .eq('is_foundational', false)
-      .eq('is_current_context', false)
-      .gte('created_at', sevenDaysAgo)
-      .order('created_at', { ascending: false })
-      .limit(8)
-    const { data: optionalMemos } = await supabase
-      .from('company_memos')
-      .select('title, from_department, priority')
-      .in('priority', ['normal', 'low'])
-      .eq('is_foundational', false)
-      .eq('is_current_context', false)
-      .order('created_at', { ascending: false })
-      .limit(5)
+
+    const [tier1Res, criticalRes, highRes, optionalRes] = await Promise.all([
+      supabase
+        .from('company_memos')
+        .select('title, body, from_department, priority, is_foundational, is_current_context')
+        .or('is_foundational.eq.true,is_current_context.eq.true')
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('company_memos')
+        .select('title, body, from_department, priority, confidence, source_type')
+        .eq('priority', 'urgent')
+        .eq('is_foundational', false)
+        .eq('is_current_context', false)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase
+        .from('company_memos')
+        .select('title, body, from_department, priority, confidence, source_type')
+        .eq('priority', 'high')
+        .eq('is_foundational', false)
+        .eq('is_current_context', false)
+        .gte('created_at', sevenDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(8),
+      supabase
+        .from('company_memos')
+        .select('title, from_department, priority')
+        .in('priority', ['normal', 'low'])
+        .eq('is_foundational', false)
+        .eq('is_current_context', false)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    ])
+
+    const tier1Memos = tier1Res.data
+    const criticalMemos = criticalRes.data
+    const highMemos = highRes.data
+    const optionalMemos = optionalRes.data
 
     const sections: string[] = []
 
