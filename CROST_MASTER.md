@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.58  
-**Last Updated:** April 27, 2026  
+**Current Version:** 11.59  
+**Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.59 — Approval ID Bug Fix (Tool Invocation HITL)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixes "approval missing its ID" error when founders invoke tools via `/service.action` chat commands, and the same silent failure in worker REQUEST_APPROVAL flows.
+
+### What Was Built
+1. `executeToolCall` now writes `action_type: 'tool_call'` (the canonical enum value) instead of the fully-qualified tool slug (e.g. `gmail.send_email`), which violated the `approval_queue_action_type_check` CHECK constraint and silently nulled the returned approval_id. The real composio action is preserved in `payload.__tool_action` and `action_label` (where the PATCH executor already reads it).
+2. The same fix applied to `runWorkerTask` in `lib/llm-client.ts` — worker LLMs emitting `REQUEST_APPROVAL { action_type: "GMAIL_SEND_EMAIL" }` no longer silently fail to enqueue.
+3. Hardened error handling: both code paths now throw on a failed approval_queue insert (instead of silently returning `approval_id: undefined`). `executeToolCall` additionally rolls back the orphaned `tool_executions` skeleton row so it doesn't leave a stuck `'blocked'` record.
+
+### Files Changed
+- frontend/lib/tools/execute-tool-call.ts
+- frontend/lib/llm-client.ts
 
 ---
 
