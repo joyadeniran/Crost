@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
-import { ArtifactCard } from '@/components/artifacts/ArtifactCard'
+import { ArtifactsGrid } from '@/components/artifacts/ArtifactsGrid'
 import { Artifact } from '@/types'
 
 export default async function ArtifactsPage() {
@@ -57,7 +57,7 @@ export default async function ArtifactsPage() {
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
           {artifacts.length > 0
-            ? `${artifacts.length} file${artifacts.length !== 1 ? 's' : ''} — click any card to inspect, or download directly.`
+            ? `Browse, filter, and download your company's technical deliverables.`
             : 'Your generated files will appear here'
           }
         </p>
@@ -84,20 +84,11 @@ export default async function ArtifactsPage() {
           </div>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: 16,
-        }}>
-          {artifacts.map(artifact => (
-            <ArtifactCard
-              key={artifact.id}
-              artifact={artifact}
-              goalTitle={goalMap.get(artifact.goal_id ?? '') ?? undefined}
-              deptColor={deptColorMap.get(artifact.department_slug) ?? undefined}
-            />
-          ))}
-        </div>
+        <ArtifactsGrid 
+          initialArtifacts={artifacts}
+          goalMap={goalMap}
+          deptColorMap={deptColorMap}
+        />
       )}
     </div>
   )
