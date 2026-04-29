@@ -30,8 +30,19 @@ export const ERROR_REGISTRY: Record<string, CrostError> = {
   },
   'CR-LLM-GATEWAY': {
     code: 'CR-LLM-GATEWAY',
-    founderMessage: 'The intelligence provider is currently unreachable.',
+    founderMessage: 'The intelligence provider is temporarily unavailable. We are attempting to recover...',
     actionLabel: 'RETRY MISSION',
+  },
+  'CR-LLM-AUTH': {
+    code: 'CR-LLM-AUTH',
+    founderMessage: 'Authentication issue with the intelligence provider. Please check your API keys.',
+    actionLabel: 'FIX KEYS',
+    actionHref: '/dashboard/settings?tab=keys'
+  },
+  'CR-LLM-RATE': {
+    code: 'CR-LLM-RATE',
+    founderMessage: 'Intelligence rate limit reached. Throttling requests...',
+    actionLabel: 'WAIT'
   },
 
   // TOOLS / COMPOSIO
@@ -76,6 +87,14 @@ export function resolveCrostError(technicalMessage: string): CrostError {
 
   // 2. Heuristic matching
   if (technicalMessage.includes('SYSTEM_LIMIT_EXCEEDED')) return ERROR_REGISTRY['CR-LLM-QUOTA'];
+  
+  if (technicalMessage.includes('LiteLLM error')) {
+    if (technicalMessage.includes('503')) return ERROR_REGISTRY['CR-LLM-GATEWAY'];
+    if (technicalMessage.includes('429')) return ERROR_REGISTRY['CR-LLM-RATE'];
+    if (technicalMessage.includes('401') || technicalMessage.includes('400')) return ERROR_REGISTRY['CR-LLM-AUTH'];
+    return ERROR_REGISTRY['CR-LLM-GATEWAY'];
+  }
+
   if (technicalMessage.includes('gmail')) return ERROR_REGISTRY['CR-TOOL-GMAIL'];
   if (technicalMessage.includes('github')) return ERROR_REGISTRY['CR-TOOL-GITHUB'];
   if (technicalMessage.includes('track tool execution')) return ERROR_REGISTRY['CR-TOOL-TRACKING'];

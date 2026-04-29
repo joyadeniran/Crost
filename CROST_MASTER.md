@@ -3,9 +3,41 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.77  
+**Current Version:** 11.79  
 **Last Updated:** April 29, 2026  
-**Deployment Status:** ✅ PRODUCTION — Design Fallback Implemented.
+**Deployment Status:** ✅ PRODUCTION — Error UX Hardened.
+
+---
+
+## Session v11.79 — UX Resilience & Error Humanization
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Standardized technical error handling across the frontend, ensuring LiteLLM and network failures are humanized and actionable.
+
+### What Was Built
+1. **Centralized Error Registry** (`errors.ts`):
+    - Created a formal `ERROR_REGISTRY` mapping technical codes (401, 429, 503) to human-friendly "Founder Messages".
+    - Added `resolveCrostError` heuristic engine to handle technical substrings and legacy JSON errors.
+2. **LiteLLM Sanitization** (`llm-client.ts`):
+    - Improved `llm-client.ts` to surgically extract cleaner error messages from LiteLLM's nested JSON responses while maintaining detection prefixes.
+3. **Frontend UX Hardening**:
+    - Updated `formatErrorMessage` in `utils.ts` to utilize the new Error Registry.
+    - Audited and updated Login, Signup, Onboarding, and Settings components to use centralized formatting, eliminating raw technical "Failed to fetch" or "LiteLLM error" strings from toasts.
+
+---
+
+## Session v11.78 — Silent Provider Fallback & Resilience
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Eliminated user-facing "Provider Unavailable" errors by implementing an automated, silent fallback strategy.
+
+### What Was Built
+1. **Silent Fallback Logic** (`llm-client.ts`):
+    - Refactored `callLLM` to automatically catch 503 (Service Unavailable) and other provider-level errors.
+    - Implemented a "Silent Switch" protocol: if a primary model fails, the system immediately tries the next provider in the `RESILIENT_FALLBACK_CHAIN` (e.g., Groq → Gemini → Groq Llama 3.1).
+2. **Transparent Background Logging**:
+    - Switches are now logged silently to the `event_log` as a `provider_fallback` event.
+    - This maintains the "magic" of the UI (no error banners) while providing full technical traceability in the back-end logs.
+3. **Resilience Hardening**:
+    - Added retry counters and explicit "System Limit" bypasses to ensure billing/quota errors are still surfaced correctly while temporary spikes in demand are handled autonomously.
 
 ---
 

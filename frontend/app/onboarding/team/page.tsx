@@ -6,6 +6,7 @@ import { useOnboardingStore } from '@/lib/onboarding-store'
 import { DepartmentCard } from '@/components/onboarding/DepartmentCard'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 
 function getDepartmentDescription(dept: any) {
   if (typeof dept.onboarding_description === 'string' && dept.onboarding_description.trim()) {
@@ -107,9 +108,9 @@ export default function TeamPage() {
 
       router.push('/onboarding/activate')
     } catch (err: any) {
-      toast(err.message || 'Something went wrong.', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
-      setSubmitting(false)
+      setLoading(false)
     }
   }
 
@@ -139,7 +140,7 @@ export default function TeamPage() {
       if (!res.ok) throw new Error('Unable to save your setup')
       window.location.href = '/dashboard'
     } catch (err: any) {
-      toast(err.message || 'Unable to skip right now.', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setSubmitting(false)
     }

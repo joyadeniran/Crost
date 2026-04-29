@@ -6,6 +6,7 @@ import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ControlStyleCard } from '@/components/onboarding/ControlStyleCard'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 
 const OPTIONS = [
   {
@@ -74,7 +75,7 @@ export default function ControlPage() {
       if (!res.ok) throw new Error('Unable to save your setup')
       window.location.href = '/dashboard'
     } catch (err: any) {
-      toast(err.message || 'Unable to skip right now.', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setSkipping(false)
     }
