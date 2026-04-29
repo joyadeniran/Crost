@@ -3,9 +3,44 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.75  
+**Current Version:** 11.77  
 **Last Updated:** April 29, 2026  
-**Deployment Status:** ✅ PRODUCTION — Artifact Naming Improved.
+**Deployment Status:** ✅ PRODUCTION — Design Fallback Implemented.
+
+---
+
+## Session v11.77 — Design Skill & Image Generation Fallback
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Resolved the "Image Generation" edge case by implementing a dedicated Skills layer for Design, ensuring the system fails gracefully with professional specifications instead of blank outputs.
+
+### What Was Built
+1. **Design & Image Skill** (`lib/skills/image`):
+    - Created a new `image` skill that provides strict guidance to LLMs on how to handle design tasks.
+    - Explicitly prohibits binary hallucination and mandates a **High-Fidelity Design Specification** (JSON) as a fallback.
+    - Includes a structured schema for dimensions, color palettes, typography, and creative prompts (DALL-E/Midjourney compatible).
+2. **Skill Layer Integration**:
+    - Updated `ACTION_SKILL_MAP` to automatically load the `image` skill for keywords like "design", "banner", "logo", and "creative".
+    - Hardened `SKILLS_DIR` resolution to ensure reliable loading across different process environments.
+3. **Artifact Transformation**:
+    - Updated `detectOutputType` to recognize the `image` skill and automatically transform its JSON output into a professional **Creative Design Brief** (.md).
+    - This ensures that when a text-only model (like Llama 3) is asked to "Design a banner", the founder receives a structured brief they can actually use, rather than a technical failure.
+
+---
+
+## Session v11.76 — Orc Hardening & 431 definitive fix
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Eliminated Orchestrator department hallucinations and hardened cookie configurations to permanently resolve 431 errors.
+
+### What Was Built
+1. **Orchestrator Validation Layer** (`llm-client.ts`):
+    - Implemented a "Hallucination Protection" routine that validates all proposed departments against the real-time database list.
+    - Added an automated "Self-Correction" loop: if Orc hallucinations an unknown department, the system now intercepts the response and issues a `CRITICAL ERROR` prompt forcing a redraft.
+    - If boundaries are violated twice, the plan is rejected entirely to prevent downstream execution failures.
+2. **Hardened Cookie Domains**:
+    - Updated `auth/callback` and `api/toggle` routes to explicitly use the dynamic `app.crosthq.com` domain for all `set-cookie` operations.
+    - This ensures that *newly* set session cookies and mode toggles do not accidentally populate the wildcard `.crosthq.com` domain, which was causing the 431 recurrence.
+3. **Prompt Engineering**:
+    - Strengthened `ORCHESTRATOR_SYSTEM_NOTE` with absolute constraints and explicit prohibitions against creating phantom departments like "design" or "graphics".
 
 ---
 

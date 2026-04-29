@@ -727,8 +727,6 @@ export async function callLLM(
   const maxAttempts = 3
 
   // Identify if we should use the fallback chain.
-  // We only use the chain if the requested model is part of our known reliable stack,
-  // or if it's the default 'cloud' sentinel.
   const useFallbackChain = RESILIENT_FALLBACK_CHAIN.includes(model) || model === 'cloud'
 
   while (attempts < maxAttempts) {
@@ -749,17 +747,36 @@ export async function callLLM(
       }
 
       // Select the next model in the chain
-      // If the current model failed, find its index and move to the next one
       const currentIndex = RESILIENT_FALLBACK_CHAIN.indexOf(currentModel)
+      let nextModel: string | null = null
+
       if (currentIndex !== -1 && currentIndex < RESILIENT_FALLBACK_CHAIN.length - 1) {
-        currentModel = RESILIENT_FALLBACK_CHAIN[currentIndex + 1]
-        console.info(`[callLLM] Falling back to: ${currentModel}`)
+        nextModel = RESILIENT_FALLBACK_CHAIN[currentIndex + 1]
       } else if (currentIndex === -1 && attempts === 1) {
-        // If it wasn't in the chain (e.g. a custom user model), fallback to the first reliable one
-        currentModel = RESILIENT_FALLBACK_CHAIN[0]
-        console.info(`[callLLM] Falling back to primary reliable: ${currentModel}`)
+        nextModel = RESILIENT_FALLBACK_CHAIN[0]
+      }
+
+      if (nextModel) {
+        const switchDescription = `Automated provider fallback: ${currentModel} failed (Attempt ${attempts}). Switching to ${nextModel}.`
+        console.info(`[callLLM] ${switchDescription}`)
+        
+        // SILENT LOGGING: Log to event_log for transparency without interrupting the user
+        logEvent({
+          event_type: 'provider_fallback',
+          description: switchDescription,
+          model_used: currentModel,
+          metadata: { 
+            failed_model: currentModel, 
+            next_model: nextModel, 
+            attempt: attempts,
+            error: err.message?.slice(0, 500)
+          },
+          created_by: userId
+        }).catch(() => {})
+
+        currentModel = nextModel
       } else {
-        throw err // No more fallback options in the chain
+        throw err // No more fallback options
       }
     }
   }
@@ -924,12 +941,14 @@ Rules:
 3. If the goal is ambiguous, set is_valid_goal=false and provide a clarification_question.
 4. NEVER provide both a plan and a direct_response.
 5. ALWAYS provide a risk_note in the plan.
-6. You MUST ONLY assign tasks to the PROVIDED list of departments.
-7. CENTRALIZED RESEARCH: Insert a "Master Research Task" at the start for any market/external data needs.
-8. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.
-9. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
-10. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
-11. Never refer to yourself as the founder or use the founder's personal identity as your own.`
+6. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments (e.g., if "design" is not in the list, do NOT use it; use an existing one like "marketing" or "operations" instead).
+7. If a task requires a skill not explicitly owned by a department, assign it to the most relevant existing department.
+8. CENTRALIZED RESEARCH: Insert a "Master Research Task" at the start for any market/external data needs.
+9. BRAIN VS. TOOL: Use tools ONLY for data the LLM cannot know. Use Brain for strategy/creative.
+10. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
+11. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
+12. Never refer to yourself as the founder or use the founder's personal identity as your own.
+13. ABSOLUTE CONSTRAINT: Plans containing non-existent departments will be rejected by the system. Check the "Available Departments" list before every task assignment.`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1035,6 +1054,36 @@ export async function runOrchestratorTask(
   const { model: planModel, provider: planProvider } = await getModel('planning', userId)
   const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
   let result = parseOrchestratorResponse(content)
+
+  // ─── Hallucination Protection ──────────────────────────────────────────────
+  // Validate that all proposed departments actually exist in the DB.
+  if (result.is_valid_goal && result.plan?.tasks) {
+    const activeSlugs = activeDeptsList.map(d => d.slug.toLowerCase())
+    const invalidTasks = result.plan.tasks.filter((t: any) => !activeSlugs.includes(t.dept.toLowerCase()))
+    
+    if (invalidTasks.length > 0) {
+      console.warn(`[Orchestrator] Hallucination detected: Unknown departments [${invalidTasks.map((t: any) => t.dept).join(', ')}]. Forcing retry...`)
+      
+      const retryPrompt = `${prompt}\n\nCRITICAL ERROR: You proposed tasks for departments that do NOT exist: [${invalidTasks.map((t: any) => t.dept).join(', ')}]. \nONLY use these available departments: [${activeSlugs.join(', ')}]. \nRedraft the plan using ONLY these departments.`
+      
+      const retryResponse = await callLLM(planModel, await buildFinalPrompt(
+        orcDept?.persona_prompt ?? 'You are the Orchestrator.',
+        retryPrompt,
+        orcDept?.capabilities ?? [],
+        orcDept?.restrictions ?? [],
+        orcDept?.slug,
+        goalId
+      ), ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
+      
+      result = parseOrchestratorResponse(retryResponse.content)
+      
+      // Secondary validation check
+      const secondaryInvalid = (result.plan?.tasks || []).filter((t: any) => !activeSlugs.includes(t.dept.toLowerCase()))
+      if (secondaryInvalid.length > 0) {
+        throw new Error(`Orchestrator failed to respect department boundaries after retry. Proposed unknown depts: ${secondaryInvalid.map((t: any) => t.dept).join(', ')}`)
+      }
+    }
+  }
 
   const previousAssistantMessage = [...conversationHistory].reverse().find((m) => m.role === 'assistant')?.content
   const latestUserMessage = [...conversationHistory].reverse().find((m) => m.role === 'user')?.content
