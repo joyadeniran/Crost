@@ -701,8 +701,8 @@ async function callLiteLLM(
 // Evaluated in order if the primary model fails.
 const RESILIENT_FALLBACK_CHAIN = [
   'groq/llama-3.3-70b-versatile', // Smartest/Fastest (Primary)
-  'gemini/gemini-2.5-flash',       // Reliable Backup
-  'local/gemma3'                  // Emergency Local Fallback
+  'gemini/gemini-2.0-flash',       // Reliable Backup (Corrected version name)
+  'groq/llama-3.1-8b-instant'     // Fast Cloud Fallback (Replaced local/gemma3)
 ]
 
 export async function callLLM(

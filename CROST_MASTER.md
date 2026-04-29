@@ -3,9 +3,36 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.72  
+**Current Version:** 11.74  
 **Last Updated:** April 29, 2026  
-**Deployment Status:** ✅ STABLE — 431 Errors Resolved.
+**Deployment Status:** ✅ PRODUCTION — Cloud-Only Models Enforced.
+
+---
+
+## Session v11.74 — Cloud Enforcement & Event Log Stability
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Eliminated all emergency local model fallbacks to ensure 100% cloud reliability for MVP. Fixed a critical filtering bug in the Event Log deep-link.
+
+### What Was Built
+1. **Cloud-Only Fallback Chain** (`llm-client.ts`):
+    - Removed `local/gemma3` from the `RESILIENT_FALLBACK_CHAIN`.
+    - Added `groq/llama-3.1-8b-instant` as the tertiary cloud fallback.
+    - Corrected the Gemini backup model name to `gemini/gemini-2.0-flash`.
+2. **Event Log Deep-Link Fix** (`EventLogClient.tsx`):
+    - Resolved a JavaScript property access error (`(ev as any).goal_id`) that was causing the event log to appear empty when filtered via deep-link.
+    - Simplified the client-side filtering logic to correctly match the `goal_id` column.
+
+---
+
+## Session v11.73 — Cookie Force Purge (Legacy Cleanup)
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Resolved persistent 431 errors on browsers with "poisoned" cookie states by implementing an aggressive force-purge of legacy wildcard cookies (`.crosthq.com`).
+
+### What Was Built
+1. **Force Purge Logic** (`LayoutStoreHydrator.tsx`):
+    - Added an automated routine that detects duplicated Supabase auth cookies.
+    - Specifically targets and deletes cookies set on the parent `.crosthq.com` domain by setting their expiry to the past.
+    - This ensures that only the new, correctly-scoped `app.crosthq.com` cookies are sent to the server, curing the 431 error instantly without requiring manual cache clearing.
 
 ---
 
