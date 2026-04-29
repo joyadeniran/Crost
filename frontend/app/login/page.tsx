@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { Logo } from '@/components/ui/Logo'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
 
 
@@ -39,7 +40,7 @@ export default function LoginPage() {
         window.location.href = '/dashboard'
       }
     } catch (err: any) {
-      toast(err.message || 'Authentication failed', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setLoading(false)
     }
@@ -57,7 +58,7 @@ export default function LoginPage() {
       if (error) throw error
       window.location.href = '/dashboard'
     } catch (err: any) {
-      toast(err.message || 'Invalid code', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setLoading(false)
     }
@@ -75,7 +76,7 @@ export default function LoginPage() {
       })
       if (error) throw error
     } catch (err: any) {
-      toast(err.message || 'Social login failed', 'error')
+      toast(formatErrorMessage(err), 'error')
     }
   }
 

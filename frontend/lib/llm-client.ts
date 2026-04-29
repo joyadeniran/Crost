@@ -676,7 +676,21 @@ async function callLiteLLM(
 
   if (!res.ok) {
     const errText = await res.text()
-    throw new Error(`LiteLLM error ${res.status}: ${errText}`)
+    let cleanMessage = `LiteLLM error ${res.status}`
+    try {
+      const parsed = JSON.parse(errText)
+      // Extract the nested error message from LiteLLM's standard response
+      if (parsed.error?.message) {
+        cleanMessage = parsed.error.message
+      } else if (parsed.message) {
+        cleanMessage = parsed.message
+      }
+    } catch {
+      // Not JSON, use technical fallback
+    }
+    
+    // We keep 'LiteLLM error' in the prefix so formatErrorMessage() can still detect it
+    throw new Error(`LiteLLM error ${res.status}: ${cleanMessage}`)
   }
 
   const data = await res.json()

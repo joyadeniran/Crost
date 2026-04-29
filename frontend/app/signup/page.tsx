@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { Logo } from '@/components/ui/Logo'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
 
 export default function SignUpPage() {
@@ -51,7 +52,7 @@ export default function SignUpPage() {
       setShowOtp(true)
       toast('Verification code sent!', 'success')
     } catch (err: any) {
-      toast(err.message || 'Signup failed', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setLoading(false)
     }
@@ -79,7 +80,7 @@ export default function SignUpPage() {
       }
       window.location.href = '/onboarding/identity'
     } catch (err: any) {
-      toast(err.message || 'Invalid code', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setLoading(false)
     }
@@ -97,7 +98,7 @@ export default function SignUpPage() {
       })
       if (error) throw error
     } catch (err: any) {
-      toast(err.message || 'Social login failed', 'error')
+      toast(formatErrorMessage(err), 'error')
     }
   }
 

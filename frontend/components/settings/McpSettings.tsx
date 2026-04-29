@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 
 interface Tool {
   id: string
@@ -104,7 +105,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
 
     } catch (err: any) {
       console.error('Composio Connection Failed:', err)
-      toast(err.message || 'Failed to connect. Please try again.', 'error', 'Connection Error')
+      toast(formatErrorMessage(err), 'error', 'Connection Error')
     } finally {
       setUpdating(null)
     }
@@ -125,7 +126,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
       }
     } catch (err) {
       console.error('Failed to disconnect tool:', err)
-      toast('Failed to disconnect. Please try again.', 'error')
+      toast(formatErrorMessage(err), 'error')
     } finally {
       setUpdating(null)
     }

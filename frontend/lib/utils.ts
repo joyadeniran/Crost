@@ -1,6 +1,7 @@
 /**
  * Data optimization utilities to minimize Supabase egress and payload overhead.
  */
+import { resolveCrostError } from './errors';
 
 /**
  * Truncates a string to a safe limit, appending an ellipsis if needed.
@@ -86,24 +87,38 @@ export function formatMemoBody(body: string): string {
  * specifically for SYSTEM_LIMIT_EXCEEDED and other structured errors.
  */
 export function formatErrorMessage(err: string | any): string {
-  if (!err) return 'Unknown error occurred.';
+  if (!err) return 'An unexpected interruption occurred.';
   
-  let parsed = err;
+  let technicalMessage = '';
+  let parsed: any = null;
+
   if (typeof err === 'string') {
+    technicalMessage = err;
     try {
       parsed = JSON.parse(err);
     } catch {
-      // Not JSON, return as is
-      return err;
+      // Not JSON
     }
+  } else {
+    parsed = err;
+    technicalMessage = err.message || err.error || JSON.stringify(err);
   }
 
-  if (parsed.code === 'SYSTEM_LIMIT_EXCEEDED') {
+  // 1. Detailed Quota Handling (Legacy fallback for rich messages)
+  if (parsed && parsed.code === 'SYSTEM_LIMIT_EXCEEDED') {
     const reset = parsed.resetAt ? new Date(parsed.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'midnight';
     return `Daily free limit reached (${(parsed.limit || 0).toLocaleString()} tokens). Please add your own API key in Settings or wait until ${reset} for the reset.`;
   }
 
-  return parsed.message || parsed.error || JSON.stringify(parsed);
+  // 2. Browser/Network technical strings
+  const lower = technicalMessage.toLowerCase();
+  if (lower.includes('failed to fetch') || lower.includes('network error') || lower.includes('networkerror')) {
+    return 'Connection interrupted. Please check your internet or try again in a moment.';
+  }
+
+  // 3. Centralized Crost Error Resolution
+  const resolved = resolveCrostError(technicalMessage);
+  return resolved.founderMessage;
 }
 
 /**

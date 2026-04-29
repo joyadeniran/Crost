@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
+import { formatErrorMessage } from '@/lib/utils'
 
 export default function MeetOrcPage() {
   const router = useRouter()
@@ -70,7 +71,7 @@ export default function MeetOrcPage() {
       await persistSkip('team')
       window.location.href = '/dashboard'
     } catch (err: any) {
-      toast(err.message || 'Unable to skip right now.', 'error')
+      toast(formatErrorMessage(err), 'error')
       setLoading(false)
     }
   }
