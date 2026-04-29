@@ -3,9 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.71  
-**Last Updated:** April 28, 2026  
-**Deployment Status:** ✅ COMPLETE — Production Stabilized.
+**Current Version:** 11.72  
+**Last Updated:** April 29, 2026  
+**Deployment Status:** ✅ STABLE — 431 Errors Resolved.
+
+---
+
+## Session v11.72 — 431 Header Fix & Dynamic Refactoring
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Resolved 431 "Request Header Fields Too Large" errors by narrowing cookie domains and refactored configurations to use dynamic environment-based hostnames instead of hardcoded strings.
+
+### What Was Built
+1. **Cookie Bloat Mitigation** (`LayoutStoreHydrator.tsx`):
+    - Added a cookie check and refined polling/realtime logic to prevent excessive re-renders and network usage.
+    - Optimized re-renders using Zustand selectors and `useRef` for stable callbacks.
+2. **Dynamic Domain Handling**:
+    - Refactored `middleware.ts`, `lib/supabase.ts`, and `lib/supabase-browser.ts` to derive the cookie domain dynamically from `NEXT_PUBLIC_APP_URL`.
+    - Eliminated hardcoded `app.crosthq.com` references for better scalability across environments.
+3. **Verified Stability**:
+    - Confirmed `npm run type-check` and `npm run lint` pass cleanly in the frontend.
 
 ---
 
