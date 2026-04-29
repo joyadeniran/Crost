@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.74  
+**Current Version:** 11.75  
 **Last Updated:** April 29, 2026  
-**Deployment Status:** ✅ PRODUCTION — Cloud-Only Models Enforced.
+**Deployment Status:** ✅ PRODUCTION — Artifact Naming Improved.
+
+---
+
+## Session v11.75 — Build Fix & Artifact Naming Polish
+**Date**: April 29, 2026  **Status**: ✅
+**Impact**: Resolved a production build failure and improved user experience by providing descriptive filenames for generated artifacts.
+
+### What Was Built
+1. **TypeScript Build Fix** (`types/index.ts`):
+    - Added missing `goal_id` field to `EventLogEntry` interface to resolve property access errors during Next.js compilation.
+2. **Descriptive Artifact Naming** (`llm-client.ts`):
+    - Refactored `uploadArtifact` to derive filenames from task labels (e.g., `fy26-financial-projection.xlsx`) instead of random UUIDs.
+    - Implemented a filename sanitizer to ensure compatibility with all OS/browsers (lowercase, no special characters).
+3. **Email Attachment Investigation**:
+    - Identified that while `executeToolCall` passes `attachment_url` to Gmail, the current Composio integration requires specific handling for URL-based attachments which may be causing the silent omission.
 
 ---
 
