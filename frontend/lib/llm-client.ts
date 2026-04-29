@@ -176,7 +176,15 @@ async function uploadArtifact(
     const ext = detection.targetFormat
     const contentType = mimeMap[ext] || 'text/plain'
     const artifactType = typeMap[ext] || 'document'
-    const fileName = `goals/${goalId || 'global'}/task-${taskId}-${Date.now()}.${ext}`
+
+    // Use taskHint (the task label) for a descriptive filename, fallback to taskId
+    const cleanLabel = (taskHint || 'artifact')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .substring(0, 50)
+    
+    const fileName = `goals/${goalId || 'global'}/${cleanLabel}-${Date.now()}.${ext}`
 
     const { data, error } = await supabase.storage
       .from('artifacts')
