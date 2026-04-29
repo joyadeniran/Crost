@@ -98,7 +98,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
       if (typeFilter !== 'all' && ev.event_type !== typeFilter) return false
       if (deptFilter !== 'all' && ev.department_slug !== deptFilter) return false
       // goalScope client-side guard (server already scoped, but keep in sync for UI)
-      if (goalScope && (ev as any).goal_id && (ev as any).goal_id !== goalScope) return false
+      if (goalScope && ev.goal_id !== goalScope) return false
       if (search && !ev.description.toLowerCase().includes(search.toLowerCase()) &&
           !ev.event_type.toLowerCase().includes(search.toLowerCase())) return false
       return true
