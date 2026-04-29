@@ -189,6 +189,7 @@ export interface EventLogEntry {
   id: string
   department_id: string | null
   department_slug: string | null
+  goal_id: string | null
   event_type: EventType
   description: string
   metadata: Record<string, unknown>
