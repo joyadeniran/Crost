@@ -103,6 +103,11 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     return { sourceFormat: 'json', contentType: 'code', targetFormat: ext as any, transformer: transformToCode };
   }
 
+  if (parsed?.skill === 'image') {
+    // For images without a tool, we generate a Design Spec (MD/DOCX fallback)
+    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+  }
+
   // ── CHECK 0: Explicit format field set by department prompt ─────────────
   if (parsed?.format && typeof parsed.format === 'string') {
     const fmt = parsed.format.toLowerCase();

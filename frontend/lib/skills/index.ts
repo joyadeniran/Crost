@@ -18,10 +18,10 @@ import path from 'path'
 // ─── Skill slug registry ──────────────────────────────────────────────────────
 
 /** All valid MVP skill slugs. */
-export type SkillSlug = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'pitch_deck' | 'code'
+export type SkillSlug = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'pitch_deck' | 'code' | 'image'
 
 /** Canonical directory for skill files. */
-const SKILLS_DIR = path.join(process.cwd(), 'lib', 'skills')
+const SKILLS_DIR = path.join(__dirname)
 
 // ─── Action → skill slug mappings ────────────────────────────────────────────
 
@@ -31,6 +31,23 @@ const SKILLS_DIR = path.join(process.cwd(), 'lib', 'skills')
  * pitch_deck is always co-loaded with pptx (handled in loadSkillsForTask).
  */
 const ACTION_SKILL_MAP: Array<{ keywords: string[]; slugs: SkillSlug[] }> = [
+  // Image / Design
+  {
+    keywords: [
+      'generate_image',
+      'create_design',
+      'design_banner',
+      'create_logo',
+      'design_asset',
+      'graphic_design',
+      'generate_concepts',
+      'visual_design',
+      'banner',
+      'design',
+      'creative',
+    ],
+    slugs: ['image'],
+  },
   // Source Code / Technical
   {
     keywords: [
@@ -263,7 +280,7 @@ export async function loadSkillsForTask(
  * pptx must come before pitch_deck so the LLM reads the base contract first.
  */
 function orderSlugs(slugs: SkillSlug[]): SkillSlug[] {
-  const PRIORITY: SkillSlug[] = ['pptx', 'xlsx', 'docx', 'pdf', 'code', 'pitch_deck']
+  const PRIORITY: SkillSlug[] = ['pptx', 'xlsx', 'docx', 'pdf', 'code', 'pitch_deck', 'image']
   return PRIORITY.filter((s) => slugs.includes(s))
 }
 
@@ -279,6 +296,7 @@ export function getSkillLabel(slug: SkillSlug): string {
     pdf: 'PDF Document',
     code: 'Source Code',
     pitch_deck: 'Founder-Grade Pitch Deck',
+    image: 'Creative Design & Visual Concepts',
   }
   return labels[slug] ?? slug
 }

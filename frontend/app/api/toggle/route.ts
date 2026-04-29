@@ -28,12 +28,17 @@ export async function POST(req: NextRequest) {
       .from('system_config')
       .upsert({ key: 'env_mode', value: 'cloud', created_by: user.id }, { onConflict: 'key, created_by' })
 
+    const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+    const prodDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : undefined
+    const domainOptions = isProd ? { domain: prodDomain } : {}
+
     const res = NextResponse.json({ success: true, mode: 'cloud' })
     res.cookies.set('env_mode', 'cloud', {
       path: '/',
       maxAge: 60 * 60 * 24 * 365, // 1 year
       httpOnly: false,
       sameSite: 'lax',
+      ...domainOptions
     })
     return res
 

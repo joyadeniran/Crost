@@ -38,10 +38,16 @@ export async function GET(request: Request) {
             return cookies[name]
           },
           set(name: string, value: string, options: CookieOptions) {
-            response.cookies.set({ name, value, ...options })
+            const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+            const prodDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : undefined
+            const domainOptions = isProd ? { domain: prodDomain } : {}
+            response.cookies.set({ name, value, ...options, ...domainOptions })
           },
           remove(name: string, options: CookieOptions) {
-            response.cookies.delete({ name, ...options })
+            const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
+            const prodDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : undefined
+            const domainOptions = isProd ? { domain: prodDomain } : {}
+            response.cookies.delete({ name, ...options, ...domainOptions })
           },
         },
       }
