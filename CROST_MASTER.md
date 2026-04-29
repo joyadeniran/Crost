@@ -3,9 +3,26 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.70  
+**Current Version:** 11.71  
 **Last Updated:** April 28, 2026  
 **Deployment Status:** ✅ COMPLETE — Production Stabilized.
+
+---
+
+## Session v11.71 — Production Build Fix (Render)
+**Date**: April 28, 2026  **Status**: ✅
+**Impact**: Fixed a fatal production build error on Render caused by standalone debug scripts in the `frontend/` directory being caught by the Next.js type-checker.
+
+### What Was Built
+1. **Clean Frontend Root** (`frontend/`):
+    - Moved several standalone scripts (`debug-result.ts`, `debug-tools.ts`, `check_events.ts`, `check-data.js`, `check-rest.js`, `checkDB.js`, `run-migration.js`) from the `frontend/` root to the project-level `scripts/` directory.
+    - This prevents `next build` and `tsc` from attempting to compile these non-application files, which lacked production dependencies (like `dotenv`) and caused type-check failures.
+2. **Verified Stability**:
+    - Ran `npm run type-check` in the `frontend/` directory to confirm a clean build state.
+
+### Files Changed
+- Moved scripts to `scripts/`
+- CROST_MASTER.md
 
 ---
 
