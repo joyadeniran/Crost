@@ -30,7 +30,8 @@ export async function middleware(request: NextRequest) {
   })
 
   const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
-  const cookieOptions = isProd ? { domain: '.crosthq.com', path: '/', sameSite: 'lax' as const, secure: true } : {}
+  const prodDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : undefined
+  const cookieOptions = isProd ? { domain: prodDomain, path: '/', sameSite: 'lax' as const, secure: true } : {}
 
   // Use the public anon key for middleware (browser context)
   const supabase = createServerClient(
