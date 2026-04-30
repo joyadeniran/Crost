@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       const action = parts[1] || "";
       
       const executionResult = await executeToolCall({
-        userId,
+        userId: userId!,
         departmentId: task.dept_slug,
         taskId,
         goalId: task.goal_id,
