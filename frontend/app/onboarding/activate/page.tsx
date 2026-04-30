@@ -77,6 +77,12 @@ export default function ActivatePage() {
     } catch (err) {
       console.error('Session refresh failed (non-fatal):', err)
     }
+    // Clear onboarding store — sensitive business data (name, description, stage) must not
+    // persist in localStorage once the founder has landed on the dashboard.
+    try {
+      useOnboardingStore.getState().reset()
+      localStorage.removeItem('crost-onboarding-storage')
+    } catch {}
     // Hard redirect so the browser re-validates session cookies with the server
     window.location.href = '/dashboard'
   }

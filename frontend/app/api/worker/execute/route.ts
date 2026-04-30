@@ -8,15 +8,17 @@
 export const dynamic = 'force-dynamic'
 
 import { executeToolCall } from "@/lib/tools/execute-tool-call";
-import { createServerSupabaseClient } from "@/lib/supabase";
-import { NextResponse } from "next/server";
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from "@/lib/supabase";
+import { NextRequest, NextResponse } from "next/server";
 import { cleanLargePayload } from "@/lib/utils";
 
 // uploadArtifactFile logic extracted into unified execute-tool-call layer
 
-export async function POST(req: Request) {
+const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+export async function POST(req: NextRequest) {
   try {
-    const { taskId, goalId, userId, toolName, args } = await req.json();
+    const { taskId, goalId, userId: bodyUserId, toolName, args } = await req.json();
 
     if (!taskId || !goalId) {
       return NextResponse.json({ error: "taskId and goalId are required" }, { status: 400 });
@@ -26,9 +28,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "COMPOSIO_API_KEY is not set" }, { status: 500 });
     }
 
+    // Auth gate: accept either a valid user session OR the internal service secret.
+    // The internal secret path is used by server-side workers (runWorkerTask).
+    // External callers without a session or the secret are rejected.
+    const internalSecret = req.headers.get('x-crost-internal-secret')
+    let userId: string | null = null
+
+    if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
+      // Trusted internal call — accept userId from body (must still pass ownership check below)
+      userId = bodyUserId ?? null
+    } else {
+      // Browser / external call — derive userId from authenticated session only
+      const authClient = await createSupabaseServerComponentClient()
+      const { data: { user } } = await authClient.auth.getUser()
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+      }
+      userId = user.id
+    }
+
     const supabase = createServerSupabaseClient();
 
-    // 1. GATEKEEPER: Verify task is approved and belongs to the user
+    // 1. GATEKEEPER: Verify task is approved and belongs to the authenticated user
     const { data: task, error: taskError } = await supabase
       .from('goal_tasks')
       .select('status, goal_id, dept_slug, created_by')
@@ -44,7 +65,7 @@ export async function POST(req: Request) {
       }, { status: 404 });
     }
 
-    // Ownership check
+    // Ownership check — compare against session-derived userId (not body userId for external calls)
     if (task.created_by !== null && task.created_by !== userId) {
       console.warn(`[Worker Execute] Ownership mismatch for task ${taskId}`);
       return NextResponse.json({ error: "Unauthorized: Task owner mismatch." }, { status: 403 });

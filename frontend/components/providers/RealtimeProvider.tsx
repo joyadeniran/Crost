@@ -36,24 +36,34 @@ export function RealtimeProvider({
     setIsLoading(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Departments Realtime subscription
+  // Departments Realtime subscription — scoped to current user to prevent cross-tenant leakage
   useEffect(() => {
-    const channel = supabaseClient
-      .channel('departments-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'departments' },
-        (payload) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            upsertDepartment(payload.new as Department)
-          } else if (payload.eventType === 'DELETE') {
-            removeDepartment((payload.old as Department).id)
+    let channel: ReturnType<typeof supabaseClient.channel> | null = null
+    ;(async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session?.user) return
+      channel = supabaseClient
+        .channel('departments-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'departments',
+            filter: `user_id=eq.${session.user.id}`,
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              upsertDepartment(payload.new as Department)
+            } else if (payload.eventType === 'DELETE') {
+              removeDepartment((payload.old as Department).id)
+            }
           }
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
+    })()
 
-    return () => { supabaseClient.removeChannel(channel) }
+    return () => { if (channel) supabaseClient.removeChannel(channel) }
   }, [upsertDepartment, removeDepartment])
 
   // Approval queue count is managed by LayoutStoreHydrator (payload-based, no REST roundtrip).
