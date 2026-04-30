@@ -43,7 +43,7 @@ const CreateApprovalSchema = z.object({
   action_type: z.enum([
     'send_email', 'post_social', 'send_message', 'merge_code',
     'spend_budget', 'create_document', 'run_query', 'delete_data',
-    'external_api_call', 'other',
+    'external_api_call', 'tool_call', 'other',
   ]),
   action_label: z.string().min(1),
   payload: z.record(z.unknown()),

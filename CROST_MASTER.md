@@ -3,9 +3,59 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.79  
-**Last Updated:** April 29, 2026  
-**Deployment Status:** ✅ PRODUCTION — Error UX Hardened.
+**Current Version:** 11.80  
+**Last Updated:** April 30, 2026  
+**Deployment Status:** ✅ PRODUCTION — QA Suite & Security Hardened.
+
+---
+
+## Session v11.80 — QA Suite, Security Fixes & Edge-Case Hardening
+**Date**: April 30, 2026  **Status**: ✅  
+**Impact**: Comprehensive test suite (E2E + unit) covering auth, waterfall, HITL, artifacts, and edge cases; 9 security/reliability bugs fixed including multi-tenant data leak, unauthenticated worker execution, and onboarding store persistence.
+
+### What Was Built
+1. **Playwright E2E Suite** (`tests/e2e/`):
+   - `auth-security.spec.ts` — 27 cases: duplicate signup bypass, middleware redirects, onboarding step rank enforcement, cookie force-purge, 3-step onboarding flow
+   - `waterfall-lifecycle.spec.ts` — 10 suites: happy-path goal→artifact, direct Orc response, hallucination guard retry, chain-reaction dispatch, rejection cascade, HITL matrix (careful/aggressive), LLM 503/429 silent fallback, Composio schema mismatch, JIT connection sync, realtime subscription isolation
+2. **Vitest Unit Suite** (`tests/unit/`):
+   - `llm-client.test.ts` — 18 cases: full fallback chain, SYSTEM_LIMIT_EXCEEDED no-retry, provider_fallback event logging, first-goal exemption, hallucination guard redraft
+   - `utils-errors.test.ts` — 32 cases: ERROR_REGISTRY completeness, resolveCrostError heuristics, formatErrorMessage, cleanLargePayload, event_log payload size guard
+   - `artifact-transformers.test.ts` — 30 cases: detectOutputType 10-tier priority, Excel/Docx/Markdown transformers, image fallback, artifact sources shape
+   - `edge-cases.test.ts` — 12 cases: AbortError fallback chain, SUPABASE_QUERY keyword guard (comment injection, double-semicolon), Zod tool_call enum, realtime filter contract, onboarding store reset, worker 401/internal-secret auth, hallucination guard goal error state, CR-DB-MEMO surfacing
+3. **QA Documentation** (`QA_ARCHITECTURE_REPORT.md`, `QA_AGENT_GUIDE.md`): Agent-runnable guide with environment setup, mock factories, known contracts, CI GitHub Actions YAML
+
+### Bugs Fixed
+1. **CRITICAL — Multi-tenant data leak**: `EventLogClient`, `RealtimeProvider`, `ApprovalsLiveRefresh` had unfiltered `postgres_changes` subscriptions; added async session fetch + `created_by/user_id=eq.${userId}` filter on all three
+2. **CRITICAL — Silent approval creation failure**: `POST /api/approvals` Zod schema missing `'tool_call'` in `action_type` enum; added it (DB already allowed it)
+3. **HIGH — Goal stuck in planning**: Hallucination guard threw without setting goal `status: 'error'`; now updates `goals` row + `orc_notes` before throwing
+4. **HIGH — Silent memory gaps**: `addTaskLog` was fire-and-forget; now awaited; failures surface as `CR-DB-MEMO` event log entry
+5. **HIGH — Approval polling firehose**: `ApprovalsLiveRefresh` had no debounce; added 150ms debounce, `useRef` timer tracking, circuit breaker (MAX_CONSECUTIVE_ERRORS=3)
+6. **HIGH — Unauthenticated worker execute**: `/api/worker/execute` accepted arbitrary `userId` from body; added dual-auth gate (session OR `x-crost-internal-secret` header)
+7. **MEDIUM — Onboarding store leak**: Sensitive business data remained in localStorage after activation; `finalizeAndRedirect()` now calls `reset()` + `localStorage.removeItem('crost-onboarding-storage')`
+
+### Files Changed
+- `frontend/package.json` — test scripts, devDependencies (playwright, vitest, jsdom, vite)
+- `frontend/playwright.config.ts` — new
+- `frontend/vitest.config.ts` — new
+- `frontend/tests/e2e/fixtures/auth.setup.ts` — new
+- `frontend/tests/e2e/fixtures/llm-mocks.ts` — new
+- `frontend/tests/e2e/fixtures/api-helpers.ts` — new
+- `frontend/tests/e2e/auth-security.spec.ts` — new
+- `frontend/tests/e2e/waterfall-lifecycle.spec.ts` — new
+- `frontend/tests/unit/setup.ts` — new
+- `frontend/tests/unit/llm-client.test.ts` — new
+- `frontend/tests/unit/utils-errors.test.ts` — new
+- `frontend/tests/unit/artifact-transformers.test.ts` — new
+- `frontend/tests/unit/edge-cases.test.ts` — new
+- `frontend/QA_ARCHITECTURE_REPORT.md` — new
+- `frontend/QA_AGENT_GUIDE.md` — new
+- `frontend/components/event-log/EventLogClient.tsx` — multi-tenant filter fix
+- `frontend/components/providers/RealtimeProvider.tsx` — multi-tenant filter fix
+- `frontend/components/approvals/ApprovalsLiveRefresh.tsx` — filter + debounce + circuit breaker
+- `frontend/app/api/approvals/route.ts` — Zod tool_call enum fix
+- `frontend/lib/llm-client.ts` — goal error state on hallucination guard + await addTaskLog + CR-DB-MEMO logging
+- `frontend/app/api/worker/execute/route.ts` — dual-auth gate
+- `frontend/app/onboarding/activate/page.tsx` — store reset on finalize
 
 ---
 

@@ -1091,10 +1091,16 @@ export async function runOrchestratorTask(
       
       result = parseOrchestratorResponse(retryResponse.content)
       
-      // Secondary validation check
+      // Secondary validation check — if still invalid after one retry, mark goal as error
+      // rather than leaving it stuck in 'planning' forever (HIGH-1 fix).
       const secondaryInvalid = (result.plan?.tasks || []).filter((t: any) => !activeSlugs.includes(t.dept.toLowerCase()))
       if (secondaryInvalid.length > 0) {
-        throw new Error(`Orchestrator failed to respect department boundaries after retry. Proposed unknown depts: ${secondaryInvalid.map((t: any) => t.dept).join(', ')}`)
+        const badDepts = secondaryInvalid.map((t: any) => t.dept).join(', ')
+        await supabase.from('goals').update({
+          status: 'error',
+          orc_notes: `Orchestrator repeatedly proposed invalid departments after retry: [${badDepts}]. Available: [${activeSlugs.join(', ')}].`,
+        }).eq('id', goalId)
+        throw new Error(`Orchestrator failed to respect department boundaries after retry. Proposed unknown depts: ${badDepts}`)
       }
     }
   }
@@ -1382,8 +1388,9 @@ export async function runWorkerTask(
     })
 
     // DUAL-WRITE: Add to singular company_memo task_logs (§8)
+    // Awaited inside this try block so failures surface to the catch below (HIGH-2 fix).
     if (userId) {
-      addTaskLog(supabase, userId, {
+      await addTaskLog(supabase, userId, {
         id: task.id,
         goal_id: goalId || '',
         dept_slug: dept,
@@ -1392,10 +1399,18 @@ export async function runWorkerTask(
         result: workerResult.memo_summary,
         artifact_id: artifactUrl ? 'attached' : null,
         created_at: new Date().toISOString()
-      }).catch(() => {})
+      })
     }
   } catch (memoErr) {
     console.error('[runWorkerTask] Memo insert failed (non-fatal):', memoErr)
+    // Surface to event_log so the founder can see if memory writes are degraded.
+    logEvent({
+      event_type: 'error',
+      description: 'CR-DB-MEMO: task log write failed — strategic memory may be incomplete.',
+      error_code: 'CR-DB-MEMO',
+      goal_id: goalId ?? null,
+      created_by: userId,
+    }).catch(() => {})
   }
 
   // Chain Reaction: if all tasks are terminal, synthesize and auto-complete the goal.

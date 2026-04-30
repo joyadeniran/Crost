@@ -53,15 +53,29 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
   // goal_id scope — set when arriving via deep-link, clearable
   const [goalScope, setGoalScope] = useState<string | null>(initialGoalId ?? null)
 
-  // Live updates
+  // Live updates — scoped to the current user to prevent cross-tenant data leakage
   useEffect(() => {
-    const channel = supabaseClient
-      .channel('event-log-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'event_log' }, (payload) => {
-        setEvents(prev => [payload.new as EventLogEntry, ...prev])
-      })
-      .subscribe()
-    return () => { supabaseClient.removeChannel(channel) }
+    let channel: ReturnType<typeof supabaseClient.channel> | null = null
+    ;(async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session?.user) return
+      channel = supabaseClient
+        .channel('event-log-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'event_log',
+            filter: `created_by=eq.${session.user.id}`,
+          },
+          (payload) => {
+            setEvents(prev => [payload.new as EventLogEntry, ...prev])
+          }
+        )
+        .subscribe()
+    })()
+    return () => { if (channel) supabaseClient.removeChannel(channel) }
   }, [])
 
   const handleLoadMore = async () => {
