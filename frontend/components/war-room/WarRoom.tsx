@@ -1725,7 +1725,7 @@ export function WarRoom() {
   const activeGoalId = activeGoal?.id
   const activeGoalStatus = activeGoal?.status
   useEffect(() => {
-    if (!activeGoalId || !['pending', 'planning', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
+    if (!activeGoalId || !['pending', 'planning', 'clarifying', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
     let consecutiveFailures = 0
     const interval = setInterval(async () => {
       try {
@@ -2052,14 +2052,15 @@ export function WarRoom() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, force_plan: skip }),
       })
-      if (res.ok) {
-        // Optimistically flip to planning or keep at clarifying while polling
-        setActiveGoal({ ...activeGoal, status: 'planning' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setPollError(`Dialogue failed: ${formatErrorMessage(json.error ?? res.statusText)}`)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[handleDialogueResponse]', err)
+      setPollError(`Network error during dialogue: ${formatErrorMessage(err?.message ?? 'unknown')}`)
     }
-  }, [activeGoal, setActiveGoal])
+  }, [activeGoal])
 
   const inFlightDispatches = useRef<Set<string>>(new Set())
 
@@ -2084,23 +2085,34 @@ export function WarRoom() {
         setPollError(`Dispatch failed: ${formatErrorMessage(json.error ?? res.statusText)}`)
         setDecisions(d => ({ ...d, [taskId]: null }))
       }
-      } catch (err: any) {
+    } catch (err: any) {
       console.error('[WarRoom] dispatch failed', err)
       setPollError(`Network error while dispatching task: ${formatErrorMessage(err?.message ?? 'unknown')}`)
       setDecisions(d => ({ ...d, [taskId]: null }))
-      } finally {
+    } finally {
       inFlightDispatches.current.delete(taskId)
-      }
-      }, [activeGoal])
+    }
+  }, [activeGoal])
+
   const handleReject = useCallback(async (taskId: string) => {
     if (!activeGoal) return
     setDecisions(d => ({ ...d, [taskId]: 'rejected' }))
-    // Log rejection
-    fetch(`/api/goals/${activeGoal.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    }).catch(() => {})
+    try {
+      const res = await fetch(`/api/goals/${activeGoal.id}/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setPollError(`Reject failed: ${formatErrorMessage(json.error ?? res.statusText)}`)
+        setDecisions(d => ({ ...d, [taskId]: null }))
+      }
+    } catch (err: any) {
+      console.error('[WarRoom] reject failed', err)
+      setPollError(`Network error while rejecting task: ${formatErrorMessage(err?.message ?? 'unknown')}`)
+      setDecisions(d => ({ ...d, [taskId]: null }))
+    }
   }, [activeGoal])
 
   const handleHold = useCallback((taskId: string) => {
