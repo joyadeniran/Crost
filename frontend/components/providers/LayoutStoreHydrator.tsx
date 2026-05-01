@@ -75,9 +75,9 @@ export function LayoutStoreHydrator({ pendingCount, artifactCount, envMode }: Pr
   const refreshCount = useCallback(async () => {
     if (!isDashboard) return
 
-    // Throttling: Don't refresh more than once every 5 seconds (increased from 2s)
+    // Throttling: Don't refresh more than once every 1 second
     const now = Date.now()
-    if (now - lastRefreshRef.current < 5000) return
+    if (now - lastRefreshRef.current < 1000) return
     lastRefreshRef.current = now
 
     try {

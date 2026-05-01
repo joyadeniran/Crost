@@ -1012,9 +1012,9 @@ function parseOrchestratorResponse(raw: string): any {
       // Without this, dependency IDs remain as LLM placeholders and
       // the waterfall gate in the worker never resolves — tasks block forever.
       for (const t of parsed.plan.tasks) {
-        t.depends_on = (t.depends_on ?? []).map(
-          (depId: string) => idMap.get(depId) ?? depId
-        )
+        t.depends_on = (t.depends_on ?? [])
+          .map((depId: string) => idMap.get(depId) ?? depId)
+          .filter((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
       }
     }
     return { ok: true, ...parsed }

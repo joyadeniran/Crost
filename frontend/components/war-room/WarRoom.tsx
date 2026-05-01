@@ -2071,22 +2071,27 @@ export function WarRoom() {
     setDecisions(d => ({ ...d, [taskId]: 'approved' }))
     
     try {
-      await fetch(`/api/goals/${activeGoal.id}/dispatch`, {
+      const res = await fetch(`/api/goals/${activeGoal.id}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           task_id: taskId,
           ...(overrides && { task_override: overrides })
         }),
       })
-    } catch (err) {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setPollError(`Dispatch failed: ${formatErrorMessage(json.error ?? res.statusText)}`)
+        setDecisions(d => ({ ...d, [taskId]: null }))
+      }
+      } catch (err: any) {
       console.error('[WarRoom] dispatch failed', err)
+      setPollError(`Network error while dispatching task: ${formatErrorMessage(err?.message ?? 'unknown')}`)
       setDecisions(d => ({ ...d, [taskId]: null }))
-    } finally {
+      } finally {
       inFlightDispatches.current.delete(taskId)
-    }
-  }, [activeGoal])
-
+      }
+      }, [activeGoal])
   const handleReject = useCallback(async (taskId: string) => {
     if (!activeGoal) return
     setDecisions(d => ({ ...d, [taskId]: 'rejected' }))

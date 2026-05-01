@@ -3,9 +3,28 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.80  
-**Last Updated:** April 30, 2026  
-**Deployment Status:** ✅ PRODUCTION — QA Suite & Security Hardened.
+**Current Version:** 11.81  
+**Last Updated:** May 1, 2026  
+**Deployment Status:** ✅ PRODUCTION — Orc Workflow Hardened.
+
+---
+
+## Session v11.81 — Orc Workflow Audit and UI Fixes
+**Date**: May 1, 2026  **Status**: ✅  
+**Impact**: Resolved critical Orc UI unresponsiveness, silent API errors, task dependency loops, and ghost approval counters.
+
+### What Was Built
+1. **WarRoom UI Hardening**: Surfaced `unauthenticated` and network errors via `setPollError` instead of silent `console.error`; fixed empty PATCH on reject; removed optimistic `status: planning` flip to stop clarification skipping.
+2. **Task Execution Resilience**: `llm-client.ts` now filters out placeholder/invalid task IDs in `depends_on` after UUID remapping, preventing deadlocks in the worker waterfall.
+3. **Ghost Approvals Fix**: Reduced throttling in `LayoutStoreHydrator.tsx` from 5s to 1s to resolve UI desync where approvals seemed higher than actual pending tasks.
+4. **Documentation**: Merged `CLAUDE.md` into `GEMINI.md` to establish a single source of truth.
+
+### Files Changed
+- `GEMINI.md`
+- `CLAUDE.md` (deleted)
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/components/providers/LayoutStoreHydrator.tsx`
+- `frontend/lib/llm-client.ts`
 
 ---
 
