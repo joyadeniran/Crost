@@ -287,6 +287,7 @@ export interface GoalTask {
   params: Record<string, unknown>
   risk_level: RiskLevel
   depends_on: string[]        // task_ids that must complete before this dispatches
+  expected_deliverable: string
   model: string
   status: GoalTaskStatus
   assigned_at: string | null

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Artifact, ArtifactSources } from '@/types'
+import { useState, useEffect } from 'react'
+import { Artifact, ArtifactSources, GoalTask, Goal } from '@/types'
 import Image from 'next/image'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
+import { supabaseClient } from '@/lib/supabase-browser'
 
 interface Props {
   artifact: Artifact
@@ -258,10 +259,41 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
 
 export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const [showDrawer, setShowDrawer] = useState(false)
-  const [activeTab, setActiveTab] = useState<'preview' | 'details'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'details' | 'lineage'>('preview')
   const [downloading, setDownloading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const [lineageData, setLineageData] = useState<(GoalTask & { goals: Goal | null }) | null>(null)
+  const [loadingLineage, setLoadingLineage] = useState(false)
+
+  useEffect(() => {
+    if (showDrawer && activeTab === 'lineage' && artifact.task_id && !lineageData) {
+      const fetchLineage = async () => {
+        setLoadingLineage(true)
+        try {
+          const { data, error } = await supabaseClient
+            .from('goal_tasks')
+            .select(`
+              *,
+              goals (
+                title,
+                founder_input
+              )
+            `)
+            .eq('task_id', artifact.task_id)
+            .single()
+          if (error) throw error
+          setLineageData(data as any)
+        } catch (err) {
+          console.error('[Lineage Fetch Error]', err)
+        } finally {
+          setLoadingLineage(false)
+        }
+      }
+      fetchLineage()
+    }
+  }, [showDrawer, activeTab, artifact.task_id, lineageData])
 
   const createdAt = new Date(artifact.created_at)
   const { name, ext } = inferFilename(artifact)
@@ -633,7 +665,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
               padding: '0 28px',
               gap: 20,
             }}>
-              {(['preview', 'details'] as const).map(tab => (
+              {(['preview', 'details', 'lineage'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -730,7 +762,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                     </>
                   )}
                 </>
-              ) : (
+              ) : activeTab === 'details' ? (
                 /* Details Tab */
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div style={{
@@ -788,6 +820,89 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                         ))}
                       </div>
                     </div>
+                  )}
+                </div>
+              ) : (
+                /* Lineage Tab */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {loadingLineage ? (
+                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                      Loading lineage data...
+                    </div>
+                  ) : !artifact.task_id ? (
+                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontStyle: 'italic' }}>
+                      No lineage tracking available for this legacy artefact.
+                    </div>
+                  ) : !lineageData ? (
+                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontStyle: 'italic' }}>
+                      Lineage data not found.
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                          SOURCE TASK
+                        </div>
+                        <div style={{
+                          background: 'rgba(255,255,255,0.02)',
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          borderRadius: 10,
+                          padding: '16px 18px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 12,
+                        }}>
+                          <div>
+                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Label & Status</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{lineageData.label}</div>
+                              <span className="crost-badge" style={{ fontSize: 9, opacity: 0.8, textTransform: 'uppercase' }}>{lineageData.status}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Reasoning</div>
+                            <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>{lineageData.reasoning}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Expected Deliverable</div>
+                            <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>{lineageData.expected_deliverable}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                          PARENT GOAL
+                        </div>
+                        <div style={{
+                          background: 'rgba(255,255,255,0.02)',
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          borderRadius: 10,
+                          padding: '16px 18px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 12,
+                        }}>
+                          <div>
+                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Goal Title</div>
+                            <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{lineageData.goals?.title || 'Unknown Goal'}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Founder Input</div>
+                            <div style={{
+                              color: 'var(--text-2)',
+                              fontSize: 13,
+                              lineHeight: 1.5,
+                              maxHeight: 120,
+                              overflowY: 'auto',
+                              paddingRight: 8,
+                            }}>
+                              {lineageData.goals?.founder_input}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}

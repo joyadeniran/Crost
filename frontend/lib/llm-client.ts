@@ -444,7 +444,7 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
     const supabase = createServerSupabaseClient()
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [tier1Res, criticalRes, highRes, optionalRes] = await Promise.all([
+    const [tier1Res, criticalRes, highRes, optionalRes, structuredRes] = await Promise.all([
       supabase
         .from('company_memos')
         .select('title, body, from_department, priority, is_foundational, is_current_context')
@@ -476,20 +476,50 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
         .order('created_at', { ascending: false })
         .limit(5),
       // Spec §8 Structured context from the singular company_memo table
-      supabase
+      userId ? supabase
         .from('company_memo')
-        .select('title, status, result, created_at')
-        .order('created_at', { ascending: false })
-        .limit(10)
+        .select('company_profile, active_goals, strategies, task_logs, decisions, department_notes')
+        .eq('user_id', userId)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null })
     ])
 
     const tier1Memos = tier1Res.data
     const criticalMemos = criticalRes.data
     const highMemos = highRes.data
     const optionalMemos = optionalRes.data
-    const structuredMemos = (arguments[0] as any)?.structuredRes?.data || [] // Adjusted for destructuring context if needed, but let's use proper destructuring below
+    const structuredMemo = (structuredRes as any)?.data
 
     const sections: string[] = []
+
+    if (structuredMemo) {
+      const parts: string[] = []
+      
+      if (structuredMemo.company_profile && (structuredMemo.company_profile.name || structuredMemo.company_profile.description)) {
+        const p = structuredMemo.company_profile
+        parts.push(`COMPANY PROFILE: ${p.name || ''} ${p.industry ? `(${p.industry})` : ''} - ${p.description || ''}`)
+      }
+
+      if (structuredMemo.decisions && structuredMemo.decisions.length > 0) {
+        const d = (structuredMemo.decisions as any[])
+          .slice(-10)
+          .map(dec => `- [${dec.made_by}] ${dec.title}: ${dec.decision}`)
+          .join('\n')
+        parts.push(`### STRATEGIC DECISIONS\n${d}`)
+      }
+
+      if (structuredMemo.task_logs && structuredMemo.task_logs.length > 0) {
+        const t = (structuredMemo.task_logs as any[])
+          .slice(-10)
+          .map(log => `- [${log.dept_slug}] ${log.title}: ${log.status}${log.result ? ` (${log.result})` : ''}`)
+          .join('\n')
+        parts.push(`### RECENT TASK OUTCOMES\n${t}`)
+      }
+
+      if (parts.length > 0) {
+        sections.push(`### STRATEGIC MEMO (Source of Truth)\n${parts.join('\n\n')}`)
+      }
+    }
 
     if (tier1Memos && tier1Memos.length > 0) {
       const formatted = tier1Memos
@@ -520,7 +550,8 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
     }
 
     return sections.join('\n\n')
-  } catch {
+  } catch (err) {
+    console.error('[buildOrcContext] Error:', err)
     return ''
   }
 }

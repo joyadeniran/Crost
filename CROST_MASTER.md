@@ -3,13 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.81  
-**Last Updated:** May 1, 2026  
-**Deployment Status:** ✅ PRODUCTION — Orc Workflow Hardened.
+**Current Version:** 11.82  
+**Last Updated:** May 2, 2026  
+**Deployment Status:** ✅ PRODUCTION — Strategic Memory & Lineage Fixed.
 
 ---
 
-## Session v11.81 — Orc Workflow Audit and UI Fixes
+## Session v11.82 — Strategic Memory Fix & Artefact Lineage
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Resolved critical bug in Orc's strategic memory consumption and implemented the Artefact Lineage UI for provenance tracing.
+
+### What Was Built
+1. **Strategic Memory Fix**: Refactored `buildOrcContext` in `llm-client.ts` to correctly fetch and format structured context from the singular `company_memo` table. Fixed a major destructuring bug and incorrect column selection that prevented Orc from accessing recent decisions and task logs.
+2. **Artefact Lineage UI**: Added a dedicated "Lineage" tab to the `ArtifactCard` detail drawer. This tab dynamically fetches parent task and goal data, allowing founders to trace an artefact's provenance (Reasoning, Goal, Expected Deliverable).
+3. **QA Validation**: Added and verified unit tests for `buildOrcContext`, covering successful data formatting and null-user edge cases. Verified frontend integrity with a clean `type-check` and `lint`.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/types/index.ts`
 **Date**: May 1, 2026  **Status**: ✅  
 **Impact**: Resolved critical Orc UI unresponsiveness, silent API errors, task dependency loops, and ghost approval counters.
 
