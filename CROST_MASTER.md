@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.85  
+**Current Version:** 11.86  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Orc Capability Hardening & Image Gen.
+**Deployment Status:** ✅ PRODUCTION — Orc UX & Force-Plan Hardened.
+
+---
+
+## Session v11.86 — Orc UX Refinement & Force-Plan Hardening
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Corrected Orc's self-introduction logic and hardened the "Skip & Plan Anyway" workflow to ensure maximum resilience when clarification is bypassed.
+
+### What Was Built
+1. **Onboarding UX**: Updated the "Meet Orc" screen (`MeetOrcPage`) to explicitly introduce "Orc (short for Orchestrator)" to set clear expectations for new founders.
+2. **Brain Hardening**: Corrected `ORCHESTRATOR_SYSTEM_NOTE` in `llm-client.ts` to remove the redundant "short for Orchestrator" from every response, restricting it to explicit "Who are you?" queries.
+3. **Force-Plan Resilience**: Strengthened the `runOrchestratorTask` logic. When a founder clicks "Skip & Plan Anyway", Orc is now explicitly authorized and instructed to proceed with partial context, leveraging System Memory, Memos, and the KB to form the best possible plan rather than repeating clarification questions.
+
+### Files Changed
+- `frontend/app/onboarding/orc/page.tsx`
+- `frontend/lib/llm-client.ts`
 
 ---
 

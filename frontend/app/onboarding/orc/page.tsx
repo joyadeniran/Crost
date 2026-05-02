@@ -89,9 +89,9 @@ export default function MeetOrcPage() {
           </div>
 
           <span className="time-remaining">~90 sec left</span>
-          <h2>Meet Orc — your AI Chief of Staff.</h2>
+          <h2>Meet Orc (short for Orchestrator).</h2>
           <p>
-            Orc plans your work, coordinates departments, and helps you run your company.
+            As your AI Chief of Staff, Orc plans your work, coordinates departments, and helps you run your company.
             Departments are specialist teams Orc activates when needed.
           </p>
 

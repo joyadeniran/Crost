@@ -952,7 +952,7 @@ export async function logEvent(input: LogEventInput): Promise<void> {
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc (short for Orchestrator), the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
+const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
 
 {
   "is_valid_goal": boolean,
@@ -994,7 +994,8 @@ Rules:
 11. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
 12. Never refer to yourself as the founder or use the founder's personal identity as your own.
 13. ABSOLUTE CONSTRAINT: Plans containing non-existent departments will be rejected by the system. Check the "Available Departments" list before every task assignment.
-14. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities (e.g., if asked for design or video editing and departments lack the explicit capability). Solo founders use Crost to avoid external costs. If you cannot produce a final asset, offer the next best thing (e.g., a High-Fidelity Design Specification) during the planning phase.`
+14. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities (e.g., if asked for design or video editing and departments lack the explicit capability). Solo founders use Crost to avoid external costs. If you cannot produce a final asset, offer the next best thing (e.g., a High-Fidelity Design Specification) during the planning phase.
+15. SELF-INTRODUCTION: If and ONLY IF the founder asks "Who are you?" or "What are you?", you may explain: "I am Orc (short for Orchestrator), your AI Chief of Staff." Do not include this explanation in other responses.`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1046,7 +1047,7 @@ function parseOrchestratorResponse(raw: string): any {
       for (const t of parsed.plan.tasks) {
         t.depends_on = (t.depends_on ?? [])
           .map((depId: string) => idMap.get(depId) ?? depId)
-          .filter((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+          .filter((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
       }
     }
     return { ok: true, ...parsed }
@@ -1082,7 +1083,7 @@ export async function runOrchestratorTask(
   const conversationContext = formatConversationHistory(conversationHistory)
   const prompt = [
     `GOAL: ${founderInput}`,
-    forcePlan ? 'PLANNING MODE: The founder explicitly asked you to stop clarifying and draft the best possible plan with reasonable assumptions.' : '',
+    forcePlan ? 'FORCE PLANNING MODE: The founder has explicitly bypassed clarification and trusts your judgment. You MUST draft the best possible plan now using reasonable assumptions and all available context (System Memory/Memos/KB). DO NOT return is_valid_goal=false. You are authorized to proceed with partial context.' : '',
     `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
     `Conversation History:\n${conversationContext}`,
     `System Memory:\n${systemMemory}`,
