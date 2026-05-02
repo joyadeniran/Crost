@@ -3,25 +3,26 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.82  
+**Current Version:** 11.83  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Strategic Memory & Lineage Fixed.
+**Deployment Status:** ✅ PRODUCTION — Waterfall Waterfall Unblocked.
 
 ---
 
-## Session v11.82 — Strategic Memory Fix & Artefact Lineage
+## Session v11.83 — Waterfall Restoration & Status Hardening
 **Date**: May 2, 2026  **Status**: ✅  
-**Impact**: Resolved critical bug in Orc's strategic memory consumption and implemented the Artefact Lineage UI for provenance tracing.
+**Impact**: Resolved critical failures in the task waterfall, enabling "Skip" and "Mark Done" functionality and unblocking downstream dependencies.
 
 ### What Was Built
-1. **Strategic Memory Fix**: Refactored `buildOrcContext` in `llm-client.ts` to correctly fetch and format structured context from the singular `company_memo` table. Fixed a major destructuring bug and incorrect column selection that prevented Orc from accessing recent decisions and task logs.
-2. **Artefact Lineage UI**: Added a dedicated "Lineage" tab to the `ArtifactCard` detail drawer. This tab dynamically fetches parent task and goal data, allowing founders to trace an artefact's provenance (Reasoning, Goal, Expected Deliverable).
-3. **QA Validation**: Added and verified unit tests for `buildOrcContext`, covering successful data formatting and null-user edge cases. Verified frontend integrity with a clean `type-check` and `lint`.
+1. **Waterfall Dispatch Fix**: Updated `POST /api/goals/[id]/dispatch` to allow `skipped` and `rejected` task statuses to satisfy dependencies. Previously, only `completed` was accepted, causing 409 Conflict errors for any goal where a task was bypassed.
+2. **Database Status Alignment**: Created migration `20260502222000_unblock_waterfall.sql` to add the missing `'skipped'` status to the `goal_tasks_status_check` constraint. This resolves the 500 Internal Server Error when founders attempt to skip tasks.
+3. **Spec §6 Compliance**: Restored the `expected_deliverable` column in both the database and the dispatcher logic, ensuring workers receive clear output requirements as mandated by the spec.
+4. **Idempotency Hardening**: Updated the dispatcher to treat `skipped` and `rejected` as terminal statuses, preventing redundant re-execution attempts.
 
 ### Files Changed
-- `frontend/lib/llm-client.ts`
-- `frontend/components/artifacts/ArtifactCard.tsx`
-- `frontend/types/index.ts`
+- `frontend/app/api/goals/[id]/dispatch/route.ts`
+- `supabase/migrations/20260502222000_unblock_waterfall.sql`
+- `frontend/types/index.ts` (updated in v11.82)
 **Date**: May 1, 2026  **Status**: ✅  
 **Impact**: Resolved critical Orc UI unresponsiveness, silent API errors, task dependency loops, and ghost approval counters.
 

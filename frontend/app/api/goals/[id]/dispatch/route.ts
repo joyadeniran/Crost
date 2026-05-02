@@ -88,17 +88,16 @@ export async function POST(req: NextRequest, { params }: Params) {
         supabase.from('company_memos').select('task_id').eq('goal_id', goal.id)
       ])
       
-      // Include 'pending' tasks (never attempted) alongside 'planned' tasks (blocked by deps).
-      // This ensures dependent tasks are dispatched automatically even if the founder only
-      // manually dispatched the first task in the chain.
       const planned = (allTasks || []).filter(t => t.status === 'planned' || t.status === 'pending')
       const memoIds = new Set((allMemos || []).map(m => m.task_id))
+      const RESOLVED_STATUSES = new Set(['completed', 'skipped', 'rejected'])
       
       let count = 0
       for (const t of planned) {
         const blockers = (t.depends_on || []).filter((depId: string) => {
           const depTask = (allTasks || []).find(at => at.task_id === depId)
-          return !depTask || depTask.status !== 'completed' || !memoIds.has(depId)
+          // A dependency is satisfied if the task is completed (with memo) OR skipped/rejected
+          return !depTask || (!RESOLVED_STATUSES.has(depTask.status)) || (depTask.status === 'completed' && !memoIds.has(depId))
         })
         
         if (blockers.length === 0) {
@@ -136,10 +135,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       .single()
 
     if (existingTask) {
-      if (['dispatched', 'completed', 'running'].includes(existingTask.status)) {
+      if (['dispatched', 'completed', 'running', 'skipped', 'rejected'].includes(existingTask.status)) {
         return NextResponse.json({
           success: true,
-          data: { dispatched: false, reason: 'already_dispatched', status: existingTask.status, dept: task.dept, task_id, goal_id: goal.id },
+          data: { dispatched: false, reason: 'already_terminal', status: existingTask.status, dept: task.dept, task_id, goal_id: goal.id },
           timestamp: new Date().toISOString(),
         })
       }
@@ -154,8 +153,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       const depList = depTasks ?? []
       const memoIds = new Set((depMemos ?? []).map(m => m.task_id))
+      const RESOLVED_STATUSES = new Set(['completed', 'skipped', 'rejected'])
       
-      const finishedIds = depList.filter(d => d.status === 'completed' && memoIds.has(d.task_id)).map(d => d.task_id)
+      const finishedIds = depList
+        .filter(d => {
+          if (d.status === 'completed') return memoIds.has(d.task_id)
+          return RESOLVED_STATUSES.has(d.status)
+        })
+        .map(d => d.task_id)
+
       const missingOrPending = task.depends_on.filter(id => !finishedIds.includes(id))
 
       if (missingOrPending.length > 0) {
@@ -222,7 +228,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         action: task.action,
         label: task_override?.label || task.label,
         reasoning: task_override?.reasoning || task.reasoning,
-        // expected_deliverable: (task as any).expected_deliverable || task.label, // Removed missing column
+        expected_deliverable: (task as any).expected_deliverable || task.label,
         params: task_override?.params || task.params,
         risk_level: task.risk_level,
         depends_on: task.depends_on,
