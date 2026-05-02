@@ -884,23 +884,23 @@ export async function checkTokenBudget(userId: string): Promise<
       return { allowed: true } // First goal — exempt from daily limit
     }
 
-    // Per-user per-day system token usage (resets at midnight UTC)
-    const todayMidnightUTC = new Date()
-    todayMidnightUTC.setUTCHours(0, 0, 0, 0)
+    // Per-user per-day system token usage (resets at local midnight)
+    const todayMidnight = new Date()
+    todayMidnight.setHours(0, 0, 0, 0)
 
     const { data: usage } = await supabase
       .from('api_usage_logs')
       .select('total_tokens')
       .eq('user_id', userId)
       .eq('key_type', 'system')
-      .gte('created_at', todayMidnightUTC.toISOString())
+      .gte('created_at', todayMidnight.toISOString())
 
     const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.total_tokens ?? 0), 0)
 
     if (tokensUsed >= limit) {
-      // Reset time: next midnight UTC
-      const resetAt = new Date(todayMidnightUTC)
-      resetAt.setUTCDate(resetAt.getUTCDate() + 1)
+      // Reset time: next midnight local
+      const resetAt = new Date(todayMidnight)
+      resetAt.setDate(resetAt.getDate() + 1)
       return { allowed: false, tokensUsed, limit, resetAt: resetAt.toISOString() }
     }
 

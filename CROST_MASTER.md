@@ -3,9 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.87  
+**Current Version:** 11.88  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Full UX Branding Audit Complete.
+**Deployment Status:** ✅ PRODUCTION — Usage Limits & Event Logs Hardened.
+
+---
+
+## Session v11.88 — Usage Limits & Event Log Deep-Linking
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Fixed usage limit reset messaging and ensured Orchestrator failures are correctly logged and searchable via goal-scoped deep-links.
+
+### What Was Built
+1. **Local Midnight Resets**: Updated `checkTokenBudget` in `llm-client.ts` to reset at local midnight of the user's environment rather than UTC midnight. This aligns with the "12:00 AM reset" expectation and resolves the "1:00 AM reset" confusion for GMT+1 users.
+2. **Quota Event Logging**: Updated `POST /api/goals` and `POST /api/goals/[id]/dialogue` to explicitly log `token_limit_hit` and `error` events with the associated `goal_id` when the Orchestrator fails. This ensures the "view full event log →" link is no longer empty.
+3. **Event Log UI Upgrade**: Added `token_limit_hit` and `provider_fallback` to the event type filter dropdown.
+4. **War Room Context**: Updated the failure deep-link to show ALL events for the specific goal ID (removing the mandatory `type=error` filter), providing founders with the full history leading up to a failure.
+5. **Messaging Refinement**: Improved the quota error message in `utils.ts` to explicitly state it is a "usage cap" rather than an "app error," managing founder expectations.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/app/api/goals/route.ts`
+- `frontend/app/api/goals/[id]/dialogue/route.ts`
+- `frontend/components/event-log/EventLogClient.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/lib/utils.ts`
 
 ---
 

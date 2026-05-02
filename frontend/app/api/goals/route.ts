@@ -92,9 +92,24 @@ export async function POST(req: NextRequest) {
     // We do NOT await this — the client polls /api/goals/[id] for status updates.
     runOrchestratorTask(founder_input, goal.id).catch(async (err) => {
       console.error('[POST /api/goals] Orchestrator failed:', err)
+      
+      const { logEvent } = await import('@/lib/llm-client')
+      const errorMessage = String(err)
+      const isQuota = errorMessage.includes('SYSTEM_LIMIT_EXCEEDED')
+
+      await logEvent({
+        event_type: isQuota ? 'token_limit_hit' : 'error',
+        department_slug: 'orchestrator',
+        goal_id: goal.id,
+        description: isQuota ? 'Daily free limit reached during planning.' : `Planning failed: ${errorMessage.slice(0, 150)}`,
+        error_code: isQuota ? 'SYSTEM_LIMIT_EXCEEDED' : 'PLANNING_FAILURE',
+        created_by: user.id,
+        metadata: { error: errorMessage }
+      }).catch(() => {})
+
       await supabase
         .from('goals')
-        .update({ status: 'failed', outcome: String(err) })
+        .update({ status: 'failed', outcome: errorMessage })
         .eq('id', goal.id)
         .eq('created_by', user.id)
     })

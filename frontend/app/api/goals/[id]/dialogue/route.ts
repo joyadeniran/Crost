@@ -60,9 +60,24 @@ export async function POST(req: NextRequest, { params }: Params) {
     // We run it with the current history and the force_plan flag
     runOrchestratorTask(goal.founder_input, goalId, updatedHistory, !!force_plan).catch(async (err) => {
       console.error('[POST /api/goals/dialogue] Orchestrator failed:', err)
+      
+      const { logEvent } = await import('@/lib/llm-client')
+      const errorMessage = String(err)
+      const isQuota = errorMessage.includes('SYSTEM_LIMIT_EXCEEDED')
+
+      await logEvent({
+        event_type: isQuota ? 'token_limit_hit' : 'error',
+        department_slug: 'orchestrator',
+        goal_id: goalId,
+        description: isQuota ? 'Daily free limit reached during planning.' : `Planning failed: ${errorMessage.slice(0, 150)}`,
+        error_code: isQuota ? 'SYSTEM_LIMIT_EXCEEDED' : 'PLANNING_FAILURE',
+        created_by: user.id,
+        metadata: { error: errorMessage }
+      }).catch(() => {})
+
       await supabase
         .from('goals')
-        .update({ status: 'failed', outcome: String(err) })
+        .update({ status: 'failed', outcome: errorMessage })
         .eq('id', goalId)
     })
 

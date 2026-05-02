@@ -2358,7 +2358,7 @@ export function WarRoom() {
           <div style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 11, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span>Try rephrasing your goal, or</span>
             <a
-              href={`/dashboard/event-log?goal_id=${activeGoal.id}&type=error`}
+              href={`/dashboard/event-log?goal_id=${activeGoal.id}`}
               style={{
                 color: 'var(--accent)',
                 textDecoration: 'none',
@@ -2370,8 +2370,7 @@ export function WarRoom() {
             >
               view full event log →
             </a>
-          </div>
-        </div>
+          </div>        </div>
       )}
     </div>
   )

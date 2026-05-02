@@ -33,6 +33,7 @@ const EVENT_TYPE_OPTIONS: EventType[] = [
   'approval_requested', 'approval_approved', 'approval_rejected',
   'action_executed', 'memo_written', 'tool_called', 'tool_executed',
   'department_created', 'department_updated', 'error',
+  'token_limit_hit', 'provider_fallback',
 ]
 
 interface Props {
