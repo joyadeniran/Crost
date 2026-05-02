@@ -41,6 +41,7 @@ export type EventType =
   | 'error'
   | 'mode_switched'
   | 'token_limit_hit'
+  | 'provider_fallback'
   | 'department_created'
   | 'department_updated'
   | 'department_activated'

@@ -3,9 +3,22 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.88  
+**Current Version:** 11.89  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Usage Limits & Event Logs Hardened.
+**Deployment Status:** ✅ PRODUCTION — Build Stability Restored.
+
+---
+
+## Session v11.89 — Production Build Fix (TypeScript Alignment)
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Resolved fatal production build failure on Render caused by a missing union member in the `EventType` definition.
+
+### What Was Built
+1. **Type Alignment**: Updated `frontend/types/index.ts` to include `'provider_fallback'` in the `EventType` union. This ensures the Event Log UI can safely reference this new event type without triggering TypeScript compilation errors.
+2. **Verified Stability**: Successfully ran local `type-check` and `lint` to confirm build integrity.
+
+### Files Changed
+- `frontend/types/index.ts`
 
 ---
 
