@@ -886,7 +886,7 @@ function TaskApprovalItem({
               }}>
                 {resolvedStatus === 'failed' 
                   ? "This task failed. Retry or skip to continue."
-                  : `Orc needs: ${dbTask?.orc_notes || 'More information to proceed.'}`}
+                  : `Orc needs: ${Array.isArray(dbTask?.orc_notes) && dbTask!.orc_notes.length > 0 ? (dbTask!.orc_notes[dbTask!.orc_notes.length - 1] as any).note : 'More information to proceed.'}`}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {resolvedStatus === 'needs_data' && (

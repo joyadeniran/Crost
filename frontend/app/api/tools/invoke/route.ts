@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { service, action, params = {}, goal_id, task_id } = body
+  let { service, action, params = {}, goal_id, task_id } = body
 
   try {
     if (!service || !action) {
@@ -27,6 +27,19 @@ export async function POST(req: NextRequest) {
         { error: 'service and action are required' },
         { status: 400 },
       )
+    }
+
+    // NATURAL LANGUAGE PARAMETER RESOLUTION (Spec §14)
+    // If the founder used a slash command with raw text (e.g. /gmail.send_email hello to joy@...),
+    // the UI sends { text: "..." }. We use a fast LLM to parse this into the tool's expected schema.
+    if (params && typeof params === 'object' && Object.keys(params).length === 1 && 'text' in params && typeof params.text === 'string') {
+      const { resolveToolParameters } = await import('@/lib/tools/parameter-resolver')
+      console.log(`[invoke] Resolving parameters for ${service}.${action} from text: "${params.text}"`)
+      const resolved = await resolveToolParameters(service, action, params.text, user.id)
+      if (resolved && Object.keys(resolved).length > 0) {
+        console.log(`[invoke] Resolved parameters:`, resolved)
+        params = resolved
+      }
     }
 
     const result = await executeToolCall({

@@ -952,7 +952,7 @@ export async function logEvent(input: LogEventInput): Promise<void> {
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
+const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc (short for Orchestrator), the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
 
 {
   "is_valid_goal": boolean,
@@ -993,7 +993,8 @@ Rules:
 10. If conversation history exists, you MUST incorporate the latest founder reply. Do not repeat the same clarification question after the founder has already answered.
 11. If the founder's latest reply selects or paraphrases one of your suggested options, treat it as valid input and draft the plan.
 12. Never refer to yourself as the founder or use the founder's personal identity as your own.
-13. ABSOLUTE CONSTRAINT: Plans containing non-existent departments will be rejected by the system. Check the "Available Departments" list before every task assignment.`
+13. ABSOLUTE CONSTRAINT: Plans containing non-existent departments will be rejected by the system. Check the "Available Departments" list before every task assignment.
+14. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities (e.g., if asked for design or video editing and departments lack the explicit capability). Solo founders use Crost to avoid external costs. If you cannot produce a final asset, offer the next best thing (e.g., a High-Fidelity Design Specification) during the planning phase.`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1396,7 +1397,30 @@ export async function runWorkerTask(
   }
 
   // Update task status FIRST — resilient against memo insert failures.
-  await supabase.from('goal_tasks').update({ status: workerResult.status, completed_at: new Date().toISOString() }).eq('task_id', task.id)
+  const updatePayload: any = { status: workerResult.status, completed_at: new Date().toISOString() }
+  
+  if (workerResult.status === 'needs_data') {
+    const parsed = workerResult.result as any;
+    let noteText = 'Blocked waiting for founder data.';
+    if (Array.isArray(parsed.missing_data) && parsed.missing_data.length > 0) {
+      noteText = parsed.missing_data.join(', ');
+    } else if (typeof parsed.missing_data === 'string' && parsed.missing_data.trim() !== '') {
+      noteText = parsed.missing_data;
+    } else if (parsed.summary) {
+      noteText = parsed.summary;
+    }
+    
+    // Fetch existing notes to append
+    const { data: existingTask } = await supabase.from('goal_tasks').select('orc_notes').eq('task_id', task.id).single()
+    const existingNotes = existingTask?.orc_notes || []
+    
+    updatePayload.orc_notes = [
+      ...existingNotes,
+      { ts: new Date().toISOString(), note: noteText, action_taken: 'BLOCKED_AWAITING_DATA' }
+    ]
+  }
+
+  await supabase.from('goal_tasks').update(updatePayload).eq('task_id', task.id)
   await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', deptRow.id)
 
   // Memo insert is non-critical — log failure but never block task completion.

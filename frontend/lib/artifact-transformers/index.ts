@@ -4,11 +4,12 @@ import { transformToDocument } from './document-transformer';
 import { transformToExcel } from './excel-transformer';
 import { transformToCode } from './code-transformer';
 import { transformToPresentation } from './pptx-transformer';
+import { transformToImage } from './image-transformer';
 
 export interface OutputDetection {
   sourceFormat: 'json' | 'text' | 'array';
-  contentType: 'email' | 'document' | 'plan' | 'research' | 'code' | 'generic';
-  targetFormat: 'txt' | 'docx' | 'md' | 'xlsx' | 'json' | 'csv' | 'py' | 'sql' | 'ts' | 'js';
+  contentType: 'email' | 'document' | 'plan' | 'research' | 'code' | 'image' | 'generic';
+  targetFormat: 'txt' | 'docx' | 'md' | 'xlsx' | 'json' | 'csv' | 'py' | 'sql' | 'ts' | 'js' | 'jpg';
   transformer?: (data: any) => Promise<string | Buffer>;
 }
 
@@ -37,6 +38,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   const hintDemandsPdf = /\b(pdf|pdf report|export pdf)\b/.test(hintLower);
   const hintDemandsDocx = /\b(docx|word document|word doc|memo|brief|letter|one[- ]pager|word report)\b/.test(hintLower);
   const hintDemandsCode = /\b(code|script|sql|css|typescript|javascript|python|develop|implement|logic|feature|refactor|component|schema)\b/.test(hintLower);
+  const hintDemandsImage = /\b(image|graphic|banner|logo|illustration|photo|visual|generate image)\b/.test(hintLower);
 
   if (!isJson) {
     // Founder explicitly asked for a typed artefact but LLM returned narrative —
@@ -44,6 +46,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     if (hintDemandsXlsx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'xlsx', transformer: transformToExcel };
     if (hintDemandsPptx) return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'docx', transformer: transformToPresentation };
     if (hintDemandsDocx) return { sourceFormat: 'text', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
+    if (hintDemandsImage) return { sourceFormat: 'text', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
     if (hintDemandsCode) return { sourceFormat: 'text', contentType: 'code', targetFormat: 'txt' }; // raw code string
     // Plain text: only use txt for truly unstructured text
     return {
@@ -72,6 +75,9 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   if (hintDemandsCode) {
     // Technical departments producing JSON should often be using the 'code' transformer
     return { sourceFormat: 'json', contentType: 'code', targetFormat: 'txt', transformer: transformToCode };
+  }
+  if (hintDemandsImage) {
+    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
   }
 
   // Strip markdown fences that LLMs often wrap JSON in
@@ -104,8 +110,8 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   }
 
   if (parsed?.skill === 'image') {
-    // For images without a tool, we generate a Design Spec (MD/DOCX fallback)
-    return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+    // Generate actual image instead of falling back to design spec markdown
+    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
   }
 
   // ── CHECK 0: Explicit format field set by department prompt ─────────────
@@ -120,6 +126,9 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     if (fmt === 'md' || fmt === 'markdown') {
       return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
     }
+    if (fmt === 'jpg' || fmt === 'png' || fmt === 'image') {
+      return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
+    }
   }
 
   // ── CHECK 1: Explicit action field ──────────────────────────────────────
@@ -130,6 +139,9 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     }
     if (action.includes('word') || action.includes('document') || action.includes('report')) {
       return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToDocument };
+    }
+    if (action.includes('image') || action.includes('graphic') || action.includes('banner')) {
+      return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
     }
   }
 

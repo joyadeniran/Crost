@@ -77,7 +77,7 @@ YOUR RULES:
 - NEVER post to any platform without Approval Feed sign-off.
 - NEVER promise a product feature — verify with Engineering first.
 - NEVER write generic, corporate-sounding content.`,
-    capabilities: ['write_content', 'draft_social_posts', 'competitor_research', 'email_campaigns'],
+    capabilities: ['write_content', 'draft_social_posts', 'competitor_research', 'email_campaigns', 'graphic_design', 'image_generation'],
     restrictions: ['cannot_post_without_approval', 'cannot_promise_features'],
     tools: ['gmail', 'slack', 'web_search'],
     model_provider: 'local',

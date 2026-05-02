@@ -3,9 +3,41 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.83  
+**Current Version:** 11.85  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Waterfall Waterfall Unblocked.
+**Deployment Status:** ✅ PRODUCTION — Orc Capability Hardening & Image Gen.
+
+---
+
+## Session v11.85 — Orc Capability Hardening & Image Generation
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Mandated strict capability awareness for Orc to prevent hallucinated external hiring. Added native image generation capabilities for the Marketing department via Pollinations.ai.
+
+### What Was Built
+1. **Spec & Prompt Hardening**: Updated `CROST_SPEC.md` and `ORCHESTRATOR_SYSTEM_NOTE` (in `llm-client.ts`) to enforce strict capability awareness. Orc must now anticipate missing capabilities (e.g. video editing) and propose alternatives (e.g. Design Specs) during the planning phase, rather than failing silently or assuming the founder can afford external hires.
+2. **Marketing Department Upgrade**: Added `graphic_design` and `image_generation` capabilities to the Marketing department in `scripts/seed-departments.ts` and created migration `20260502223000_update_marketing_capabilities.sql`.
+3. **Pollinations.ai Image Generation**: Created `image-transformer.ts` and updated `detectOutputType` to detect image requests. The Marketing department can now seamlessly generate actual `.jpg` banners and illustrations using the free Pollinations.ai API, without requiring new API keys.
+4. **UX Bug Fixes**: Fixed the "Orc needs: [empty]" blocked message bug by properly appending missing data arrays to `orc_notes` in `llm-client.ts` and rendering the last note text in `WarRoom.tsx`. Added explicit "Orc (short for Orchestrator)" self-introduction.
+
+### Files Changed
+- `CROST_SPEC.md`
+- `frontend/lib/llm-client.ts`
+- `scripts/seed-departments.ts`
+- `supabase/migrations/20260502223000_update_marketing_capabilities.sql` (New)
+- `frontend/lib/artifact-transformers/image-transformer.ts` (New)
+- `frontend/lib/artifact-transformers/index.ts`
+- `frontend/components/war-room/WarRoom.tsx`
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Resolved parameter mapping failures for direct slash commands. Gmail and other tools now correctly parse natural language input into structured parameters.
+
+### What Was Built
+1. **AI Parameter Resolver**: Created `frontend/lib/tools/parameter-resolver.ts` which uses a fast LLM (Llama 3.1 8B) to map natural language chat input into the structured JSON schema required by tools.
+2. **Invoke Route Integration**: Updated `POST /api/tools/invoke` to automatically trigger the parameter resolver when a founder uses a slash command with raw text (e.g., `/gmail.send_email hello to...`).
+3. **Gmail Reliability**: Fixed the "Missing recipient" error by ensuring the `to` or `recipient_email` field is correctly extracted from natural language commands.
+
+### Files Changed
+- `frontend/lib/tools/parameter-resolver.ts`
+- `frontend/app/api/tools/invoke/route.ts`
 
 ---
 
