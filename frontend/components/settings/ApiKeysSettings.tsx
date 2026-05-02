@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatErrorMessage } from '@/lib/utils'
+import { toast } from '@/components/ui/toaster'
 
 interface KeyStatus {
   [provider: string]: boolean // provider → is_valid
@@ -95,7 +96,7 @@ export function ApiKeysSettings() {
         // Refresh usage in case they now have a BYOK key
         fetchUsage()
       } else {
-        alert(formatErrorMessage(json.error ?? 'API key validation failed. Check the key and try again.'))
+        toast(formatErrorMessage(json.error ?? 'API key validation failed. Check the key and try again.'), 'error')
       }
     } finally {
       setSaving(null)

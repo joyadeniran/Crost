@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Department, AvailableTool } from '@/types'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 
 const MODEL_OPTIONS: { provider: Department['model_provider']; name: string; label: string }[] = [
   { provider: 'gemini', name: 'gemini/gemini-2.5-flash',   label: 'Gemini 2.5 Flash' },
@@ -33,6 +34,8 @@ export function DeptSettingsForm({ dept }: Props) {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [hasDraft, setHasDraft] = useState(false)
   const [resettingTemplate, setResettingTemplate] = useState(false)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   // Fetch real available tools from DB (filtered for Toolkits only)
   useEffect(() => {
@@ -63,16 +66,15 @@ export function DeptSettingsForm({ dept }: Props) {
   }, [persona, toneOverride, tools, capabilities, restrictions, modelKey, dept.slug, dept.persona_prompt, dept.tone_override, dept.tools, dept.capabilities, dept.restrictions, dept.model_provider, dept.model_name])
 
   const discardDraft = () => {
-    if (confirm('Discard all unsaved changes for this department?')) {
-      setPersona(dept.persona_prompt)
-      setToneOverride(dept.tone_override ?? '')
-      setTools(dept.tools as string[])
-      setCapabilities((dept.capabilities as string[]).join(', '))
-      setRestrictions((dept.restrictions as string[]).join(', '))
-      setModelKey(`${dept.model_provider}::${dept.model_name}`)
-      localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
-      setHasDraft(false)
-    }
+    setPersona(dept.persona_prompt)
+    setToneOverride(dept.tone_override ?? '')
+    setTools(dept.tools as string[])
+    setCapabilities((dept.capabilities as string[]).join(', '))
+    setRestrictions((dept.restrictions as string[]).join(', '))
+    setModelKey(`${dept.model_provider}::${dept.model_name}`)
+    localStorage.removeItem(`crost-dept-draft-${dept.slug}`)
+    setHasDraft(false)
+    setShowDiscardConfirm(false)
   }
 
   const toggleTool = (tool: string) => {
@@ -131,14 +133,12 @@ export function DeptSettingsForm({ dept }: Props) {
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Deprecation failed')
       setDeleting(false)
+    } finally {
+      setShowDeleteConfirm(false)
     }
   }
 
   const handleResetTemplate = async () => {
-    if (!confirm('Reset this department to its base template? This will discard your custom prompt, tools, constraints, and model settings.')) {
-      return
-    }
-
     setResettingTemplate(true)
     setError(null)
     setSuccess(false)
@@ -158,6 +158,7 @@ export function DeptSettingsForm({ dept }: Props) {
       setError(err instanceof Error ? err.message : 'Reset failed')
     } finally {
       setResettingTemplate(false)
+      setShowResetConfirm(false)
     }
   }
 
@@ -197,6 +198,35 @@ export function DeptSettingsForm({ dept }: Props) {
 
   return (
     <div style={{ maxWidth: 640 }}>
+      <ConfirmationModal
+        isOpen={showDiscardConfirm}
+        title="Discard Changes"
+        message="Are you sure you want to discard all unsaved changes for this department?"
+        confirmLabel="Yes, Discard"
+        onConfirm={discardDraft}
+        onCancel={() => setShowDiscardConfirm(false)}
+        isDanger
+      />
+
+      <ConfirmationModal
+        isOpen={showResetConfirm}
+        title="Reset Department"
+        message="Reset this department to its base template? This will discard your custom prompt, tools, constraints, and model settings."
+        confirmLabel="Yes, Reset"
+        onConfirm={handleResetTemplate}
+        onCancel={() => setShowResetConfirm(false)}
+        isDanger
+      />
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        title="Deprecate Department"
+        message={`Are you sure you want to deprecate ${dept.name}? This will set it to inactive and pause its Orc persona.`}
+        confirmLabel={deleting ? 'Deprecating...' : 'Yes, Deprecate'}
+        onConfirm={handleDeprecate}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDanger
+      />
 
       {/* Persona */}
       <section style={sectionStyle}>
@@ -332,7 +362,7 @@ export function DeptSettingsForm({ dept }: Props) {
         </button>
         {hasDraft && !saving && (
           <button
-            onClick={discardDraft}
+            onClick={() => setShowDiscardConfirm(true)}
             style={{
               fontFamily: 'var(--font-dm-mono, monospace)',
               fontSize: 10,
@@ -365,7 +395,7 @@ export function DeptSettingsForm({ dept }: Props) {
         </p>
         <div>
           <button
-            onClick={handleResetTemplate}
+            onClick={() => setShowResetConfirm(true)}
             disabled={resettingTemplate}
             style={{
               fontFamily: 'var(--font-dm-mono, monospace)',
@@ -398,60 +428,22 @@ export function DeptSettingsForm({ dept }: Props) {
           <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
             Deprecating this department will set it to inactive, auto-reject all pending approvals, and pause its Orc persona. This cannot be undone without re-activating.
           </p>
-          {!showDeleteConfirm ? (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              style={{
-                fontFamily: 'var(--font-dm-mono, monospace)',
-                fontSize: 11,
-                padding: '6px 16px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,77,109,0.4)',
-                background: 'transparent',
-                color: 'var(--red)',
-                cursor: 'pointer',
-              }}
-            >
-              Deprecate Department
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Are you sure?</span>
-              <button
-                onClick={handleDeprecate}
-                disabled={deleting}
-                style={{
-                  fontFamily: 'var(--font-dm-mono, monospace)',
-                  fontSize: 11,
-                  padding: '6px 16px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: 'var(--red)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  opacity: deleting ? 0.6 : 1,
-                }}
-              >
-                {deleting ? 'Deprecating…' : 'Yes, deprecate'}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                style={{
-                  fontFamily: 'var(--font-dm-mono, monospace)',
-                  fontSize: 11,
-                  padding: '6px 16px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border)',
-                  background: 'transparent',
-                  color: 'var(--text-3)',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              {deleteError && <span style={{ fontSize: 12, color: 'var(--red)' }}>{deleteError}</span>}
-            </div>
-          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 11,
+              padding: '6px 16px',
+              borderRadius: 8,
+              border: '1px solid rgba(255,77,109,0.4)',
+              background: 'transparent',
+              color: 'var(--red)',
+              cursor: 'pointer',
+            }}
+          >
+            Deprecate Department
+          </button>
+          {deleteError && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 10 }}>{deleteError}</div>}
         </section>
       )}
     </div>

@@ -3,9 +3,32 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.86  
+**Current Version:** 11.87  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Orc UX & Force-Plan Hardened.
+**Deployment Status:** ✅ PRODUCTION — Full UX Branding Audit Complete.
+
+---
+
+## Session v11.87 — UX Branding Audit & Native Dialog Elimination
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Eliminated all remaining native browser dialogs (`confirm`, `alert`), replacing them with branded, in-app confirmation modals and toast notifications for a consistent, professional founder experience.
+
+### What Was Built
+1. **Branded Confirmation Modal**: Created `frontend/components/ui/ConfirmationModal.tsx`, a reusable, high-fidelity modal component styled to match the Crost aesthetic (Syne typography, glassmorphism backdrops, accent shadows).
+2. **Artifact Deletion Flow**: Replaced the native `confirm()` in `ArtifactCard.tsx` with the new branded modal. Replaced error alerts with the in-app toaster.
+3. **Knowledge Base Hardening**: Audited and updated `frontend/app/dashboard/knowledge/page.tsx` to remove native deletion confirmations.
+4. **Department Settings & Chat**: Updated `DeptSettingsForm.tsx` and `DepartmentChat.tsx` to eliminate native dialogs for clearing history, discarding drafts, and resetting templates.
+5. **System Settings**: Updated `ApiKeysSettings.tsx` to use branded toast notifications for validation errors instead of browser alerts.
+6. **War Room Resilience**: Replaced remaining goal-submission error alerts with branded toasts.
+
+### Files Changed
+- `frontend/components/ui/ConfirmationModal.tsx`
+- `frontend/components/artifacts/ArtifactCard.tsx`
+- `frontend/components/departments/DepartmentChat.tsx`
+- `frontend/components/departments/DeptSettingsForm.tsx`
+- `frontend/app/dashboard/knowledge/page.tsx`
+- `frontend/components/settings/ApiKeysSettings.tsx`
+- `frontend/components/war-room/WarRoom.tsx`
 
 ---
 

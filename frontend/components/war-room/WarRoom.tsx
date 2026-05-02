@@ -1,5 +1,8 @@
 'use client'
 
+import { toast } from '@/components/ui/toaster'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
+
 // components/war-room/WarRoom.tsx
 // The War Room: goal input + live plan card + per-task approve/reject.
 // This is the core of the founder→orchestrator→worker loop.
@@ -1805,11 +1808,11 @@ export function WarRoom() {
       if (json.success && json.data) {
         setActiveGoal(json.data)
       } else {
-        alert(formatErrorMessage(json.error ?? 'Failed to submit goal'))
+        toast(formatErrorMessage(json.error ?? 'Failed to submit goal'), 'error')
         setIsSubmittingGoal(false)
       }
     } catch {
-      alert('Could not reach the server. Please check your connection.')
+      toast('Could not reach the server. Please check your connection.', 'error')
       setIsSubmittingGoal(false)
     }
   }, [setActiveGoal, setIsSubmittingGoal])

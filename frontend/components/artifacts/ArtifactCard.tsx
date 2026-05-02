@@ -5,6 +5,8 @@ import { Artifact, ArtifactSources, GoalTask, Goal } from '@/types'
 import Image from 'next/image'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
 import { supabaseClient } from '@/lib/supabase-browser'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
+import { toast } from '@/components/ui/toaster'
 
 interface Props {
   artifact: Artifact
@@ -263,6 +265,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const [downloading, setDownloading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [lineageData, setLineageData] = useState<(GoalTask & { goals: Goal | null }) | null>(null)
   const [loadingLineage, setLoadingLineage] = useState(false)
@@ -340,22 +343,32 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
     }
   }
 
-  const deleteArtifact = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm('Delete this artifact? This cannot be undone.')) return
+  const deleteArtifact = async () => {
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
+      toast('Artifact deleted successfully', 'success')
       window.location.reload()
     } catch {
-      alert('Failed to delete artifact. Please try again.')
+      toast('Failed to delete artifact. Please try again.', 'error')
       setIsDeleting(false)
+    } finally {
+      setShowDeleteConfirm(false)
     }
   }
 
   return (
     <>
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        title="Delete Artifact"
+        message={`Are you sure you want to delete "${displayFilename}"? This action cannot be undone.`}
+        confirmLabel={isDeleting ? 'Deleting...' : 'Yes, Delete'}
+        onConfirm={deleteArtifact}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDanger
+      />
       {/* ── Card ─────────────────────────────────────────────── */}
       <div
         className="artifact-card"
@@ -548,7 +561,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   Download
                 </button>
                 <button
-                  onClick={deleteArtifact}
+                  onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
                   style={{
                     display: 'flex',
@@ -948,7 +961,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
               </button>
               <button
                 id={`drawer-delete-${artifact.id}`}
-                onClick={deleteArtifact}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={isDeleting}
                 style={{
                   padding: '10px 16px',

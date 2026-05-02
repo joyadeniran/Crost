@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 type KBFile = {
   id: string;
@@ -60,6 +61,7 @@ export default function KnowledgePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasFetched, setHasFetched] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -116,15 +118,25 @@ export default function KnowledgePage() {
     }
   };
 
-  const handleDelete = async (fileId: string) => {
-    if (!confirm('Delete this file permanently?')) return;
-    await fetch(`/api/knowledge/files?id=${fileId}`, { method: 'DELETE' });
-    setFiles(prev => prev.filter(f => f.id !== fileId));
-    if (selectedFile?.id === fileId) setSelectedFile(null);
+  const handleDelete = async () => {
+    if (!fileToDelete) return;
+    await fetch(`/api/knowledge/files?id=${fileToDelete}`, { method: 'DELETE' });
+    setFiles(prev => prev.filter(f => f.id !== fileToDelete));
+    if (selectedFile?.id === fileToDelete) setSelectedFile(null);
+    setFileToDelete(null);
   };
 
   return (
     <div className="knowledge-page">
+      <ConfirmationModal
+        isOpen={!!fileToDelete}
+        title="Delete File"
+        message="Are you sure you want to delete this file from your Knowledge Base? This action cannot be undone."
+        confirmLabel="Yes, Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setFileToDelete(null)}
+        isDanger
+      />
       <div className="knowledge-header">
         <div>
           <h1 className="knowledge-title">Knowledge Base</h1>
@@ -271,7 +283,7 @@ export default function KnowledgePage() {
                 <span className="kb-card-refs">📎 Used {file.reference_count}x</span>
                 <button
                   className="kb-delete-btn"
-                  onClick={e => { e.stopPropagation(); handleDelete(file.id); }}
+                  onClick={e => { e.stopPropagation(); setFileToDelete(file.id); }}
                 >Delete</button>
               </div>
             </div>
@@ -342,7 +354,7 @@ export default function KnowledgePage() {
             </div>
 
             <div className="kb-drawer-footer">
-              <button className="kb-drawer-delete" onClick={() => handleDelete(selectedFile.id)}>
+              <button className="kb-drawer-delete" onClick={() => setFileToDelete(selectedFile.id)}>
                 Delete File
               </button>
             </div>

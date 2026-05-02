@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useLocalStorage } from '@/lib/hooks'
 import type { Department } from '@/types'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -22,6 +23,7 @@ export function DepartmentChat({ department: dept }: Props) {
   const [sessionId, setSessionId, sessionReady, clearSession] = useLocalStorage<string | undefined>(`crost-chat-session-${dept.slug}`, undefined)
 
   const [loading, setLoading] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -69,11 +71,10 @@ export function DepartmentChat({ department: dept }: Props) {
   }
 
   const handleClear = () => {
-    if (confirm('Clear entire chat history for this department?')) {
-      clearMessages()
-      clearSession()
-      clearInput()
-    }
+    clearMessages()
+    clearSession()
+    clearInput()
+    setShowClearConfirm(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -108,6 +109,15 @@ export function DepartmentChat({ department: dept }: Props) {
       flexDirection: 'column',
       minHeight: 440,
     }}>
+      <ConfirmationModal
+        isOpen={showClearConfirm}
+        title="Clear Chat History"
+        message={`Are you sure you want to clear the entire chat history for ${dept.name}? This action cannot be undone.`}
+        confirmLabel="Yes, Clear"
+        onConfirm={handleClear}
+        onCancel={() => setShowClearConfirm(false)}
+        isDanger
+      />
       {/* Header with Clear */}
       <div style={{
         padding: '10px 14px',
@@ -121,7 +131,7 @@ export function DepartmentChat({ department: dept }: Props) {
         </span>
         {messages.length > 0 && (
           <button
-            onClick={handleClear}
+            onClick={() => setShowClearConfirm(true)}
             style={{
               background: 'transparent',
               border: 'none',
