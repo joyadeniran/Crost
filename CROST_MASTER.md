@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.89  
+**Current Version:** 11.90  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Build Stability Restored.
+**Deployment Status:** ✅ PRODUCTION — Orc Intent & UX Branding Refined.
+
+---
+
+## Session v11.90 — Orc Intent Detection & UX Refinement
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Sharpened Orc's ability to distinguish between simple questions and complex goals, and introduced distinct UI branding for direct conversational responses.
+
+### What Was Built
+1. **Sharper Intent Detection**: Refined `ORCHESTRATOR_SYSTEM_NOTE` in `llm-client.ts` to strictly enforce "Assistant Mode" for conversational queries (e.g., "what can you do?"). This eliminates redundant multi-task planning and slow response times for simple interactions.
+2. **"Orc Assistant" UI Branding**: Updated `SynthesisReportCard` in `WarRoom.tsx` to intelligently detect direct responses. Simple answers are now branded as **"Orc Assistant / Direct Response"**, while complex goals retain the **"Strategic Output / Mission Report"** signature.
+3. **Synthesis Title Hardening**: Updated `buildOrcContext` to use a predictable `[DIRECT RESPONSE]` title prefix for conversational memos, ensuring the UI can reliably toggle its branding state.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/components/war-room/WarRoom.tsx`
 
 ---
 

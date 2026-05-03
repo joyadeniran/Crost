@@ -1328,17 +1328,17 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: 'var(--accent)',
-            letterSpacing: '0.15em',
+          <span style={{ 
+            fontSize: 10, 
+            fontWeight: 700, 
+            color: 'var(--accent)', 
+            letterSpacing: '0.15em', 
             textTransform: 'uppercase',
             display: 'block',
             marginBottom: 6,
             fontFamily: 'var(--font-dm-mono, monospace)',
           }}>
-            Strategic Output
+            {report.title?.includes('[DIRECT RESPONSE]') ? 'Orc Assistant' : 'Strategic Output'}
           </span>
           <h3 style={{ 
             fontFamily: 'var(--font-syne, sans-serif)', 
@@ -1348,10 +1348,9 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             margin: 0,
             letterSpacing: '-0.02em',
           }}>
-            Mission Report
+            {report.title?.includes('[DIRECT RESPONSE]') ? 'Direct Response' : 'Mission Report'}
           </h3>
-        </div>
-        <button 
+        </div>        <button 
           onClick={onDismiss}
           className="topbar-control-btn"
           style={{ 
@@ -1403,8 +1402,12 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             🧠
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Orchestrator</div>
-            <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>Chief of Staff Pass</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              {report.title?.includes('[DIRECT RESPONSE]') ? 'Orc Assistant' : 'Orchestrator'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+              {report.title?.includes('[DIRECT RESPONSE]') ? 'Direct Chat Response' : 'Chief of Staff Pass'}
+            </div>
           </div>
         </div>
       </div>
