@@ -983,12 +983,14 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
 Rules: 
 1. COMPLEX GOALS: If the goal is clear but requires multiple steps or different departments, set is_valid_goal=true and is_direct_response=false and provide a plan.
 2. CONVERSATIONAL QUERIES: If the founder asks a simple question about you, your capabilities, the company state, or for help (e.g. "Who are you?", "What can you do?", "What is our current mission?", "How do I use this?"), set is_valid_goal=true and is_direct_response=true and provide the direct_response. DO NOT draft a multi-task plan for simple questions.
-3. AMBIGUOUS GOALS: If the goal is ambiguous, set is_valid_goal=false and provide a clarification_question.
-4. NEVER provide both a plan and a direct_response.
-5. ALWAYS provide a risk_note in the plan.
-6. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
-7. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
-8. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."`
+3. ACTION VERB TRIGGER: If the goal contains substantive action verbs like "design", "write", "create", "build", "research", "analyze", "draft", "make", or "generate", you MUST use Planning Mode (is_valid_goal=true, is_direct_response=false). Do NOT perform creative or substantive work in the direct_response; assign it to the correct department.
+4. ASSUMPTION OVER INTERROGATION: Do not ask pedantic clarification questions for common abbreviations, social platforms, or standard business terms (e.g., assuming "X" = Twitter, "Insta" = Instagram, "Deck" = Pitch Deck). Make the industry-standard assumption, proceed with the plan, and explicitly document your assumption in the plan's risk_note.
+5. AMBIGUOUS GOALS: If the goal is truly non-sensical or critically ambiguous, set is_valid_goal=false and provide a clarification_question.
+6. NEVER provide both a plan and a direct_response.
+7. ALWAYS provide a risk_note in the plan.
+8. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
+9. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
+10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1395,12 +1397,13 @@ export async function runWorkerTask(
   
   if (workerResult.status === 'needs_data') {
     const parsed = workerResult.result as any;
-    let noteText = 'Blocked waiting for founder data.';
+    let noteText = 'The department requires more context or data to execute this task.';
+    
     if (Array.isArray(parsed.missing_data) && parsed.missing_data.length > 0) {
       noteText = parsed.missing_data.join(', ');
     } else if (typeof parsed.missing_data === 'string' && parsed.missing_data.trim() !== '') {
       noteText = parsed.missing_data;
-    } else if (parsed.summary) {
+    } else if (parsed.summary && typeof parsed.summary === 'string' && parsed.summary.trim() !== '') {
       noteText = parsed.summary;
     }
     

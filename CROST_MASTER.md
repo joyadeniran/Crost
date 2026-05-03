@@ -3,9 +3,24 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.90  
+**Current Version:** 11.91  
 **Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Orc Intent & UX Branding Refined.
+**Deployment Status:** ✅ PRODUCTION — Orc Intelligence & Intent Hardened.
+
+---
+
+## Session v11.91 — Orc Intelligence & Intent Hardening
+**Date**: May 2, 2026  **Status**: ✅  
+**Impact**: Significantly hardened Orc's intelligence to distinguish complex goals from conversational queries, enforced industry-standard assumptions, and improved worker-blocked messaging.
+
+### What Was Built
+1. **Action Verb Triggers**: Updated `ORCHESTRATOR_SYSTEM_NOTE` in `llm-client.ts` to explicitly define substantive action verbs (design, write, create, build, etc.) that mandate **Planning Mode**. This prevents Orc from "hallucinating" work inside a chat response and ensures proper artifact production.
+2. **Assumption Over interrogation**: Added a new behavioral rule mandating that Orc make industry-standard assumptions (e.g., X = Twitter, Insta = Instagram) instead of halting execution for pedantic clarification. Assumptions are now documented in the `risk_note`.
+3. **Hardened "Needs Data" Messaging**: Updated `runWorkerTask` to inject a default, human-readable note ("The department requires more context...") if a department fails to provide a specific reason for a block. This ensures the War Room UI never displays an empty "Orc needs:" message.
+4. **Resilience Verification**: Verified that "What can you do?" triggers a fast assistant response while "Design a post" correctly triggers a multi-task mission.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
 
 ---
 
