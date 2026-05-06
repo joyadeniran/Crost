@@ -409,28 +409,37 @@ export interface ApprovalRequest {
 
 export function parseApprovalRequest(response: string): ApprovalRequest | null | 'BLOCKED' {
   const hasSignal = response.includes(APPROVAL_SIGNAL_MARKER)
-  const match = response.match(APPROVAL_REGEX)
+  if (!hasSignal) return null
 
-  if (hasSignal && !match) {
+  // Search for the outermost JSON block in the entire response
+  const firstBrace = response.indexOf('{')
+  const lastBrace = response.lastIndexOf('}')
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
     if (response.includes('\nREQUEST_APPROVAL') || response.startsWith('REQUEST_APPROVAL')) {
       return 'BLOCKED'
     }
     return null
   }
-  if (!match) return null
+
+  const jsonStr = response.slice(firstBrace, lastBrace + 1)
 
   try {
-    const parsed = JSON.parse(match[1]) as Partial<ApprovalRequest>
-    if (!parsed.reasoning || parsed.reasoning.trim() === '' || !parsed.action_type || !parsed.action_label) {
+    const parsed = JSON.parse(jsonStr) as Partial<ApprovalRequest>
+    
+    // If it's a wrapped response like {"REQUEST_APPROVAL": {...}}, unwrap it
+    const actual = (parsed as any).REQUEST_APPROVAL || parsed
+
+    if (!actual.reasoning || actual.reasoning.trim() === '' || !actual.action_type || !actual.action_label) {
       return null
     }
 
     return {
-      action_type: parsed.action_type,
-      action_label: parsed.action_label,
-      reasoning: parsed.reasoning,
-      payload: parsed.payload ?? {},
-      context: parsed.context ?? '',
+      action_type: actual.action_type,
+      action_label: actual.action_label,
+      reasoning: actual.reasoning,
+      payload: actual.payload ?? {},
+      context: actual.context ?? '',
     }
   } catch {
     return 'BLOCKED'
@@ -544,9 +553,9 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
 
     if (optionalMemos && optionalMemos.length > 0) {
       const tier4 = optionalMemos
-        .map((m: any) => `- [${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})`)
+        .map((m: any) => `- [${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n  Summary: ${m.body.slice(0, 100)}${m.body.length > 100 ? '...' : ''}`)
         .join('\n')
-      sections.push(`### RECENT MEMOS (Summary Only)\n${tier4}`)
+      sections.push(`### RECENT MEMOS\n${tier4}`)
     }
 
     return sections.join('\n\n')
@@ -772,7 +781,7 @@ export async function callLLM(
   const maxAttempts = 3
 
   // Identify if we should use the fallback chain.
-  const useFallbackChain = RESILIENT_FALLBACK_CHAIN.includes(model) || model === 'cloud'
+  const useFallbackChain = RESILIENT_FALLBACK_CHAIN.includes(model) || model === 'cloud' || !model.startsWith('local')
 
   while (attempts < maxAttempts) {
     try {
@@ -1074,12 +1083,26 @@ export async function runOrchestratorTask(
     .eq('created_by', userId)
 
   const activeDeptsList = allActiveDepts ?? []
+
+  // Step 1: Inject recent tasks to handle meta-commands like "Retry the last task"
+  const { data: recentTasks } = await supabase
+    .from('goal_tasks')
+    .select('label, status, dept_slug, created_at')
+    .eq('created_by', userId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  
+  const formattedRecentTasks = (recentTasks || [])
+    .map(t => `- [${t.status.toUpperCase()}] ${t.label} (Dept: ${t.dept_slug})`)
+    .join('\n')
+
   const systemMemory = await buildOrcContext(userId)
   const conversationContext = formatConversationHistory(conversationHistory)
   const prompt = [
     `GOAL: ${founderInput}`,
     forcePlan ? 'FORCE PLANNING MODE: The founder has explicitly bypassed clarification and trusts your judgment. You MUST draft the best possible plan now using reasonable assumptions and all available context (System Memory/Memos/KB). DO NOT return is_valid_goal=false. You are authorized to proceed with partial context.' : '',
     `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
+    formattedRecentTasks ? `Recent Workspace Tasks:\n${formattedRecentTasks}` : '',
     `Conversation History:\n${conversationContext}`,
     `System Memory:\n${systemMemory}`,
   ].filter(Boolean).join('\n\n')
@@ -1198,6 +1221,9 @@ export async function runOrchestratorTask(
   }
 
   const { plan } = result
+  if (!plan) {
+    throw new Error('Orchestrator proposed a valid goal but failed to provide a plan.')
+  }
   await supabase.from('goals').update({ orchestrator_plan: plan, risk_note: plan.risk_note, status: 'awaiting_approval' }).eq('id', goalId)
 
   await supabase.from('goal_tasks').delete().eq('goal_id', goalId).in('status', ['pending', 'planned', 'awaiting_approval'])
@@ -1477,11 +1503,36 @@ export async function runWorkerTask(
   }
 
   return workerResult
-  } catch (workerErr) {
-    // Reset department to 'error' so it doesn't stay stuck in 'running'.
+  } catch (workerErr: any) {
+    // Step 3: Hardened Exception Handling — prevent silent stalls
+    const errorMsg = workerErr.message || String(workerErr)
+    console.error(`[runWorkerTask] CRITICAL FAILURE for task ${task.id}:`, errorMsg)
+
     try {
+      // 1. Force the goal_tasks status to 'failed' so the UI/Orc knows it's dead
+      await supabase.from('goal_tasks').update({ 
+        status: 'failed',
+        orc_notes: [{ ts: new Date().toISOString(), note: `Critical execution error: ${errorMsg}`, action_taken: 'SYSTEM_ERROR' }]
+      }).eq('task_id', task.id)
+
+      // 2. Write a system memo so there's a paper trail for the Orchestrator
+      await supabase.from('company_memos').insert({
+        goal_id: goalId || null,
+        task_id: task.id,
+        from_department: 'system',
+        title: `Execution Failed: ${task.label}`,
+        body: `Critical error during execution of [${task.action}]:\n\n${errorMsg}\n\nStack trace logged to server console.`,
+        priority: 'high',
+        source_type: 'system',
+        created_by: userId
+      })
+
+      // 3. Reset department status to 'error'
       await supabase.from('departments').update({ status: 'error', current_task: null }).eq('id', deptRow.id)
-    } catch {}
+    } catch (dbErr) {
+      console.error('[runWorkerTask] Emergency DB update failed:', dbErr)
+    }
+
     throw workerErr
   }
 }

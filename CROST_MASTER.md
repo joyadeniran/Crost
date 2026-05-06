@@ -3,9 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.91  
-**Last Updated:** May 2, 2026  
-**Deployment Status:** ✅ PRODUCTION — Orc Intelligence & Intent Hardened.
+**Current Version:** 11.92  
+**Last Updated:** May 6, 2026  
+**Deployment Status:** ✅ PRODUCTION — AI Pipeline Hardened & Context Amnesia Fixed.
+
+---
+
+## Session v11.92 — AI Pipeline Hardening & Error Resilience
+**Date**: May 6, 2026  **Status**: ✅  
+**Impact**: Resolved "Context Amnesia" and task stalling by hardening Orchestrator memory and worker error handling.
+### What Was Built
+1. **Meta-Command Awareness**: Orchestrator now receives the last 5 workspace tasks in its prompt, enabling reliable "Retry" commands.
+2. **Enhanced Memory Retention**: `buildOrcContext` now includes memo bodies for recent items, preventing the loss of critical error/summary context.
+3. **Hardened Worker Exceptions**: `runWorkerTask` now forces task status to 'failed' and writes a system memo on LLM/network failure, preventing silent goal stalls.
+4. **Robust Approval Parsing**: Refactored `parseApprovalRequest` to handle nested JSON and wrapped LLM responses, eliminating `APPROVAL_PARSE_BLOCKED` errors.
+5. **Unit Test Alignment**: Hardened unit tests and mocks in `llm-client.test.ts` to reflect the new state-machine logic.
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/tests/unit/llm-client.test.ts`
 
 ---
 

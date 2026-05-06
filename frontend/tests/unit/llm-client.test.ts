@@ -14,11 +14,21 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Set default env vars for testing
+process.env.CLOUD_MODEL = 'groq/llama-3.3-70b-versatile'
+process.env.CLOUD_MODEL_WORKER = 'groq/llama-3.3-70b-versatile'
+process.env.LITELLM_BASE_URL = 'http://localhost:4000'
+process.env.LITELLM_MASTER_KEY = 'test-key'
+
 // ── Mocks — must be declared before dynamic imports ───────────────────────
+
+const loggedEvents: string[] = []
 
 // Mock the Supabase server client so no real DB calls are made
 vi.mock('@/lib/supabase', () => ({
   createClient: vi.fn(() => mockSupabaseClient()),
+  createServerSupabaseClient: vi.fn(() => mockSupabaseClient()),
+  createSupabaseServerComponentClient: vi.fn(async () => mockSupabaseClient()),
 }))
 
 // Mock the Composio SDK
@@ -33,25 +43,73 @@ vi.mock('@composio/core', () => ({
 // ── Mock Supabase client factory ───────────────────────────────────────────
 
 function mockSupabaseClient(overrides: Record<string, unknown> = {}) {
-  const queryBuilder = {
-    select: vi.fn().mockReturnThis(),
+  const queryBuilder: any = {
+    _table: '',
+    _data: null,
+    select: vi.fn().mockImplementation(function(this: any) {
+      if (this._table === 'departments') {
+        this._data = [
+          { id: 'mock-dept-id-1', slug: 'marketing', name: 'Marketing', activation_stage: 'active', persona_prompt: 'Persona' },
+          { id: 'mock-dept-id-2', slug: 'executive', name: 'Executive', activation_stage: 'active', persona_prompt: 'Persona' }
+        ]
+      } else {
+        this._data = []
+      }
+      return this
+    }),
     eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    insert: vi.fn().mockResolvedValue({ data: [{ id: 'mock-id' }], error: null }),
-    update: vi.fn().mockReturnThis(),
-    upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
-    delete: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    in: vi.fn().mockReturnThis(),
     neq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
     match: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    then: vi.fn().mockImplementation(function(this: any, resolve: any) {
+      return Promise.resolve({ data: this._data, error: null }).then(resolve)
+    }),
+    single: vi.fn().mockImplementation(async function(this: any) {
+      if (this._table === 'departments') {
+        return { data: { id: 'mock-dept-id', slug: 'marketing', name: 'Marketing', activation_stage: 'active', persona_prompt: 'Persona' }, error: null }
+      }
+      if (this._table === 'goals') {
+        return { data: { id: 'goal-id-1', created_by: 'test-user-id', title: 'Test Goal', env_mode_snapshot: 'cloud' }, error: null }
+      }
+      if (this._table === 'user_model_assignments') {
+        return { data: { model_name: 'groq/llama-3.3-70b-versatile', provider: 'groq' }, error: null }
+      }
+      if (this._table === 'system_config') {
+        return { data: { value: 'cloud' }, error: null }
+      }
+      return { data: { id: 'mock-id' }, error: null }
+    }),
+    maybeSingle: vi.fn().mockImplementation(async function(this: any) {
+      if (this._table === 'departments') {
+        return { data: { id: 'mock-dept-id', slug: 'marketing', name: 'Marketing', activation_stage: 'active', persona_prompt: 'Persona' }, error: null }
+      }
+      return { data: null, error: null }
+    }),
+    insert: vi.fn().mockImplementation(function(this: any, rows: any) {
+      if (this._table === 'event_log') {
+        if (Array.isArray(rows)) {
+          rows.forEach(r => loggedEvents.push(r.event_type))
+        } else {
+          loggedEvents.push(rows.event_type)
+        }
+      }
+      return this
+    }),
+    update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
   }
 
   return {
-    from: vi.fn(() => queryBuilder),
+    from: vi.fn((table: string) => {
+      queryBuilder._table = table
+      return queryBuilder
+    }),
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null }),
@@ -65,6 +123,13 @@ function mockSupabaseClient(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  vi.mocked(fetch).mockReset()
+  loggedEvents.length = 0
+})
 
 // ── LiteLLM response builder ───────────────────────────────────────────────
 
@@ -85,7 +150,7 @@ function litellmError(status: number, message: string) {
     ok: false,
     status,
     json: async () => ({ error: { message } }),
-    text: async () => JSON.stringify({ error: message }),
+    text: async () => JSON.stringify({ error: { message } }),
   } as Response
 }
 
@@ -99,10 +164,10 @@ describe('callLLM — resilient fallback chain', () => {
       litellmResponse('{"is_valid_goal":true,"tasks":[]}')
     )
 
-    const result = await callLLM({
-      model: 'groq/llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'test' }],
-    })
+    const { content: result } = await callLLM(
+      'groq/llama-3.3-70b-versatile',
+      'test'
+    )
 
     expect(result).toContain('is_valid_goal')
     expect(fetch).toHaveBeenCalledTimes(1)
@@ -117,10 +182,10 @@ describe('callLLM — resilient fallback chain', () => {
       )
       .mockResolvedValueOnce(litellmResponse('fallback response from gemini'))
 
-    const result = await callLLM({
-      model: 'groq/llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'test' }],
-    })
+    const { content: result } = await callLLM(
+      'groq/llama-3.3-70b-versatile',
+      'test'
+    )
 
     expect(result).toBe('fallback response from gemini')
     expect(fetch).toHaveBeenCalledTimes(2)
@@ -134,10 +199,10 @@ describe('callLLM — resilient fallback chain', () => {
       .mockResolvedValueOnce(litellmError(429, 'LiteLLM error - Rate limit exceeded'))
       .mockResolvedValueOnce(litellmResponse('third model response'))
 
-    const result = await callLLM({
-      model: 'groq/llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'test' }],
-    })
+    const { content: result } = await callLLM(
+      'groq/llama-3.3-70b-versatile',
+      'test'
+    )
 
     expect(result).toBe('third model response')
     expect(fetch).toHaveBeenCalledTimes(3)
@@ -152,10 +217,10 @@ describe('callLLM — resilient fallback chain', () => {
       .mockResolvedValueOnce(litellmError(503, 'LiteLLM error - Service unavailable'))
 
     await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-      })
+      callLLM(
+        'groq/llama-3.3-70b-versatile',
+        'test'
+      )
     ).rejects.toThrow()
   })
 
@@ -173,10 +238,10 @@ describe('callLLM — resilient fallback chain', () => {
     vi.mocked(fetch).mockResolvedValueOnce(litellmError(429, limitError))
 
     await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-      })
+      callLLM(
+        'groq/llama-3.3-70b-versatile',
+        'test'
+      )
     ).rejects.toThrow(/SYSTEM_LIMIT_EXCEEDED/)
 
     // Must not retry — only one fetch call
@@ -190,10 +255,10 @@ describe('callLLM — resilient fallback chain', () => {
       .mockResolvedValueOnce(litellmError(503, 'custom model unavailable'))
       .mockResolvedValueOnce(litellmResponse('chain[0] response'))
 
-    const result = await callLLM({
-      model: 'some-custom-model-not-in-chain',
-      messages: [{ role: 'user', content: 'test' }],
-    })
+    const { content: result } = await callLLM(
+      'some-custom-model-not-in-chain',
+      'test'
+    )
 
     expect(result).toBe('chain[0] response')
     // Second call should use the first model in RESILIENT_FALLBACK_CHAIN
@@ -208,40 +273,16 @@ describe('callLLM — provider_fallback event logging', () => {
   it('logs provider_fallback event to event_log on each fallback', async () => {
     const { callLLM } = await import('@/lib/llm-client')
 
-    // Track event_log inserts
-    const loggedEvents: string[] = []
-    const supabaseMock = mockSupabaseClient()
-    const fromMock = supabaseMock.from as ReturnType<typeof vi.fn>
-    fromMock.mockImplementation((table: string) => {
-      const builder = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-        insert: vi.fn((rows: Array<{ event_type: string }>) => {
-          if (table === 'event_log') {
-            rows.forEach((r) => loggedEvents.push(r.event_type))
-          }
-          return { data: null, error: null }
-        }),
-        update: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        or: vi.fn().mockReturnThis(),
-      }
-      return builder
-    })
-
     vi.mocked(fetch)
       .mockResolvedValueOnce(litellmError(503, 'LiteLLM error - Service unavailable'))
       .mockResolvedValueOnce(litellmResponse('fallback worked'))
 
-    await callLLM({
-      model: 'groq/llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'test' }],
-      userId: 'test-user-id',
-    })
+    await callLLM(
+      'groq/llama-3.3-70b-versatile',
+      'test',
+      undefined,
+      'test-user-id'
+    )
 
     // provider_fallback must have been logged
     expect(loggedEvents).toContain('provider_fallback')
@@ -262,11 +303,12 @@ describe('checkTokenBudget', () => {
 
     // callLLM should complete without throwing — no SYSTEM_LIMIT_EXCEEDED
     await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'my very first goal' }],
-        userId: 'new-user-id',
-      })
+      callLLM(
+        'groq/llama-3.3-70b-versatile',
+        'my very first goal',
+        undefined,
+        'new-user-id'
+      )
     ).resolves.toBeDefined()
   })
 
@@ -280,11 +322,12 @@ describe('checkTokenBudget', () => {
     // (handled in module-level mock via mockSupabaseClient)
 
     await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-        userId: 'fail-open-user',
-      })
+      callLLM(
+        'groq/llama-3.3-70b-versatile',
+        'test',
+        undefined,
+        'fail-open-user'
+      )
     ).resolves.toBeDefined()
   })
 })
@@ -297,16 +340,20 @@ describe('runOrchestratorTask', () => {
       is_valid_goal: true,
       is_direct_response: false,
       summary: 'Test plan',
-      tasks: depts.map((dept, i) => ({
-        id: `task-${i}`,
-        dept,
-        label: `Task ${i}`,
-        action: 'test_action',
-        reasoning: 'test',
-        params: {},
-        depends_on: i === 0 ? [] : [`task-${i - 1}`],
-        risk: 'low',
-      })),
+      plan: {
+        goal: 'Test goal',
+        risk_note: 'None',
+        tasks: depts.map((dept, i) => ({
+          id: `task-${i}`,
+          dept,
+          label: `Task ${i}`,
+          action: 'test_action',
+          reasoning: 'test',
+          params: {},
+          depends_on: i === 0 ? [] : [`task-${i - 1}`],
+          risk: 'low',
+        })),
+      }
     })
   }
 
@@ -328,18 +375,22 @@ describe('runOrchestratorTask', () => {
       is_valid_goal: true,
       is_direct_response: false,
       summary: 'Bad plan',
-      tasks: [
-        {
-          id: 'task-0',
-          dept: 'quantum_computing', // not in active dept list
-          label: 'Impossible task',
-          action: 'quantum',
-          reasoning: 'n/a',
-          params: {},
-          depends_on: [],
-          risk: 'low',
-        },
-      ],
+      plan: {
+        goal: 'Bad plan',
+        risk_note: 'Risky',
+        tasks: [
+          {
+            id: 'task-0',
+            dept: 'quantum_computing', // not in active dept list
+            label: 'Impossible task',
+            action: 'quantum',
+            reasoning: 'n/a',
+            params: {},
+            depends_on: [],
+            risk: 'low',
+          },
+        ],
+      }
     })
 
     vi.mocked(fetch)
@@ -359,7 +410,7 @@ describe('runOrchestratorTask', () => {
     const { runOrchestratorTask } = await import('@/lib/llm-client')
 
     const directResponse = JSON.stringify({
-      is_valid_goal: false,
+      is_valid_goal: true,
       is_direct_response: true,
       direct_response: 'Your company name is Acme Inc.',
     })
@@ -426,7 +477,7 @@ describe('runWorkerTask', () => {
     vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(needsDataResponse))
 
     await expect(
-      runWorkerTask(mockDept as Parameters<typeof runWorkerTask>[0], mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
+      runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
     ).resolves.not.toThrow()
 
     // The task status update call should have been made with 'needs_data'
@@ -451,7 +502,7 @@ describe('runWorkerTask', () => {
     vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(approvalResponse))
 
     await expect(
-      runWorkerTask(mockDept as Parameters<typeof runWorkerTask>[0], mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
+      runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
     ).resolves.not.toThrow()
   })
 
@@ -468,20 +519,20 @@ describe('runWorkerTask', () => {
     vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(successResponse))
 
     await expect(
-      runWorkerTask(mockDept as Parameters<typeof runWorkerTask>[0], mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
+      runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
     ).resolves.not.toThrow()
   })
 
-  it('resets department status to error on unexpected exception', async () => {
+  it('throws and resets department status to error on unexpected exception', async () => {
     const { runWorkerTask } = await import('@/lib/llm-client')
 
-    // Force callLLM to throw a non-recoverable error
-    vi.mocked(fetch).mockRejectedValueOnce(new Error('Unexpected network collapse'))
+    // Force callLLM to throw a non-recoverable error across all retries
+    vi.mocked(fetch).mockRejectedValue(new Error('Unexpected network collapse'))
 
-    // runWorkerTask should not propagate the error — it handles internally
+    // runWorkerTask should now propagate the error after performing emergency DB updates
     await expect(
-      runWorkerTask(mockDept as Parameters<typeof runWorkerTask>[0], mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
-    ).resolves.not.toThrow()
+      runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
+    ).rejects.toThrow('Unexpected network collapse')
   })
 })
 

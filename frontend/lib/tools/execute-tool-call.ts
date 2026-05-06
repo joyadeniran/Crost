@@ -273,24 +273,36 @@ export async function executeToolCall(options: ExecuteOptions) {
   }
 
   // 4. Execution Layer
-  const result: ToolResult = await runComposioTool({
-    userId,
-    service,
-    action,
-    params
-  });
+  try {
+    const result: ToolResult = await runComposioTool({
+      userId,
+      service,
+      action,
+      params
+    });
 
-  // 5. Memory Routing & Separation (Memos vs Artifacts)
-  const { artifactId: createdArtifactId } = await handleToolResultArchiving({
-    result,
-    userId,
-    departmentId,
-    taskId,
-    goalId,
-    executionId: executionLog.id
-  });
+    // 5. Memory Routing & Separation (Memos vs Artifacts)
+    const { artifactId: createdArtifactId } = await handleToolResultArchiving({
+      result,
+      userId,
+      departmentId,
+      taskId,
+      goalId,
+      executionId: executionLog.id
+    });
 
-  return { ...result, artifact_id: createdArtifactId } as ToolResult & { artifact_id: string | null };
+    return { ...result, artifact_id: createdArtifactId } as ToolResult & { artifact_id: string | null };
+  } catch (execError: any) {
+    const errorMsg = execError.message || String(execError);
+    console.error("[executeToolCall] Runtime failure:", errorMsg);
+    
+    await supabase.from("tool_executions").update({
+      status: "failed",
+      result_summary: `Runtime execution error: ${errorMsg}`
+    }).eq("id", executionLog.id);
+    
+    throw execError;
+  }
 }
 
 /**
