@@ -256,6 +256,7 @@ export interface Goal {
   status: GoalStatus
   outcome: string | null
   orc_conversation?: { role: 'user' | 'assistant', content: string, ts: string }[]
+  created_by: string | null
   created_at: string
   updated_at: string
   // Orc upgrade fields (migration 011)
