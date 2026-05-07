@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     // 2. LOCAL TOOL ROUTER
     let result;
-    const normalizedToolName = toolName.toUpperCase();
+    const normalizedToolName = (toolName ?? '').toUpperCase();
 
     if (normalizedToolName === 'COMPANY_MEMOS') {
       const { data: memos, error: memoErr } = await supabase
