@@ -17,8 +17,19 @@ import { cleanLargePayload } from "@/lib/utils";
 const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(req: NextRequest) {
+  // Hoisted so the catch block can reference them for observability writes
+  let taskId: string | undefined
+  let goalId: string | undefined
+  let toolName: string | undefined
+  let userId: string | null = null
+
   try {
-    const { taskId, goalId, userId: bodyUserId, toolName, args } = await req.json();
+    const body = await req.json();
+    taskId = body.taskId
+    goalId = body.goalId
+    toolName = body.toolName
+    const bodyUserId = body.userId
+    const args = body.args
 
     if (!taskId || !goalId) {
       return NextResponse.json({ error: "taskId and goalId are required" }, { status: 400 });
@@ -32,7 +43,6 @@ export async function POST(req: NextRequest) {
     // The internal secret path is used by server-side workers (runWorkerTask).
     // External callers without a session or the secret are rejected.
     const internalSecret = req.headers.get('x-crost-internal-secret')
-    let userId: string | null = null
 
     if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
       // Trusted internal call — accept userId from body (must still pass ownership check below)
@@ -168,6 +178,41 @@ export async function POST(req: NextRequest) {
     }, { status: 200 });
   } catch (error: any) {
     console.error("[Worker Execute Error]:", error);
+
+    try {
+      const errorMsg = error.message || String(error);
+      const supabase = createServerSupabaseClient();
+
+      if (taskId && goalId) {
+        await supabase
+          .from('goal_tasks')
+          .update({ status: 'failed', completed_at: new Date().toISOString() })
+          .eq('task_id', taskId)
+          .eq('goal_id', goalId);
+
+        await supabase.from('event_log').insert({
+          goal_id: goalId,
+          event_type: 'task_failed',
+          description: `Worker execute route error for task ${taskId}: ${errorMsg}`,
+          metadata: { taskId, goalId, toolName: toolName ?? null, error: errorMsg },
+          created_by: userId ?? null,
+        });
+
+        await supabase.from('company_memos').insert({
+          goal_id: goalId,
+          task_id: taskId,
+          from_department: 'system',
+          title: `Execution Failed: ${toolName ?? taskId}`,
+          body: `Critical error in worker execute route:\n\n${errorMsg}`,
+          priority: 'high',
+          source_type: 'system',
+          created_by: userId ?? null,
+        });
+      }
+    } catch (dbErr) {
+      console.error("[Worker Execute] Emergency observability write failed:", dbErr);
+    }
+
     return NextResponse.json({ error: error.message || "Execution failed" }, { status: 500 });
   }
 }

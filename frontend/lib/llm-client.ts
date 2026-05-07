@@ -1087,13 +1087,13 @@ export async function runOrchestratorTask(
   // Step 1: Inject recent tasks to handle meta-commands like "Retry the last task"
   const { data: recentTasks } = await supabase
     .from('goal_tasks')
-    .select('label, status, dept_slug, created_at')
+    .select('task_id, label, status, dept_slug, goal_id, created_at')
     .eq('created_by', userId)
     .order('created_at', { ascending: false })
     .limit(5)
-  
+
   const formattedRecentTasks = (recentTasks || [])
-    .map(t => `- [${t.status.toUpperCase()}] ${t.label} (Dept: ${t.dept_slug})`)
+    .map(t => `- [${t.status.toUpperCase()}] ${t.label} (task_id: ${t.task_id}, goal_id: ${t.goal_id}, Dept: ${t.dept_slug})`)
     .join('\n')
 
   const systemMemory = await buildOrcContext(userId)
@@ -1355,7 +1355,7 @@ export async function runWorkerTask(
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[0])
-      workerResult.status = parsed.needs_more_data ? 'needs_data' : 'completed'
+      workerResult.status = parsed.needs_more_data ? 'needs_data' : (parsed.status === 'failed' ? 'failed' : 'completed')
       workerResult.result = parsed
       workerResult.memo_summary = parsed.summary || content.slice(0, 500)
     } catch (e) { console.error('Worker JSON parse fail', e) }
@@ -1502,6 +1502,44 @@ export async function runWorkerTask(
     }
   }
 
+  // Non-exception failure guard: catches cases where the LLM worker explicitly
+  // returns status='failed' or a terminal-error status, without throwing.
+  // These bypass the catch block but still need event_log + memo observability.
+  const TERMINAL_ERROR_STATUSES = new Set(['failed'])
+  if (TERMINAL_ERROR_STATUSES.has(workerResult.status)) {
+    const failReason = workerResult.errors?.join('; ') || workerResult.memo_summary || 'Worker returned failure status without exception'
+    console.error(`[runWorkerTask] Worker returned failure status for task ${task.id}:`, failReason)
+
+    try {
+      await supabase.from('event_log').insert({
+        department_slug: deptRow.slug,
+        goal_id: goalId || null,
+        event_type: 'task_failed',
+        description: `Worker task failed: ${task.label}`,
+        metadata: {
+          task_id: task.id,
+          action: task.action,
+          error: failReason,
+          source: 'non_exception_return',
+        },
+        created_by: userId,
+      })
+
+      await supabase.from('company_memos').insert({
+        goal_id: goalId || null,
+        task_id: task.id,
+        from_department: 'system',
+        title: `Execution Failed: ${task.label}`,
+        body: `Worker returned a failure result:\n\n${failReason}`,
+        priority: 'high',
+        source_type: 'system',
+        created_by: userId,
+      })
+    } catch (dbErr) {
+      console.error('[runWorkerTask] Non-exception failure observability write failed:', dbErr)
+    }
+  }
+
   return workerResult
   } catch (workerErr: any) {
     // Step 3: Hardened Exception Handling — prevent silent stalls
@@ -1510,12 +1548,27 @@ export async function runWorkerTask(
 
     try {
       // 1. Force the goal_tasks status to 'failed' so the UI/Orc knows it's dead
-      await supabase.from('goal_tasks').update({ 
+      await supabase.from('goal_tasks').update({
         status: 'failed',
+        completed_at: new Date().toISOString(),
         orc_notes: [{ ts: new Date().toISOString(), note: `Critical execution error: ${errorMsg}`, action_taken: 'SYSTEM_ERROR' }]
       }).eq('task_id', task.id)
 
-      // 2. Write a system memo so there's a paper trail for the Orchestrator
+      // 2. Emit task_failed to event_log so the UI, Chain Reaction, and Orc can react
+      await supabase.from('event_log').insert({
+        department_slug: deptRow.slug,
+        goal_id: goalId || null,
+        event_type: 'task_failed',
+        description: `Worker task failed: ${task.label}`,
+        metadata: {
+          task_id: task.id,
+          action: task.action,
+          error: errorMsg,
+        },
+        created_by: userId,
+      })
+
+      // 3. Write a system memo so there's a paper trail for the Orchestrator
       await supabase.from('company_memos').insert({
         goal_id: goalId || null,
         task_id: task.id,

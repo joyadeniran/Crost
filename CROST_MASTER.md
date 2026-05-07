@@ -3,9 +3,67 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.92  
-**Last Updated:** May 6, 2026  
-**Deployment Status:** ✅ PRODUCTION — AI Pipeline Hardened & Context Amnesia Fixed.
+**Current Version:** 11.93  
+**Last Updated:** May 7, 2026  
+**Deployment Status:** ✅ PRODUCTION — Gold-Level Observability & Multi-Tenant Hardening.
+
+---
+
+## Session v11.93 — Full-Stack Observability, Slug Fixes & Multi-Tenant Hardening
+**Date**: May 7, 2026  **Status**: ✅  
+**Impact**: Resolved 7 production bugs spanning silent failure swallowing, missing event_log entries, stale cross-account state, and incorrect Composio tool slugs. Added comprehensive unit + E2E test coverage for all fixes.
+
+### Bugs Fixed
+
+**BUG-6 — `worker/execute` catch-all was completely silent**  
+- `taskId`, `goalId`, `toolName`, `userId` were declared inside the `try` block, making them inaccessible in `catch` → hoisted to function scope.  
+- Catch block now writes `goal_tasks` failure status, `event_log` `task_failed` entry, and system `company_memo`. Previously: no DB writes, no observability, silent stall.  
+- File: `frontend/app/api/worker/execute/route.ts`
+
+**BUG-2 — Worker exception path emitted no `event_log` entry**  
+- `runWorkerTask`'s `workerErr` catch block updated `goal_tasks` and wrote a memo but never inserted into `event_log`. Added `task_failed` event insert (with `completed_at` on the task update).  
+- File: `frontend/lib/llm-client.ts`
+
+**BUG-7 — LLM-returned `status: "failed"` bypassed all observability**  
+- JSON parsing hardened to propagate `parsed.status === 'failed'` into `workerResult.status` (previously only `needs_more_data` was checked, so explicit failure was silently marked 'completed').  
+- Non-exception failure guard added: when `workerResult.status === 'failed'`, writes `task_failed` to `event_log` and a high-priority system `company_memo` before returning.  
+- File: `frontend/lib/llm-client.ts`
+
+**BUG-1 — Context injection SELECT omitted `task_id` and `goal_id`**  
+- Orchestrator's recent-tasks query selected `label, status, dept_slug, created_at` — no identifiers. Orc could not reference past tasks for retry.  
+- Fixed SELECT to include `task_id, goal_id`; format string updated to `(task_id: …, goal_id: …, Dept: …)`.  
+- File: `frontend/lib/llm-client.ts`
+
+**BUG-3 — HITL approval path never emitted `approval_requested` to `event_log`**  
+- `executeToolCall` wrote to `approval_queue` and `company_memos` but skipped `event_log`. Added `approval_requested` insert with `approval_id`, `tool`, `risk_level`, and `task_id` in metadata.  
+- File: `frontend/lib/tools/execute-tool-call.ts`
+
+**BUG-5 — Composio slug mismatches caused silent 404s on tool execution**  
+- `GMAIL_CREATE_DRAFT`, `GMAIL_SEND`, `GMAIL_REPLY`, `GITHUB_CREATE_PR`, `GITHUB_MERGE_PR`, `NOTION_CREATE_PAGE` all have different actual slugs in Composio's catalog.  
+- Added `COMPOSIO_SLUG_OVERRIDES` map in `composio.ts`; slug is resolved before `tools.execute()`.  
+- File: `frontend/lib/tools/providers/composio.ts`
+
+**BUG-4 — Stale `activeGoal` persisted across account switches**  
+- Zustand's `partialize` persists `activeGoal` to localStorage. On account switch, a previous user's goal leaked into the new session.  
+- Added `supabaseClient.auth.onAuthStateChange` listener in `LayoutStoreHydrator`: clears `activeGoal` on `SIGNED_OUT`; on `SIGNED_IN` / `TOKEN_REFRESHED`, clears if `activeGoal.created_by !== session.user.id`.  
+- File: `frontend/components/providers/LayoutStoreHydrator.tsx`
+
+### Test Coverage Added
+- **`tests/unit/worker-execute.test.ts`** (new) — 5 tests: BUG-6 catch block writes goal_tasks/event_log/company_memo, 500 response, 401 auth gate.
+- **`tests/unit/execute-tool-call.test.ts`** (new) — 6 tests: BUG-3 approval_requested event, BUG-5 Composio slug overrides, permission_denied graceful return.
+- **`tests/unit/llm-client.test.ts`** (extended) — 3 new describe groups: BUG-1 context includes task_id, BUG-2 task_failed on exception, BUG-7 task_failed on non-exception failure.
+- **`tests/e2e/waterfall-lifecycle.spec.ts`** (extended) — 3 new describe blocks covering BUG-2/6/7 observability, BUG-3 approval_requested event, BUG-4 cross-account isolation.
+
+### Files Changed
+- `frontend/app/api/worker/execute/route.ts`
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `frontend/lib/tools/providers/composio.ts`
+- `frontend/components/providers/LayoutStoreHydrator.tsx`
+- `frontend/tests/unit/worker-execute.test.ts` (new)
+- `frontend/tests/unit/execute-tool-call.test.ts` (new)
+- `frontend/tests/unit/llm-client.test.ts`
+- `frontend/tests/e2e/waterfall-lifecycle.spec.ts`
 
 ---
 

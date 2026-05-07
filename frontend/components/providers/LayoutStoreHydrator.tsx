@@ -19,6 +19,8 @@ export function LayoutStoreHydrator({ pendingCount, artifactCount, envMode }: Pr
   const setPendingApprovalCount = useCrostStore(s => s.setPendingApprovalCount)
   const setArtifactCount = useCrostStore(s => s.setArtifactCount)
   const setEnvMode = useCrostStore(s => s.setEnvMode)
+  const setActiveGoal = useCrostStore(s => s.setActiveGoal)
+  const activeGoal = useCrostStore(s => s.activeGoal)
   
   const pathname = usePathname()
   const lastRefreshRef = useRef<number>(0)
@@ -70,6 +72,27 @@ export function LayoutStoreHydrator({ pendingCount, artifactCount, envMode }: Pr
     setArtifactCount(artifactCount)
     setEnvMode(envMode)
   }, [pendingCount, artifactCount, envMode, setPendingApprovalCount, setArtifactCount, setEnvMode])
+
+  // ─── 3. Multi-tenant isolation: evict stale goal on account switch ───────────
+  // activeGoal is persisted in localStorage (store.ts partialize). When User A
+  // has a failed/limit goal and User B signs in on the same browser, the stale
+  // goal leaks into User B's session. This effect detects the mismatch and evicts.
+  useEffect(() => {
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setActiveGoal(null)
+        return
+      }
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+        const currentGoal = useCrostStore.getState().activeGoal
+        if (currentGoal && currentGoal.created_by !== session.user.id) {
+          setActiveGoal(null)
+        }
+      }
+    })
+    return () => subscription.unsubscribe()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ─── 3. Stable Refresh Logic ───────────────────────────────────────────────
   const refreshCount = useCallback(async () => {

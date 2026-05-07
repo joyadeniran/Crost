@@ -262,6 +262,21 @@ export async function executeToolCall(options: ExecuteOptions) {
       created_by: userId
     });
 
+    // Emit approval_requested to event_log so the event panel and Orc can react
+    await supabase.from('event_log').insert({
+      goal_id: goalId,
+      department_slug: departmentId,
+      event_type: 'approval_requested',
+      description: `HITL approval required: ${fullyQualifiedTool}`,
+      metadata: {
+        approval_id: approvalRow.id,
+        tool: fullyQualifiedTool,
+        risk_level: risk || 'high',
+        task_id: taskId,
+      },
+      created_by: userId,
+    });
+
     return {
       status: "requires_approval",
       execution_id: executionLog.id,

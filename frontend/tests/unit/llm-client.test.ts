@@ -52,6 +52,10 @@ function mockSupabaseClient(overrides: Record<string, unknown> = {}) {
           { id: 'mock-dept-id-1', slug: 'marketing', name: 'Marketing', activation_stage: 'active', persona_prompt: 'Persona' },
           { id: 'mock-dept-id-2', slug: 'executive', name: 'Executive', activation_stage: 'active', persona_prompt: 'Persona' }
         ]
+      } else if (this._table === 'goal_tasks') {
+        this._data = [
+          { task_id: 'recent-task-id-1', label: 'Write campaign brief', status: 'completed', dept_slug: 'marketing', goal_id: 'goal-past-1', created_at: '2024-01-01T00:00:00Z' }
+        ]
       } else {
         this._data = []
       }
@@ -533,6 +537,113 @@ describe('runWorkerTask', () => {
     await expect(
       runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
     ).rejects.toThrow('Unexpected network collapse')
+  })
+})
+
+// ── Tests: BUG-1 — task_id in Recent Workspace Tasks context ─────────────────
+
+describe('runOrchestratorTask — Recent Workspace Tasks context includes task_id', () => {
+  it('formats recent tasks with task_id so Orc can reference them for retry', async () => {
+    // This test confirms the SELECT now includes task_id and goal_id and that
+    // they appear in the formatted context string injected into the prompt.
+    // We capture the fetch call body to inspect the prompt payload.
+
+    const { runOrchestratorTask } = await import('@/lib/llm-client')
+
+    const directResponse = JSON.stringify({
+      is_valid_goal: true,
+      is_direct_response: true,
+      direct_response: 'Retrying the last failed task.',
+    })
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: directResponse }, finish_reason: 'stop' }],
+        model: 'groq/llama-3.3-70b-versatile',
+        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+      }),
+    } as Response)
+
+    await runOrchestratorTask('Retry the last failed task.', 'goal-retry-id', [], false)
+
+    // The fetch call body must contain task_id in the messages content
+    const callBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
+    const userContent = callBody.messages.find((m: any) => m.role === 'user')?.content ?? ''
+    // After BUG-1 fix, the formatted recent tasks string includes 'task_id:'
+    expect(userContent).toContain('task_id:')
+  })
+})
+
+// ── Tests: BUG-2 — task_failed event_log on exception ─────────────────────────
+
+describe('runWorkerTask — task_failed event emitted on exception', () => {
+  const mockTask = {
+    id: 'task-bug2-id',
+    label: 'Send campaign email',
+    action: 'send_email',
+    reasoning: 'test',
+    expected_deliverable: 'Email sent',
+    params: {},
+    risk_level: 'low',
+    model: 'groq/llama-3.3-70b-versatile',
+  }
+
+  it('writes task_failed to event_log when LLM throws', async () => {
+    const { runWorkerTask } = await import('@/lib/llm-client')
+
+    vi.mocked(fetch).mockRejectedValue(new Error('Network timeout'))
+
+    await expect(
+      runWorkerTask('marketing', mockTask, 'goal-bug2-id')
+    ).rejects.toThrow('Network timeout')
+
+    // event_log must have received a task_failed entry
+    expect(loggedEvents).toContain('task_failed')
+  })
+})
+
+// ── Tests: BUG-7 — task_failed event_log on non-exception failure ─────────────
+
+describe('runWorkerTask — task_failed event emitted when worker returns status:failed', () => {
+  const mockTask = {
+    id: 'task-bug7-id',
+    label: 'Analyze market data',
+    action: 'market_analysis',
+    reasoning: 'test',
+    expected_deliverable: 'Analysis complete',
+    params: {},
+    risk_level: 'low',
+    model: 'groq/llama-3.3-70b-versatile',
+  }
+
+  it('writes task_failed to event_log when LLM returns { status: "failed" }', async () => {
+    const { runWorkerTask } = await import('@/lib/llm-client')
+
+    const failureResponse = JSON.stringify({
+      status: 'failed',
+      errors: ['Insufficient data to complete analysis'],
+      summary: 'Analysis could not be completed.',
+    })
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: failureResponse }, finish_reason: 'stop' }],
+        model: 'groq/llama-3.3-70b-versatile',
+        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+      }),
+    } as Response)
+
+    const result = await runWorkerTask('marketing', mockTask, 'goal-bug7-id')
+
+    // Function should not throw — it returns the result
+    expect(result).toBeDefined()
+
+    // event_log must have received a task_failed entry from the non-exception guard
+    expect(loggedEvents).toContain('task_failed')
   })
 })
 

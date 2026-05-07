@@ -767,3 +767,206 @@ test.describe('Realtime egress — subscription isolation', () => {
     expect(artifactSub?.filter).toMatch(/created_by=eq\./)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG-2 / BUG-6 / BUG-7: Silent Stall Breaker
+// Verifies that a failed task produces:
+//   1. goal_tasks.status = 'failed'
+//   2. event_log row with event_type = 'task_failed'
+//   3. company_memos row with title starting 'Execution Failed:'
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('Silent Stall Breaker — task failure produces full observability trail', () => {
+  test('failed task writes task_failed event and Execution Failed memo within 30s', async ({ page }) => {
+    // This test requires a real or stub Supabase + LiteLLM to be available.
+    // Skip if no test credentials are configured.
+    const testUrl = process.env.TEST_APP_URL
+    const testEmail = process.env.TEST_USER_EMAIL
+    const testPassword = process.env.TEST_USER_PASSWORD
+    test.skip(!testUrl || !testEmail || !testPassword, 'TEST_APP_URL / credentials not set')
+
+    // Sign in
+    await page.goto(`${testUrl}/login`)
+    await page.fill('[data-testid="email-input"]', testEmail!)
+    await page.fill('[data-testid="password-input"]', testPassword!)
+    await page.click('[data-testid="login-button"]')
+    await page.waitForURL(`${testUrl}/dashboard`)
+
+    // Mock LiteLLM to return a plan with one task, then make the worker fail
+    setupLLMSequence(page, [
+      // 1st call: Orc plan
+      orcPlanResponse(['marketing']),
+      // 2nd call: Worker call — simulate timeout / unrecoverable error via abort
+    ])
+
+    // Force the worker LLM call to fail by aborting it
+    let workerCallCount = 0
+    await page.route('**/v1/chat/completions', async (route) => {
+      workerCallCount++
+      if (workerCallCount === 1) {
+        // Orc plan call — let through
+        await route.continue()
+      } else {
+        // Worker call — abort to simulate network failure
+        await route.abort('failed')
+      }
+    })
+
+    // Create goal
+    const goalId = await createGoal(page, 'Test failure observability')
+
+    // Wait for plan (goal enters awaiting_approval)
+    await pollGoalStatus(page, goalId, 'awaiting_approval', 15_000)
+
+    // Approve first task in plan
+    const approvalItem = await pollForPendingApproval(page, goalId, 10_000)
+    await approveAction(page, approvalItem.id)
+
+    // Wait up to 30s for task to enter failed state
+    await page.waitForFunction(
+      async (gid) => {
+        const res = await fetch(`/api/goals/${gid}/tasks`)
+        const json = await res.json()
+        return (json.data ?? []).some((t: any) => t.status === 'failed')
+      },
+      goalId,
+      { timeout: 30_000 }
+    )
+
+    // Verify event_log has task_failed
+    const eventsRes = await page.evaluate(async (gid) => {
+      const res = await fetch(`/api/event-log?goal_id=${gid}&event_type=task_failed&limit=5`)
+      return res.json()
+    }, goalId)
+    expect(eventsRes.data?.length ?? 0).toBeGreaterThan(0)
+
+    // Verify company_memos has Execution Failed memo
+    const memosRes = await page.evaluate(async (gid) => {
+      const res = await fetch(`/api/memos?goal_id=${gid}&limit=10`)
+      return res.json()
+    }, goalId)
+    const failedMemo = (memosRes.data ?? []).find((m: any) =>
+      m.title?.startsWith('Execution Failed:')
+    )
+    expect(failedMemo).toBeDefined()
+    expect(failedMemo?.priority).toBe('high')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG-3: approval_requested event appears in event_log after HITL trigger
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('BUG-3 — approval_requested event in event_log', () => {
+  test('approval_requested appears in event_log when worker requests HITL approval', async ({ page }) => {
+    const testUrl = process.env.TEST_APP_URL
+    const testEmail = process.env.TEST_USER_EMAIL
+    const testPassword = process.env.TEST_USER_PASSWORD
+    test.skip(!testUrl || !testEmail || !testPassword, 'TEST_APP_URL / credentials not set')
+
+    await page.goto(`${testUrl}/login`)
+    await page.fill('[data-testid="email-input"]', testEmail!)
+    await page.fill('[data-testid="password-input"]', testPassword!)
+    await page.click('[data-testid="login-button"]')
+    await page.waitForURL(`${testUrl}/dashboard`)
+
+    // Plan → one marketing task → worker requests approval via executeToolCall
+    setupLLMSequence(page, [
+      orcPlanResponse(['marketing']),
+      workerRequestsApprovalResponse,
+    ])
+
+    const goalId = await createGoal(page, 'Send outreach emails to prospects')
+    await pollGoalStatus(page, goalId, 'awaiting_approval', 15_000)
+
+    const approvalItem = await pollForPendingApproval(page, goalId, 10_000)
+    await approveAction(page, approvalItem.id)
+
+    // Wait for approval_queue row to appear
+    await page.waitForFunction(
+      async (gid) => {
+        const res = await fetch(`/api/approvals?goal_id=${gid}&status=pending`)
+        const json = await res.json()
+        return (json.data ?? []).length > 0
+      },
+      goalId,
+      { timeout: 20_000 }
+    )
+
+    // Verify approval_requested in event_log
+    const eventsRes = await page.evaluate(async (gid) => {
+      const res = await fetch(`/api/event-log?goal_id=${gid}&event_type=approval_requested&limit=5`)
+      return res.json()
+    }, goalId)
+    expect(eventsRes.data?.length ?? 0).toBeGreaterThan(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG-4: Multi-tenant isolation — stale activeGoal does not leak between accounts
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('BUG-4 — Multi-tenant isolation on account switch', () => {
+  test('quota banner from User A does not appear after User B signs in', async ({ page }) => {
+    const testUrl = process.env.TEST_APP_URL
+    const userAEmail = process.env.TEST_USER_A_EMAIL
+    const userAPassword = process.env.TEST_USER_A_PASSWORD
+    const userBEmail = process.env.TEST_USER_B_EMAIL
+    const userBPassword = process.env.TEST_USER_B_PASSWORD
+    test.skip(
+      !testUrl || !userAEmail || !userAPassword || !userBEmail || !userBPassword,
+      'Multi-tenant test credentials not set (TEST_USER_A_EMAIL, TEST_USER_B_EMAIL)'
+    )
+
+    // Sign in as User A and simulate a SYSTEM_LIMIT_EXCEEDED goal in localStorage
+    await page.goto(`${testUrl}/login`)
+    await page.fill('[data-testid="email-input"]', userAEmail!)
+    await page.fill('[data-testid="password-input"]', userAPassword!)
+    await page.click('[data-testid="login-button"]')
+    await page.waitForURL(`${testUrl}/dashboard`)
+
+    // Inject a stale goal for User A into the store's localStorage persistence
+    const userAId = await page.evaluate(async () => {
+      const { data } = await (window as any).__supabase.auth.getUser()
+      return data?.user?.id
+    })
+
+    await page.evaluate((uid) => {
+      const staleGoal = {
+        id: 'stale-goal-id',
+        created_by: uid,
+        status: 'failed',
+        outcome: JSON.stringify({
+          code: 'SYSTEM_LIMIT_EXCEEDED',
+          resetAt: new Date(Date.now() + 3_600_000).toISOString(),
+        }),
+      }
+      const stored = JSON.parse(localStorage.getItem('crost-store') || '{}')
+      stored.state = { ...stored.state, activeGoal: staleGoal }
+      localStorage.setItem('crost-store', JSON.stringify(stored))
+    }, userAId)
+
+    // Sign out User A
+    await page.goto(`${testUrl}/api/auth/signout`)
+    await page.waitForURL(`${testUrl}/login`)
+
+    // Sign in as User B
+    await page.fill('[data-testid="email-input"]', userBEmail!)
+    await page.fill('[data-testid="password-input"]', userBPassword!)
+    await page.click('[data-testid="login-button"]')
+    await page.waitForURL(`${testUrl}/dashboard`)
+
+    // The quota/limit banner must NOT be visible for User B
+    const limitBannerVisible = await page.locator('[data-testid="limit-banner"]').isVisible().catch(() => false)
+    expect(limitBannerVisible).toBe(false)
+
+    // activeGoal in localStorage must be null or belong to User B, not User A
+    const activeGoalInStore = await page.evaluate(() => {
+      const stored = JSON.parse(localStorage.getItem('crost-store') || '{}')
+      return stored.state?.activeGoal ?? null
+    })
+    if (activeGoalInStore) {
+      expect(activeGoalInStore.id).not.toBe('stale-goal-id')
+    }
+  })
+})
