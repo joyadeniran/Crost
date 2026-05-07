@@ -3,9 +3,37 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.93  
+**Current Version:** 11.94  
 **Last Updated:** May 7, 2026  
 **Deployment Status:** ✅ PRODUCTION — Gold-Level Observability & Multi-Tenant Hardening.
+
+---
+
+## Session v11.94 — E2E Audit: Approval Execution Path Hardening
+**Date**: May 7, 2026  **Status**: ✅  
+**Impact**: E2E testing revealed the approval execution route had its own Composio instance that bypassed the slug override map, an invalid `event_type` that would violate the DB CHECK constraint, and the DIRECT LLM approval path never emitted `approval_requested` to the event log.
+
+### Bugs Fixed
+
+**BUG-8 — Approval route bypassed COMPOSIO_SLUG_OVERRIDE_MAP**  
+- `app/api/approvals/[id]/route.ts` called `composio.tools.execute(composioActionForCall)` with a raw slug. Our BUG-5 fix added `COMPOSIO_SLUG_OVERRIDE_MAP` in `composio.ts` but the approval route instantiated Composio directly without applying it.  
+- `COMPOSIO_SLUG_OVERRIDE_MAP` extracted to module-level export; approval route imports and resolves the slug before calling `tools.execute()`. Gmail draft tasks now succeed post-approval.  
+- Files: `frontend/lib/tools/providers/composio.ts`, `frontend/app/api/approvals/[id]/route.ts`
+
+**BUG-9 — Invalid `event_type: 'tool_failed'` in approval catch block**  
+- Catch block wrote `event_type: 'tool_failed'` which is not in the `EventType` union or the DB CHECK constraint. The INSERT was silently rejected, masking approval execution failures in the event log.  
+- Fixed to `'action_execution_failed'` which is a valid `EventType`.  
+- File: `frontend/app/api/approvals/[id]/route.ts`
+
+**BUG-3b — DIRECT LLM approval path never emitted `approval_requested` event**  
+- `runWorkerTask`'s `REQUEST_APPROVAL` branch in `llm-client.ts` wrote to `approval_queue` but never inserted an `approval_requested` event_log entry. Only the `executeToolCall` (Composio) path had that event.  
+- Added `approval_requested` insert after the `approval_queue` insert in `runWorkerTask`. Event log now shows full lifecycle: `approval_requested` → `approval_approved` → `tool_executed` (or `action_execution_failed`).  
+- File: `frontend/lib/llm-client.ts`
+
+### Files Changed
+- `frontend/lib/tools/providers/composio.ts`
+- `frontend/app/api/approvals/[id]/route.ts`
+- `frontend/lib/llm-client.ts`
 
 ---
 
