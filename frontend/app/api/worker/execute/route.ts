@@ -89,8 +89,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. LOCAL TOOL ROUTER
+    // resolvedToolName is the non-undefined version used throughout this block
+    const resolvedToolName = toolName ?? ''
     let result;
-    const normalizedToolName = (toolName ?? '').toUpperCase();
+    const normalizedToolName = resolvedToolName.toUpperCase();
 
     if (normalizedToolName === 'COMPANY_MEMOS') {
       const { data: memos, error: memoErr } = await supabase
@@ -134,8 +136,8 @@ export async function POST(req: NextRequest) {
     }
     else {
       // 3. EXTERNAL DYNAMIC TOOLS (Unified Execution Gateway)
-      const parts = toolName.split(".");
-      const service = parts[0] || toolName;
+      const parts = resolvedToolName.split(".");
+      const service = parts[0] || resolvedToolName;
       const action = parts[1] || "";
       
       const executionResult = await executeToolCall({
@@ -163,9 +165,9 @@ export async function POST(req: NextRequest) {
       department_slug: task.dept_slug,
       goal_id: task.goal_id,
       event_type: 'tool_called',
-      description: `Executed internal tool: ${toolName}`,
+      description: `Executed internal tool: ${resolvedToolName}`,
       metadata: cleanLargePayload({
-        toolName,
+        toolName: resolvedToolName,
         args,
         taskId,
       }),
