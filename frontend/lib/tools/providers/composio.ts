@@ -10,6 +10,19 @@ export type ToolResult = {
   rawResponse?: any;
 };
 
+// Canonical slug overrides: Composio's actual action names sometimes differ
+// from the intuitive <SERVICE>_<ACTION> pattern. Exported so the approval
+// execution route can apply the same normalization without going through runComposioTool.
+export const COMPOSIO_SLUG_OVERRIDE_MAP: Record<string, string> = {
+  GMAIL_CREATE_DRAFT: 'GMAIL_CREATE_EMAIL_DRAFT',
+  GMAIL_SEND: 'GMAIL_SEND_EMAIL',
+  GMAIL_REPLY: 'GMAIL_REPLY_TO_EMAIL',
+  GMAIL_GET: 'GMAIL_GET_MESSAGE',
+  GITHUB_CREATE_PR: 'GITHUB_CREATE_A_PULL_REQUEST',
+  GITHUB_MERGE_PR: 'GITHUB_MERGE_A_PULL_REQUEST',
+  NOTION_CREATE_PAGE: 'NOTION_CREATE_A_PAGE_IN_DATABASE',
+}
+
 /**
  * Standardized Composio execution wrapper.
  * Handles entity routing and catches authentication token errors gracefully.
@@ -29,22 +42,9 @@ export async function runComposioTool({
     throw new Error("COMPOSIO_API_KEY is not defined in the environment.");
   }
 
-  // Canonical slug overrides: Composio's actual action names sometimes differ
-  // from the intuitive <SERVICE>_<ACTION> pattern. Maintain this map as the
-  // single source of truth for any slug that fails at runtime.
-  const COMPOSIO_SLUG_OVERRIDES: Record<string, string> = {
-    GMAIL_CREATE_DRAFT: 'GMAIL_CREATE_EMAIL_DRAFT',
-    GMAIL_SEND: 'GMAIL_SEND_EMAIL',
-    GMAIL_REPLY: 'GMAIL_REPLY_TO_EMAIL',
-    GMAIL_GET: 'GMAIL_GET_MESSAGE',
-    GITHUB_CREATE_PR: 'GITHUB_CREATE_A_PULL_REQUEST',
-    GITHUB_MERGE_PR: 'GITHUB_MERGE_A_PULL_REQUEST',
-    NOTION_CREATE_PAGE: 'NOTION_CREATE_A_PAGE_IN_DATABASE',
-  };
-
   const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
   const rawToolName = `${service}_${action}`.toUpperCase();
-  const toolName = COMPOSIO_SLUG_OVERRIDES[rawToolName] ?? rawToolName;
+  const toolName = COMPOSIO_SLUG_OVERRIDE_MAP[rawToolName] ?? rawToolName;
 
   try {
     const execution: any = await composio.tools.execute(toolName, {
@@ -75,7 +75,7 @@ export async function runComposioTool({
           arguments: params,
           dangerouslySkipVersionCheck: true,
         });
-        
+
         if (retryExecution && (retryExecution.successful === false || retryExecution.is_success === false)) {
           throw new Error(retryExecution.error || `Execution failed on retry: ${JSON.stringify(retryExecution.data || retryExecution)}`);
         }

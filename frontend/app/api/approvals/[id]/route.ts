@@ -4,6 +4,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { Composio } from "@composio/core"
 import { cleanLargePayload, normalizeToolName } from "@/lib/utils"
+import { COMPOSIO_SLUG_OVERRIDE_MAP } from '@/lib/tools/providers/composio'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,14 +169,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
               }
             }
 
-            console.log(`[Approval Execution] Executing Composio action "${composioActionForCall}" for user ${user.id}`)
+            // Apply canonical slug overrides (e.g. GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT)
+            const resolvedComposioAction = COMPOSIO_SLUG_OVERRIDE_MAP[composioActionForCall] ?? composioActionForCall
+            console.log(`[Approval Execution] Executing Composio action "${resolvedComposioAction}" (raw: "${composioActionForCall}") for user ${user.id}`)
             const { Composio } = await import("@composio/core")
             const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
             // Strip internal metadata keys before sending to composio
             const execPayload = { ...(approval.payload as any) }
             delete execPayload.__tool_action
             delete execPayload.__service
-            result = await composio.tools.execute(composioActionForCall, {
+            result = await composio.tools.execute(resolvedComposioAction, {
               userId: user.id,
               arguments: execPayload,
               dangerouslySkipVersionCheck: true
@@ -330,7 +333,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           await supabase.from('event_log').insert({
             department_slug: approval.department_slug,
             goal_id: approval.goal_id,
-            event_type: 'tool_failed',
+            event_type: 'action_execution_failed',
             description: `Execution failed: ${approval.action_label}`,
             metadata: { error: executionError, tool: normalizedAction },
             created_by: user.id

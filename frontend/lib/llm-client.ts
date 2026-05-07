@@ -1346,6 +1346,16 @@ export async function runWorkerTask(
       throw new Error(`Failed to create approval request: ${aqInsertErr.message}`)
     }
     await supabase.from('departments').update({ status: 'awaiting_approval' }).eq('id', deptRow.id)
+    // Mirror the event that executeToolCall emits for Composio-path approvals
+    await supabase.from('event_log').insert({
+      department_id: deptRow.id,
+      department_slug: dept,
+      goal_id: goalId ?? null,
+      event_type: 'approval_requested',
+      description: `Approval requested: ${approvalRequest.action_label || approvalRequest.action_type}`,
+      metadata: { action_type: approvalRequest.action_type, reasoning: approvalRequest.reasoning, task_id: task.id },
+      created_by: userId
+    }).then(({ error }) => { if (error) console.warn('[runWorkerTask] approval_requested event_log insert failed:', error.message) })
     return { task_id: task.id, status: 'needs_approval', result: {}, memo_summary: '', errors: [] }
   }
 
