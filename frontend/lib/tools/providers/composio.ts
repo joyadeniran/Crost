@@ -24,7 +24,7 @@ export const COMPOSIO_SLUG_OVERRIDE_MAP: Record<string, string> = {
 }
 
 /**
- * Standardized Composio execution wrapper.
+ * Standardized Composio execution wrapper with enhanced defensive logging for audit.
  * Handles entity routing and catches authentication token errors gracefully.
  */
 export async function runComposioTool({
@@ -38,7 +38,10 @@ export async function runComposioTool({
   action: string;
   params: Record<string, any>;
 }): Promise<ToolResult> {
+  console.log(`[COMPOSIO-AUDIT] Starting tool call: ${service}.${action} for user ${userId}`, { params: Object.keys(params) });
+
   if (!process.env.COMPOSIO_API_KEY) {
+    console.error('[COMPOSIO-AUDIT] CRITICAL: COMPOSIO_API_KEY missing');
     throw new Error("COMPOSIO_API_KEY is not defined in the environment.");
   }
 
@@ -46,14 +49,19 @@ export async function runComposioTool({
   const rawToolName = `${service}_${action}`.toUpperCase();
   const toolName = COMPOSIO_SLUG_OVERRIDE_MAP[rawToolName] ?? rawToolName;
 
+  console.log(`[COMPOSIO-AUDIT] Normalized tool: ${toolName}`);
+
   try {
     const execution: any = await composio.tools.execute(toolName, {
-      userId,
+      userId,  // entityId for multi-tenant
       arguments: params,
       dangerouslySkipVersionCheck: true,
     });
 
+    console.log(`[COMPOSIO-AUDIT] Execution response for ${toolName}:`, { success: execution?.successful || execution?.is_success, hasData: !!execution?.data });
+
     if (execution && (execution.successful === false || execution.is_success === false)) {
+      console.warn(`[COMPOSIO-AUDIT] Tool reported failure:`, execution.error);
       throw new Error(execution.error || `Execution failed: ${JSON.stringify(execution.data || execution)}`);
     }
 
@@ -66,9 +74,15 @@ export async function runComposioTool({
       rawResponse: execution,
     };
   } catch (err: any) {
+    console.error(`[COMPOSIO-AUDIT] Tool execution error for ${service}.${action}:`, {
+      message: err.message,
+      status: err.status,
+      stack: err.stack?.substring(0, 500)
+    });
+
     // Attempt auto-retry on 401s (token expiry boundary)
     if (err.message?.includes('401') || err.status === 401) {
-      console.warn(`[Composio] Token potentially expired (401) for ${service}. Retrying...`);
+      console.warn(`[COMPOSIO-AUDIT] Token potentially expired (401) for ${service}. Retrying...`);
       try {
         const retryExecution: any = await composio.tools.execute(toolName, {
           userId,
@@ -80,6 +94,7 @@ export async function runComposioTool({
           throw new Error(retryExecution.error || `Execution failed on retry: ${JSON.stringify(retryExecution.data || retryExecution)}`);
         }
 
+        console.log(`[COMPOSIO-AUDIT] Retry succeeded for ${toolName}`);
         return {
           success: true,
           service,
@@ -89,6 +104,7 @@ export async function runComposioTool({
           rawResponse: retryExecution,
         };
       } catch (retryErr: any) {
+        console.error(`[COMPOSIO-AUDIT] Retry also failed:`, retryErr.message);
         return {
           success: false,
           service,
