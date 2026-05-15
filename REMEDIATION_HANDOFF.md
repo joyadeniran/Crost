@@ -106,9 +106,9 @@ if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
 
 | # | File | Lines | Fix |
 |---|------|-------|-----|
-| 8 | `frontend/app/api/goals/[id]/dialogue/route.ts` | **53, 56, 81** (three update sites) | Add `.eq('created_by', user.id)` to every `.update().eq('id', goalId)` call |
+| ✅ 8 | `frontend/app/api/goals/[id]/dialogue/route.ts` | **53, 56, 81** (three update sites) | Add `.eq('created_by', user.id)` to every `.update().eq('id', goalId)` call |
 | 9 | `frontend/lib/tools/execute-tool-call.ts` | KB result handling (~lines 113-127) | Always humanize KB search results to text before returning; never leak raw `{matches:[...]}` JSON to UI |
-| 10 | All routes using `x-crost-internal-secret` | search: `grep -rn "x-crost-internal-secret" frontend/` | Replace `SUPABASE_SERVICE_ROLE_KEY` with new env var `WORKER_INTERNAL_SECRET`; rotate; update `.env.example`. Files affected: `worker/execute/route.ts`, `goals/[id]/dispatch/route.ts`, `approvals/[id]/route.ts` |
+| ✅ 10 | All routes using `x-crost-internal-secret` | search: `grep -rn "x-crost-internal-secret" frontend/` | Replace `SUPABASE_SERVICE_ROLE_KEY` with new env var `WORKER_INTERNAL_SECRET`; rotate; update `.env.example`. Files affected: `worker/execute/route.ts`, `goals/[id]/dispatch/route.ts`, `approvals/[id]/route.ts`, `knowledge/search`, `knowledge/read`, `goals/[id]/report`, `goals/[id]/tasks/[taskId]` |
 | 11 | `frontend/app/api/config/secret-presence/route.ts` | covered by #6 | — |
 | 12 | `frontend/app/api/knowledge/search/route.ts` | 69-71 | `.or()` ILIKE pattern with user input — Supabase SDK escapes but verify; consider RPC-based search |
 
