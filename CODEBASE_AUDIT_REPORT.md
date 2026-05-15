@@ -6,6 +6,23 @@
 
 ---
 
+## VALIDATION ADDENDUM (May 15, 2026 — post-branch-consolidation review)
+
+After initial audit, a cross-branch comparison was performed against `origin/claude/api-documentation-evaluation-cNIVx` (215 commits of orphaned parallel history, no common ancestor with `main`). Verdict:
+
+- **All 18 audit findings remain valid on `main`** (the production branch, v11.94)
+- **Zero unique security fixes exist on api-doc** worth cherry-picking — api-doc is strictly older
+- **Cherry-picking from api-doc is NOT advised**: `connections` table schema diverged incompatibly (`user_id`/`tool_slug`/`composio_connection_id` on api-doc vs `created_by`/`service_name`/`connection_id` on main). Mixing would cause data corruption.
+- Other branches checked: `claude/production-ready-code-DMxPH` (5 commits — API enhancements, no security fixes), `audit-deep-dive` (2 commits — logging only)
+
+**Refinements to original findings:**
+- **#8 (dialogue race condition)** is broader than initially stated: three `update()` calls miss `.eq('created_by', user.id)` (lines 53, 56, 81 of `goals/[id]/dialogue/route.ts`), not one.
+- **#10 (internal secret pattern)** is partially mitigated on main — `worker/execute` now has dual-mode auth (session OR internal header), but still reuses `SUPABASE_SERVICE_ROLE_KEY` as bearer. Dedicated `WORKER_INTERNAL_SECRET` env var still recommended.
+
+The audit is the authoritative source for remediation. Proceed to fix on `main` directly.
+
+---
+
 ## EXECUTIVE SUMMARY
 
 This audit identified **15 critical/high-severity issues** spanning authentication, authorization, data validation, error handling, and type safety. The system has:
