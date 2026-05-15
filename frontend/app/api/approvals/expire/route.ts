@@ -9,11 +9,12 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const provided = req.headers.get('x-cron-secret')
-    if (provided !== cronSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!cronSecret) {
+    return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
+  }
+  const provided = req.headers.get('x-cron-secret')
+  if (provided !== cronSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
     const supabase = createServerSupabaseClient()
