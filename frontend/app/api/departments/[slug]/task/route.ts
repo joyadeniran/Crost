@@ -42,14 +42,29 @@ interface ApprovalRequest {
   risk_level?: RiskLevel
 }
 
-// Extract nested JSON safely by counting opening/closing braces
+const ApprovalRequestSchema = z.object({
+  request_approval: z.literal(true).optional(),
+  action_type: z.string().min(1),
+  action_label: z.string().min(1),
+  payload: z.record(z.unknown()).optional().default({}),
+  context: z.string().optional(),
+  reasoning: z.string().optional(),
+  risk_level: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+})
+
+// Extract the longest valid JSON object starting at or after fromIndex.
+// Uses JSON.parse so braces inside string values are handled correctly.
 function extractJsonObject(text: string, fromIndex: number): string | null {
   const start = text.indexOf('{', fromIndex)
   if (start === -1) return null
-  let depth = 0
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++
-    else if (text[i] === '}') { depth--; if (depth === 0) return text.slice(start, i + 1) }
+  const sub = text.slice(start)
+  // Scan right-to-left through closing-brace positions; return longest valid match.
+  for (let end = sub.length; end >= 1; end--) {
+    if (sub[end - 1] !== '}') continue
+    try {
+      JSON.parse(sub.slice(0, end))
+      return sub.slice(0, end)
+    } catch { /* try shorter */ }
   }
   return null
 }
@@ -61,15 +76,17 @@ function extractApprovalRequest(text: string): ApprovalRequest | null {
     const raw = extractJsonObject(text, raIdx)
     if (raw) {
       try {
-        const parsed = JSON.parse(raw)
-        if (!parsed.action_type || !parsed.action_label) return null
-        return {
-          request_approval: true as const,
-          action_type: parsed.action_type,
-          action_label: parsed.action_label,
-          payload: parsed.payload ?? {},
-          context: parsed.context ?? parsed.reasoning ?? '',
-          risk_level: parsed.risk_level,
+        const result = ApprovalRequestSchema.safeParse(JSON.parse(raw))
+        if (result.success) {
+          const d = result.data
+          return {
+            request_approval: true as const,
+            action_type: d.action_type as ActionType,
+            action_label: d.action_label,
+            payload: d.payload ?? {},
+            context: d.context ?? d.reasoning ?? '',
+            risk_level: d.risk_level as RiskLevel | undefined,
+          }
         }
       } catch { /* fall through */ }
     }
@@ -83,8 +100,18 @@ function extractApprovalRequest(text: string): ApprovalRequest | null {
       try {
         const parsed = JSON.parse(raw)
         if (parsed.request_approval !== true) return null
-        if (!parsed.action_type || !parsed.action_label || !parsed.payload) return null
-        return parsed as ApprovalRequest
+        const result = ApprovalRequestSchema.safeParse(parsed)
+        if (result.success) {
+          const d = result.data
+          return {
+            request_approval: true as const,
+            action_type: d.action_type as ActionType,
+            action_label: d.action_label,
+            payload: d.payload ?? {},
+            context: d.context ?? d.reasoning ?? '',
+            risk_level: d.risk_level as RiskLevel | undefined,
+          }
+        }
       } catch { /* fall through */ }
     }
   }
