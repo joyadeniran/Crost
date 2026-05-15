@@ -14,27 +14,43 @@ import { describe, it, expect, vi } from 'vitest'
 // Mock heavy file-generation libs — we test the JSON parsing logic, not file I/O
 vi.mock('xlsx', () => ({
   utils: {
-    book_new: vi.fn(() => ({})),
+    book_new: vi.fn(() => ({ SheetNames: [], Sheets: {} })),
     aoa_to_sheet: vi.fn(() => ({})),
-    book_append_sheet: vi.fn(),
+    json_to_sheet: vi.fn(() => ({})),
+    book_append_sheet: vi.fn((wb: any, ws: any, name: string) => {
+      if (!wb.SheetNames) wb.SheetNames = []
+      if (!wb.Sheets) wb.Sheets = {}
+      wb.SheetNames.push(name)
+      wb.Sheets[name] = ws
+    }),
     sheet_add_aoa: vi.fn(),
+    encode_cell: vi.fn(({ r, c }: { r: number; c: number }) => `${String.fromCharCode(65 + c)}${r + 1}`),
+    encode_col: vi.fn((c: number) => String.fromCharCode(65 + c)),
   },
   write: vi.fn(() => Buffer.from('mock-xlsx')),
 }))
 
-vi.mock('docx', () => ({
-  Document: vi.fn(() => ({})),
-  Paragraph: vi.fn(() => ({})),
-  TextRun: vi.fn(() => ({})),
-  HeadingLevel: { HEADING_1: 1, HEADING_2: 2 },
-  AlignmentType: { CENTER: 'center', LEFT: 'left' },
-  Packer: { toBuffer: vi.fn(async () => Buffer.from('mock-docx')) },
-  Table: vi.fn(() => ({})),
-  TableRow: vi.fn(() => ({})),
-  TableCell: vi.fn(() => ({})),
-  WidthType: { AUTO: 'auto', DXA: 'dxa' },
-  BorderStyle: { SINGLE: 'single' },
-}))
+vi.mock('docx', () => {
+  // Create proper constructor functions that work with 'new'
+  const MockConstructor = function(opts: any) {
+    Object.assign(this, opts)
+    return this
+  }
+
+  return {
+    Document: MockConstructor as any,
+    Paragraph: MockConstructor as any,
+    TextRun: MockConstructor as any,
+    HeadingLevel: { HEADING_1: 1, HEADING_2: 2 },
+    AlignmentType: { CENTER: 'center', LEFT: 'left' },
+    Packer: { toBuffer: vi.fn(async () => Buffer.from('mock-docx')) },
+    Table: MockConstructor as any,
+    TableRow: MockConstructor as any,
+    TableCell: MockConstructor as any,
+    WidthType: { AUTO: 'auto', DXA: 'dxa' },
+    BorderStyle: { SINGLE: 'single' },
+  }
+})
 
 // ── Import under test ──────────────────────────────────────────────────────
 // Dynamic import after mocks are set up
@@ -206,10 +222,10 @@ describe('detectOutputType — data structure inference (tier 8)', () => {
 
   it('narrative-like data (multiple long strings) → docx', () => {
     const narrative = {
-      intro: 'This is a long introduction paragraph that exceeds the minimum length threshold...',
-      body: 'This is the main body of the document with extensive analysis and recommendations...',
+      intro: 'This is a long introduction paragraph that exceeds the minimum length threshold. We begin with foundational context and strategic positioning for the upcoming fiscal year.',
+      body: 'This is the main body of the document with extensive analysis and recommendations. Our research reveals significant market opportunities and competitive advantages that should be leveraged. The data supports aggressive expansion in key segments.',
       conclusion:
-        'In conclusion, we recommend the following strategic actions for the next quarter...',
+        'In conclusion, we recommend the following strategic actions for the next quarter. These initiatives will drive growth, improve operational efficiency, and strengthen market position across all divisions.',
     }
     expect(detectOutputType(narrative, true).targetFormat).toBe('docx')
   })

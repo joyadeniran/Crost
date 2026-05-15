@@ -28,7 +28,7 @@ vi.mock('@composio/core', () => ({
 }))
 
 function mockSupabaseClient() {
-  const builder = {
+  const builder: any = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
@@ -47,6 +47,10 @@ function mockSupabaseClient() {
     not: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
   }
+  // Make builder thenable for queries that don't end with .single()
+  builder.then = async (onResolve: any) => onResolve({ data: null, error: null })
+  builder.catch = vi.fn()
+
   return {
     from: vi.fn(() => builder),
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -325,18 +329,20 @@ describe('runOrchestratorTask — hallucination guard sets goal to error on seco
       is_valid_goal: true,
       is_direct_response: false,
       summary: 'Plan with invalid depts',
-      tasks: [
-        {
-          id: 'task-0',
-          dept: 'quantum_computing',
-          label: 'Bad task',
-          action: 'quantum',
-          reasoning: 'n/a',
-          params: {},
-          depends_on: [],
-          risk: 'low',
-        },
-      ],
+      plan: {
+        tasks: [
+          {
+            id: 'task-0',
+            dept: 'quantum_computing',
+            label: 'Bad task',
+            action: 'quantum',
+            reasoning: 'n/a',
+            params: {},
+            depends_on: [],
+            risk: 'low',
+          },
+        ],
+      },
     })
 
     // Both calls return the hallucinated plan (retry also fails)
@@ -359,11 +365,14 @@ describe('runOrchestratorTask — hallucination guard sets goal to error on seco
       } as Response)
 
     // Should throw (after updating goal to error state)
-    await expect(
-      runOrchestratorTask('invalid goal', 'goal-error-test-id', [], false)
-    ).rejects.toThrow()
+    let error: Error | undefined
+    try {
+      await runOrchestratorTask('invalid goal', 'goal-error-test-id', [], false)
+    } catch (e) {
+      error = e as Error
+    }
 
-    // fetch called twice: initial + one retry
+    expect(error).toBeDefined()
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 })
