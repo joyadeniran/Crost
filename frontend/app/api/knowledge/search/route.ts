@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 import { callEmbeddings } from '@/lib/llm-client';
 
 export const dynamic = 'force-dynamic';
@@ -46,12 +46,49 @@ async function writeKbSourcesToArtifact(
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
-    const { userId, query, category, fileType, limit = 5, artifact_id } = await req.json();
+    const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const internalSecret = req.headers.get('x-crost-internal-secret');
+    const isInternalCall = internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET;
 
-    if (!userId || !query) {
-      return NextResponse.json({ error: 'userId and query are required' }, { status: 400 });
+    let userId: string;
+
+    if (isInternalCall) {
+      const body = await req.json();
+      const { userId: bodyUserId, query, category, fileType, limit = 5, artifact_id } = body;
+      if (!bodyUserId || !query) {
+        return NextResponse.json({ error: 'userId and query are required' }, { status: 400 });
+      }
+      return handleSearch(bodyUserId, query, category, fileType, limit, artifact_id);
     }
+
+    const authClient = await createSupabaseServerComponentClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    userId = user.id;
+
+    const { query, category, fileType, limit = 5, artifact_id } = await req.json();
+
+    if (!query) {
+      return NextResponse.json({ error: 'query is required' }, { status: 400 });
+    }
+
+    return handleSearch(userId, query, category, fileType, limit, artifact_id);
+  } catch (err: any) {
+    console.error('[KB Search]', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+async function handleSearch(
+  userId: string,
+  query: string,
+  category: string | undefined,
+  fileType: string | undefined,
+  limit: number,
+  artifact_id: string | undefined
+): Promise<NextResponse> {
+  try {
+    const supabase = createServerSupabaseClient();
 
     // Search files by title, summary, and tags
     let dbQuery = supabase
