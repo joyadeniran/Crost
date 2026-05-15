@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   try {
-    const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     const internalSecret = req.headers.get('x-crost-internal-secret');
     const isInternalCall = internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET;
 

@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
       },
       body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
     }).catch(e => console.error('[Task Patch] Chain reaction failed:', e))

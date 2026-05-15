@@ -14,7 +14,7 @@ import { cleanLargePayload } from "@/lib/utils";
 
 // uploadArtifactFile logic extracted into unified execute-tool-call layer
 
-const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY
+const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(req: NextRequest) {
   // Hoisted so the catch block can reference them for observability writes

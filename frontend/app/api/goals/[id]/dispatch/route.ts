@@ -38,7 +38,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Allow internal system bypass for automated "Chain Reaction" dispatches
     const internalSecret = req.headers.get('x-crost-internal-secret')
-    const isInternal = internalSecret && internalSecret === process.env.SUPABASE_SERVICE_ROLE_KEY
+    const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+    const isInternal = internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET
 
     if (!user && !isInternal) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'x-crost-internal-secret': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+              'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
             },
             body: JSON.stringify({ task_id: t.task_id })
           }).catch(e => console.error(`[Dispatch] Recursive dispatch failed for ${t.task_id}:`, e))

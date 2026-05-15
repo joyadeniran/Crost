@@ -12,7 +12,7 @@ type Params = { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY  // TODO: rotate to WORKER_INTERNAL_SECRET (Issue #10)
+    const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
     const internalSecret = req.headers.get('x-crost-internal-secret')
 
     if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
