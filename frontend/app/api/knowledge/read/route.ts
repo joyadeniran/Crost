@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,13 +9,31 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
-    const { userId, file_id } = await req.json();
+    const INTERNAL_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const internalSecret = req.headers.get('x-crost-internal-secret');
+    const isInternalCall = internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET;
 
-    if (!userId || !file_id) {
-      return NextResponse.json({ error: 'userId and file_id are required' }, { status: 400 });
+    let userId: string;
+    let file_id: string;
+
+    if (isInternalCall) {
+      const body = await req.json();
+      userId = body.userId;
+      file_id = body.file_id;
+    } else {
+      const authClient = await createSupabaseServerComponentClient();
+      const { data: { user } } = await authClient.auth.getUser();
+      if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+      userId = user.id;
+      const body = await req.json();
+      file_id = body.file_id;
     }
 
+    if (!userId || !file_id) {
+      return NextResponse.json({ error: 'file_id is required' }, { status: 400 });
+    }
+
+    const supabase = createServerSupabaseClient();
     const { data: file, error } = await supabase
       .from('knowledge_base_files')
       .select('id, title, extracted_text, extracted_summary, category')
