@@ -49,7 +49,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 400 });
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: 'File exceeds 25MB limit' }, { status: 400 });
+      return NextResponse.json({ error: 'File exceeds 25MB limit' }, { status: 413 });
+    }
+
+    // Per-user rate limit: max 10 uploads per hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentCount } = await supabase
+      .from('knowledge_base_files')
+      .select('id', { count: 'exact', head: true })
+      .eq('created_by', user.id)
+      .gte('created_at', oneHourAgo);
+
+    if ((recentCount ?? 0) >= 10) {
+      return NextResponse.json({ error: 'Rate limit: maximum 10 uploads per hour' }, { status: 429 });
     }
 
     // 1. Insert pending metadata row
