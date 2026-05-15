@@ -1321,6 +1321,11 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
   if (isLoading) return <div style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>Synthesizing results...</div>
   if (!report) return null
 
+  const isDirectResponseReport = Boolean(
+    report.title?.toLowerCase().includes('[direct response]')
+    || report.title?.toLowerCase().startsWith('direct response:')
+  )
+
   return (
     <div className="synthesis-card">
       {/* Background Glow */}
@@ -1338,7 +1343,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             marginBottom: 6,
             fontFamily: 'var(--font-dm-mono, monospace)',
           }}>
-            {report.title?.includes('[DIRECT RESPONSE]') ? 'Orc Assistant' : 'Strategic Output'}
+            {isDirectResponseReport ? 'Orc Assistant' : 'Strategic Output'}
           </span>
           <h3 style={{ 
             fontFamily: 'var(--font-syne, sans-serif)', 
@@ -1348,7 +1353,7 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
             margin: 0,
             letterSpacing: '-0.02em',
           }}>
-            {report.title?.includes('[DIRECT RESPONSE]') ? 'Direct Response' : 'Mission Report'}
+            {isDirectResponseReport ? 'Direct Response' : 'Mission Report'}
           </h3>
         </div>        <button 
           onClick={onDismiss}
@@ -1403,10 +1408,10 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-              {report.title?.includes('[DIRECT RESPONSE]') ? 'Orc Assistant' : 'Orchestrator'}
+              {isDirectResponseReport ? 'Orc Assistant' : 'Orchestrator'}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
-              {report.title?.includes('[DIRECT RESPONSE]') ? 'Direct Chat Response' : 'Chief of Staff Pass'}
+              {isDirectResponseReport ? 'Direct Chat Response' : 'Chief of Staff Pass'}
             </div>
           </div>
         </div>
