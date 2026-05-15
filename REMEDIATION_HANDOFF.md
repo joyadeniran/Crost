@@ -58,10 +58,10 @@ Each row is **self-sufficient** for a fix-only agent. Use this as the work backl
 
 | # | File | Line | What's wrong | Fix pattern |
 |---|------|------|--------------|-------------|
-| 1a | `frontend/app/api/knowledge/search/route.ts` | 47-50 | `userId` from request body, zero auth | Replace with session `user.id`; allow body `userId` only when `x-crost-internal-secret` header is valid |
-| 1b | `frontend/app/api/knowledge/read/route.ts` | 10-13 | Same as 1a | Same fix |
-| 2 | `frontend/app/api/connect/route.ts` | 6-15 | `userId` from body, no auth at all | Add `auth.getUser()` gate; use `user.id` for `composio.create()` |
-| 3 | `frontend/app/api/departments/[slug]/reset/route.ts` | 11 | No auth, no ownership check | Add `auth.getUser()`; add `.eq('created_by', user.id)` to dept select |
+| ✅ 1a | `frontend/app/api/knowledge/search/route.ts` | 47-50 | `userId` from request body, zero auth | Replace with session `user.id`; allow body `userId` only when `x-crost-internal-secret` header is valid |
+| ✅ 1b | `frontend/app/api/knowledge/read/route.ts` | 10-13 | Same as 1a | Same fix |
+| ✅ 2 | `frontend/app/api/connect/route.ts` | 6-15 | `userId` from body, no auth at all | Add `auth.getUser()` gate; use `user.id` for `composio.create()` |
+| ✅ 3 | `frontend/app/api/departments/[slug]/reset/route.ts` | 11 | No auth, no ownership check | Add `auth.getUser()`; add `.eq('created_by', user.id)` to dept select |
 | 4 | `frontend/app/api/goals/[id]/report/route.ts` | 12-17 | Comment literally admits "We don't strictly auth gate this" | Add dual-mode: session auth + ownership OR internal secret header (mirror `worker/execute` pattern) |
 | 5a | `frontend/app/api/settings/tools/route.ts` | 6-9 | No auth on tool config mutation | Add session auth; verify `tool.user_id === user.id` before update |
 | 5b | `frontend/app/api/settings/tools/config/route.ts` | 6-9 | Same as 5a | Same fix |
