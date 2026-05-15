@@ -11,14 +11,14 @@
  *  - Zod schema: 'tool_call' now valid action_type on POST /api/approvals
  *  - Realtime subscriptions: all three fixed channels now have user-scoped filters
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
 vi.mock('@/lib/supabase', () => ({
   createClient: vi.fn(() => mockSupabaseClient()),
   createServerSupabaseClient: vi.fn(() => mockSupabaseClient()),
-  createSupabaseServerComponentClient: vi.fn(async () => mockSupabaseClient()),
+  createSupabaseServerComponentClient: vi.fn(() => Promise.resolve(mockSupabaseClient())),
 }))
 
 vi.mock('@composio/core', () => ({
@@ -31,6 +31,7 @@ function mockSupabaseClient() {
   const builder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue({ data: null, error: null }),
     maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     insert: vi.fn().mockResolvedValue({ data: [{ id: 'mock-id' }], error: null }),
@@ -90,7 +91,7 @@ describe('callLLM — AbortError / timeout', () => {
       messages: [{ role: 'user', content: 'test' }],
     })
 
-    expect(result).toBe('fallback succeeded')
+    expect(result.content).toBe('fallback succeeded')
     // AbortError should trigger fallback → 2 fetch calls
     expect(fetch).toHaveBeenCalledTimes(2)
   })
@@ -121,12 +122,11 @@ describe('callLLM — AbortError / timeout', () => {
       .mockResolvedValueOnce(litellmResponse('ok'))
 
     // Should NOT throw SYSTEM_LIMIT_EXCEEDED; AbortError is retryable
-    await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-      })
-    ).resolves.toBe('ok')
+    const result = await callLLM({
+      model: 'groq/llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'test' }],
+    })
+    expect(result.content).toBe('ok')
   })
 })
 
@@ -279,15 +279,23 @@ describe('Onboarding store: data cleared on dashboard transition', () => {
 
 describe('POST /api/worker/execute — auth guard', () => {
   it('request without session or internal secret is rejected with 401', async () => {
-    // Mock the auth client to return no user (unauthenticated)
-    const { createSupabaseServerComponentClient } = await import('@/lib/supabase')
-    vi.mocked(createSupabaseServerComponentClient as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    // Clear mocks before this test
+    vi.clearAllMocks()
+
+    // Import and mock createSupabaseServerComponentClient BEFORE importing POST
+    const supabaseMock = await import('@/lib/supabase')
+    const mockAuthClient = {
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
-    })
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+      })),
+    }
+    vi.mocked(supabaseMock.createSupabaseServerComponentClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockAuthClient)
 
-    // Simulate calling the route without auth cookies and without internal secret
+    // Now import POST (which uses the mocked createSupabaseServerComponentClient)
     const { POST } = await import('@/app/api/worker/execute/route')
     const req = new Request('http://localhost/api/worker/execute', {
       method: 'POST',
@@ -403,8 +411,24 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
       const builder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        is: vi.fn().mockReturnThis(),
+        single: vi.fn().mockImplementation(async () => {
+          // Return a goal with created_by for departments query
+          if (table === 'goals') {
+            return { data: { created_by: 'test-user-id' }, error: null }
+          }
+          return { data: null, error: null }
+        }),
+        maybeSingle: vi.fn().mockImplementation(async () => {
+          // Return a marketing department for the departments query
+          if (table === 'departments') {
+            return {
+              data: { id: 'dept-1', slug: 'marketing', name: 'Marketing', created_by: 'test-user-id', status: 'idle' },
+              error: null
+            }
+          }
+          return { data: null, error: null }
+        }),
         insert: vi.fn().mockImplementation(() => {
           if (table === 'company_memos') {
             return Promise.resolve({ data: null, error: { message: 'DB write failed', code: '23505' } })
@@ -423,7 +447,6 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
     })
     vi.mocked(createServerSupabaseClient).mockReturnValue(mockClient as ReturnType<typeof createServerSupabaseClient>)
 
-    const mockDept = { id: 'dept-1', slug: 'marketing', name: 'Marketing', status: 'idle', user_id: 'test-user-id' }
     const mockTask = {
       id: 'task-1', goal_id: 'goal-1', label: 'Research', action: 'market_research',
       dept: 'marketing', status: 'approved', params: {}, depends_on: [], risk: 'low',
@@ -432,7 +455,7 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
     // Should not throw — memo failure is non-fatal
     await expect(
       runWorkerTask(
-        mockDept as Parameters<typeof runWorkerTask>[0],
+        'marketing',  // WorkerDept is a string, not an object
         mockTask as Parameters<typeof runWorkerTask>[1],
         'goal-1'
       )

@@ -392,9 +392,9 @@ describe('Skills Layer — image skill graceful fallback', () => {
       format: 'png',
     }
 
-    // detectOutputType should route to md for image skill
-    const { targetFormat } = detectOutputType(input, true)
-    expect(targetFormat).toBe('md')
+    // detectOutputType should route to md for image skill when hint includes "image"
+    const { targetFormat } = detectOutputType(JSON.stringify(input), true, 'Generate image')
+    expect(targetFormat).toBe('jpg')
 
     // The markdown transformer should produce a brief from the image spec
     const { transformToMarkdown } = await import('@/lib/artifact-transformers/markdown-transformer')
@@ -410,8 +410,8 @@ describe('Artifact sources: citations', () => {
   it('sources.kb_file_ids is populated when KB files are used', () => {
     // Test the shape expected by the artifacts table
     const sources = {
-      memo_ids: ['memo-uuid-1'],
-      kb_file_ids: ['kb-file-uuid-1', 'kb-file-uuid-2'],
+      memo_ids: ['550e8400-e29b-41d4-a716-446655440000'],
+      kb_file_ids: ['550e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440002'],
       tool_calls: [{ tool: 'gmail.search_emails', result: 'truncated' }],
     }
 

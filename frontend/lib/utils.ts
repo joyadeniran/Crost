@@ -107,7 +107,9 @@ export function formatErrorMessage(err: string | any): string {
   // 1. Detailed Quota Handling (Legacy fallback for rich messages)
   if (parsed && parsed.code === 'SYSTEM_LIMIT_EXCEEDED') {
     const reset = parsed.resetAt ? new Date(parsed.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'midnight';
-    return `Daily free limit reached (${(parsed.limit || 0).toLocaleString()} tokens). This is not an app error, but a usage cap. Add your own API key in Settings to bypass this, or wait until ${reset} for the reset.`;
+    const limit = parsed.limit ? Math.floor(parsed.limit / 1000) : 50;
+    const used = parsed.tokensUsed ? Math.floor(parsed.tokensUsed / 1000) : 0;
+    return `Daily free limit reached (${limit},000 tokens). You've used ${used},000 of your ${limit},000 daily free tokens. This is not an app error, but a usage cap. Add your own API key in Settings to bypass this, or wait until ${reset} for the reset.`;
   }
 
   // 2. Browser/Network technical strings

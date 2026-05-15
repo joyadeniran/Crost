@@ -767,14 +767,51 @@ const RESILIENT_FALLBACK_CHAIN = [
   'groq/llama-3.1-8b-instant'     // Fast Cloud Fallback (Replaced local/gemma3)
 ]
 
+interface CallLLMParams {
+  model: string
+  messages?: Array<{ role: string; content: string }>
+  systemNote?: string
+  userId?: string | null
+  providerOverride?: string
+  isBootstrap?: boolean
+}
+
 export async function callLLM(
-  model: string,
-  prompt: string,
+  modelOrParams: string | CallLLMParams,
+  prompt?: string,
   systemNote?: string,
   userId?: string | null,
   providerOverride?: string,
   isBootstrap?: boolean
 ): Promise<{ content: string; tokensUsed: number }> {
+  let model: string
+  let actualPrompt: string
+  let actualSystemNote: string | undefined
+  let actualUserId: string | null | undefined
+  let actualProviderOverride: string | undefined
+  let actualIsBootstrap: boolean | undefined
+
+  if (typeof modelOrParams === 'object') {
+    model = modelOrParams.model
+    actualSystemNote = modelOrParams.systemNote
+    actualUserId = modelOrParams.userId
+    actualProviderOverride = modelOrParams.providerOverride
+    actualIsBootstrap = modelOrParams.isBootstrap
+
+    if (modelOrParams.messages) {
+      actualPrompt = modelOrParams.messages.map(m => `${m.role}: ${m.content}`).join('\n')
+    } else {
+      actualPrompt = ''
+    }
+  } else {
+    model = modelOrParams
+    actualPrompt = prompt || ''
+    actualSystemNote = systemNote
+    actualUserId = userId
+    actualProviderOverride = providerOverride
+    actualIsBootstrap = isBootstrap
+  }
+
   // Start with the requested model
   let currentModel = model
   let attempts = 0
@@ -785,7 +822,7 @@ export async function callLLM(
 
   while (attempts < maxAttempts) {
     try {
-      return await callLiteLLM(currentModel, prompt, systemNote, userId, providerOverride, isBootstrap)
+      return await callLiteLLM(currentModel, actualPrompt, actualSystemNote, actualUserId, actualProviderOverride, actualIsBootstrap)
     } catch (err: any) {
       attempts++
 
@@ -819,13 +856,13 @@ export async function callLLM(
           event_type: 'provider_fallback',
           description: switchDescription,
           model_used: currentModel,
-          metadata: { 
-            failed_model: currentModel, 
-            next_model: nextModel, 
+          metadata: {
+            failed_model: currentModel,
+            next_model: nextModel,
             attempt: attempts,
             error: err.message?.slice(0, 500)
           },
-          created_by: userId
+          created_by: actualUserId
         }).catch(() => {})
 
         currentModel = nextModel

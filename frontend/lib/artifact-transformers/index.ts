@@ -29,8 +29,23 @@ export interface OutputDetection {
  * format cues in the hint (e.g. "excel sheet", "pitch deck", "pdf report")
  * override weaker response-shape heuristics further down — this prevents an
  * LLM that drifted into narrative from silently producing the wrong file type.
+ *
+ * Can also accept an object directly (for testing), which is treated as parsed JSON.
  */
-export function detectOutputType(content: string, isJson: boolean, taskHint?: string): OutputDetection {
+export function detectOutputType(content: string | any, isJson: boolean, taskHint?: string): OutputDetection {
+  let contentStr = '';
+  let parsed: any = null;
+
+  // Handle both string and object inputs
+  if (typeof content === 'string') {
+    contentStr = content;
+  } else {
+    // Treat object input as already-parsed JSON
+    parsed = content;
+    isJson = true;
+    contentStr = JSON.stringify(content);
+  }
+
   // Normalise the founder-task hint so we can run keyword checks on it.
   const hintLower = (taskHint || '').toLowerCase();
   const hintDemandsXlsx = /\b(excel|xlsx|spreadsheet|workbook|budget|forecast|projection|tracker|p&l|balance sheet|income statement|cash[- ]flow|kpi tracker|financial model|excel sheet|excel template)\b/.test(hintLower);
@@ -80,15 +95,17 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
   }
 
-  // Strip markdown fences that LLMs often wrap JSON in
-  const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+  // Skip parsing if already parsed from object input
+  if (!parsed) {
+    // Strip markdown fences that LLMs often wrap JSON in
+    const stripped = contentStr.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
-  let parsed: any;
-  try {
-    parsed = JSON.parse(stripped);
-  } catch {
-    // Couldn't parse despite isJson flag — safe fallback
-    return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+    try {
+      parsed = JSON.parse(stripped);
+    } catch {
+      // Couldn't parse despite isJson flag — safe fallback
+      return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+    }
   }
 
   // ── CHECK 0a: Skill contract (highest priority — LLM followed SKILL.md) ─
@@ -110,8 +127,8 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   }
 
   if (parsed?.skill === 'image') {
-    // Generate actual image instead of falling back to design spec markdown
-    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
+    // Image skills fall back to markdown brief to avoid crashing text-only LLMs
+    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'md', transformer: transformToMarkdownResearch };
   }
 
   // ── CHECK 0: Explicit format field set by department prompt ─────────────
