@@ -138,8 +138,9 @@ async function createArtifactFromContent(
   taskPreview: string,
   userId: string,
   supabase: any,
-  taskHint?: string
-): Promise<{ id: string; file_url: string } | null> {
+  taskHint?: string,
+  goalId?: string | null
+): Promise<{ id: string; file_url: string; transformFailed?: boolean } | null> {
   try {
     // Detect content type
     let isJson = false;
@@ -151,14 +152,29 @@ async function createArtifactFromContent(
     const detection = detectOutputType(content, isJson, taskHint);
     
     let fileContent: string | Buffer = content;
+    let transformFailed = false;
     if (detection.targetFormat !== 'json' && detection.transformer) {
       try {
         const parsedContent = isJson ? JSON.parse(content) : content;
         fileContent = await detection.transformer(parsedContent) as string | Buffer;
       } catch (err) {
         console.error('[Format Transformation Error]', err);
+        transformFailed = true;
+        const intendedFormat = detection.targetFormat;
         fileContent = content;
         detection.targetFormat = isJson ? 'json' : 'txt';
+        // Surface failure to event_log so it's visible in observability
+        try {
+          await supabase.from('event_log').insert({
+            department_id: deptId,
+            department_slug: deptSlug,
+            goal_id: goalId ?? null,
+            event_type: 'error',
+            description: `Artifact transform failed (${intendedFormat}→${detection.targetFormat}): ${String(err).slice(0, 200)}`,
+            metadata: { intended_format: intendedFormat, fallback_format: detection.targetFormat, error: String(err).slice(0, 500) },
+            created_by: userId,
+          });
+        } catch { /* best-effort */ }
       }
     }
 
@@ -229,7 +245,7 @@ async function createArtifactFromContent(
       return null
     }
 
-    return { id: artifact.id, file_url: fileUrl }
+    return { id: artifact.id, file_url: fileUrl, transformFailed }
   } catch (err) {
     console.error('[Create Artifact Error]', err)
     return null
@@ -468,22 +484,27 @@ export async function POST(req: NextRequest, { params }: Params) {
         body.task.slice(0, 60),
         user.id,
         supabase,
-        body.task
+        body.task,
+        goalId
       )
 
       if (artifact) {
         artifactId = artifact.id
 
         // Also store a brief memo referencing the artifact
+        const memoBody = artifact.transformFailed
+          ? `Output stored as artifact (ID: ${artifact.id}). ⚠️ Format conversion failed — file saved as fallback format. See artifacts section to download.`
+          : `Output stored as downloadable artifact (ID: ${artifact.id}). See artifacts section to download.`
+
         await supabase.from('company_memos').insert({
           from_department: dept.name,
           from_department_id: dept.id,
           goal_id: goalId,
           title: `[Task] ${body.task.slice(0, 80)}`,
-          body: `Output stored as downloadable artifact (ID: ${artifact.id}). See artifacts section to download.`,
+          body: memoBody,
           tags: ['department_task', dept.slug, 'artifact_reference'],
           source_type: 'agent',
-          confidence: 0.9,
+          confidence: artifact.transformFailed ? 0.7 : 0.9,
           created_by: user.id,
         })
       } else {
