@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,10 +10,15 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
       .from('system_config')
       .select('key, value')
+      .eq('created_by', user.id)
       .ilike('key', '%_api_key%')
 
     if (error) throw error
