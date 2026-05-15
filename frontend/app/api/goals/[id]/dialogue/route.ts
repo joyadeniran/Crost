@@ -50,10 +50,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       await supabase.from('goals').update({
         orc_conversation: updatedHistory,
         status: 'planning'
-      }).eq('id', goalId)
+      }).eq('id', goalId).eq('created_by', user.id)
     } else if (force_plan) {
       // If forced, just flip to planning
-      await supabase.from('goals').update({ status: 'planning' }).eq('id', goalId)
+      await supabase.from('goals').update({ status: 'planning' }).eq('id', goalId).eq('created_by', user.id)
     }
 
     // 3. Re-trigger Orchestrator
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         .from('goals')
         .update({ status: 'failed', outcome: errorMessage })
         .eq('id', goalId)
+        .eq('created_by', user.id)
     })
 
     return NextResponse.json({
