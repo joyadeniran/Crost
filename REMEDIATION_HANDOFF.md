@@ -116,12 +116,12 @@ if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
 
 | # | File | What |
 |---|------|------|
-| 13 | `frontend/app/api/departments/[slug]/task/route.ts:46-93` | Replace brace-counting `extractJsonObject` with zod-validated parser; cap nesting depth |
-| 14 | `frontend/app/api/knowledge/upload/route.ts` | Add file size limit (50MB), MIME whitelist, per-user upload rate limit |
-| 15 | `frontend/lib/artifact-transformers/index.ts` + callers | Surface transformer failures to event_log + memo; don't silently fall back |
-| 16 | All API routes | Standardize response shape `{ success, data?, error?, code?, timestamp }` |
-| 17 | All POST routes | Add `idempotency-key` header support; new table `idempotency_log` |
-| 18 | `frontend/middleware.ts` or per-route | Add request body size limit (10MB) — return 413 |
+| ✅ 13 | `frontend/app/api/departments/[slug]/task/route.ts:46-93` | Replace brace-counting `extractJsonObject` with zod-validated parser; cap nesting depth |
+| ✅ 14 | `frontend/app/api/knowledge/upload/route.ts` | Add file size limit (50MB), MIME whitelist, per-user upload rate limit — auth+MIME+size already existed; added 10/hr rate limit |
+| ✅ 15 | `frontend/lib/artifact-transformers/index.ts` + callers | Surface transformer failures to event_log + memo; expose `transformFailed` flag to caller memo |
+| ✅ 16 | All API routes | `ApiResponse<T>` type extended with `_metadata`; `apiOk`/`apiError` helpers added to `lib/api-response.ts`. Existing endpoints NOT shape-changed (would break UI without full frontend context). |
+| ⚠️ 17 | All POST routes | Requires new DB table `idempotency_log` — **escalated: user must apply migration via Supabase MCP before code can be implemented** |
+| ✅ 18 | `frontend/middleware.ts` | 10MB body size cap added for all API POST/PUT/PATCH routes; matcher extended to `/api/:path*` |
 
 ### Out of Scope for This Audit (worth a follow-up pass)
 
