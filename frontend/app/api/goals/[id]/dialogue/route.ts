@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/llm-client'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { message, force_plan } = DialogueSchema.parse(body)
     const supabase = createServerSupabaseClient()
     const goalId = params.id
+
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
 
     // 1. Fetch current goal state
     const { data: goal, error: fetchErr } = await supabase
@@ -82,10 +86,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         .eq('created_by', user.id)
     })
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       timestamp: new Date().toISOString(),
-    })
+    }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200)
+
+    return NextResponse.json(responseBody)
   } catch (err) {
     console.error('[POST /api/goals/dialogue]', err)
     return NextResponse.json(

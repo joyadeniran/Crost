@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { RESERVED_SLUGS } from '@/lib/department-lifecycle'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -110,6 +111,9 @@ export async function POST(req: NextRequest) {
     if (body?.template_slug) {
       const parsedTemplate = CloneTemplateSchema.parse(body)
 
+      const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+      if (idempotency.kind === 'response') return idempotency.response
+
       const { data: existingUserDept } = await supabase
         .from('departments')
         .select('id')
@@ -177,16 +181,19 @@ export async function POST(req: NextRequest) {
         created_by: user.id
       })
 
-      return NextResponse.json(
-        {
-          success: true,
-          data: clonedDept
-        },
-        { status: 201 }
-      )
+      const responseBody = {
+        success: true,
+        data: clonedDept
+      }
+      await completeIdempotentRequest(req, supabase, user.id, responseBody, 201)
+
+      return NextResponse.json(responseBody, { status: 201 })
     }
 
     const parsed = CreateSchema.parse(body)
+
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
 
     // Step 1a: Slug uniqueness
     const { data: existing } = await supabase
@@ -245,13 +252,13 @@ export async function POST(req: NextRequest) {
       created_by: user.id
     })
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: dept
-      },
-      { status: 201 }
-    )
+    const responseBody = {
+      success: true,
+      data: dept
+    }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 201)
+
+    return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json(

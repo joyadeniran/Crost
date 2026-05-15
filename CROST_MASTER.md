@@ -3,9 +3,38 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.94  
-**Last Updated:** May 7, 2026  
+**Current Version:** 11.95  
+**Last Updated:** May 15, 2026  
 **Deployment Status:** ✅ PRODUCTION — Gold-Level Observability & Multi-Tenant Hardening.
+
+---
+
+## Session v11.95 — Audit #17 Idempotency Keys
+**Date**: May 15, 2026  **Status**: ✅  
+**Impact**: Added request-level idempotency support for duplicate-prone POST operations so client retries do not create duplicate goals, artifacts, approvals, memos, departments, tool executions, suggested actions, OAuth sessions, or Knowledge Base ingests.
+
+### What Was Built
+1. **`idempotency_log` Table**: Added a Supabase migration with per-user unique keys, request hashes, replayable JSON responses, and RLS policies.
+2. **Shared Idempotency Helper**: Added `beginIdempotentRequest` / `completeIdempotentRequest` to claim keys atomically, replay completed responses, reject key reuse with a different body, and block duplicate in-flight requests.
+3. **Critical POST Route Wiring**: Integrated `Idempotency-Key` support into goal, artifact, approval, memo, department, tool, suggested-action, connection, dispatch, dialogue, and Knowledge Base ingest routes.
+
+### Files Changed
+- `frontend/lib/idempotency.ts`
+- `frontend/app/api/goals/route.ts`
+- `frontend/app/api/goals/[id]/dialogue/route.ts`
+- `frontend/app/api/goals/[id]/dispatch/route.ts`
+- `frontend/app/api/artifacts/route.ts`
+- `frontend/app/api/approvals/route.ts`
+- `frontend/app/api/tools/invoke/route.ts`
+- `frontend/app/api/tools/execute/route.ts`
+- `frontend/app/api/suggested-actions/execute/route.ts`
+- `frontend/app/api/suggested-actions/[id]/execute/route.ts`
+- `frontend/app/api/connect/route.ts`
+- `frontend/app/api/knowledge/upload/route.ts`
+- `frontend/app/api/knowledge/import/route.ts`
+- `frontend/app/api/memos/route.ts`
+- `frontend/app/api/departments/route.ts`
+- `supabase/migrations/20260515120000_create_idempotency_log.sql`
 
 ---
 

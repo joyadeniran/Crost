@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { tool, params, ...context } = ToolRequestSchema.parse(body)
+
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
 
     // 2. Identify Service from Tool Name
     // Mapping: apollo_search_contacts -> service: 'apollo', action: 'search_contacts'
@@ -124,10 +128,13 @@ export async function POST(req: NextRequest) {
     console.log(`[MCP V1 Fallback] Executing Mock Tool: ${tool}`)
     const result = await fn(params, context)
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       data: result
-    })
+    }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200)
+
+    return NextResponse.json(responseBody)
   } catch (err: any) {
     console.error('[MCP Engine Error]', err)
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeToolCall } from '@/lib/tools/execute-tool-call'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const userId = user.id
   const actionId = params.id
   let inputs: Record<string, string> = {}
+  let body: Record<string, unknown> = {}
 
   try {
-    const body = await req.json()
-    inputs = body.inputs || {}
+    body = await req.json()
+    inputs = (body.inputs as Record<string, string> | undefined) || {}
   } catch { /* body is optional */ }
 
   // Load the SuggestedAction — must belong to this user
@@ -47,6 +49,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: `Action already in terminal state: ${action.status}` }, { status: 409 })
   }
 
+  const idempotency = await beginIdempotentRequest(req, supabase, userId, body)
+  if (idempotency.kind === 'response') return idempotency.response
+
   // Mark tapped immediately so double-clicks are idempotent
   await supabase.from('suggested_actions').update({ status: 'tapped' }).eq('id', actionId)
 
@@ -54,7 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const requiredInputs: string[] = action.required_inputs || []
   const missingInputs = requiredInputs.filter((field: string) => !inputs[field])
   if (missingInputs.length > 0) {
-    return NextResponse.json({ needs_input: true, fields: missingInputs })
+    const responseBody = { needs_input: true, fields: missingInputs }
+    await completeIdempotentRequest(req, supabase, userId, responseBody, 200)
+    return NextResponse.json(responseBody)
   }
 
   const { action_slug, payload = {} } = action
@@ -220,15 +227,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await supabase.from('suggested_actions')
         .update({ status: 'approved', approval_id: (result as any).execution_id || null })
         .eq('id', actionId)
-      return NextResponse.json({
+      const responseBody = {
         requires_approval: true,
         approval_id: (result as any).execution_id,
         message: (result as any).message,
-      })
+      }
+      await completeIdempotentRequest(req, supabase, userId, responseBody, 200)
+      return NextResponse.json(responseBody)
     }
 
     if (result.redirect) {
-      return NextResponse.json({ redirect: true, goal_id: result.goal_id, artifact_id: result.artifact_id })
+      const responseBody = { redirect: true, goal_id: result.goal_id, artifact_id: result.artifact_id }
+      await completeIdempotentRequest(req, supabase, userId, responseBody, 200)
+      return NextResponse.json(responseBody)
     }
 
     // Success
@@ -236,7 +247,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .update({ status: 'completed', resolved_at: new Date().toISOString() })
       .eq('id', actionId)
 
-    return NextResponse.json({ success: true, result })
+    const responseBody = { success: true, result }
+    await completeIdempotentRequest(req, supabase, userId, responseBody, 200)
+    return NextResponse.json(responseBody)
 
   } catch (err: any) {
     await supabase.from('suggested_actions').update({ status: 'failed' }).eq('id', actionId)

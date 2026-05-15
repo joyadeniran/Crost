@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 import { extractText } from '@/lib/knowledge/extract-text';
 import { callLLM, getModel, callEmbeddings } from '@/lib/llm-client';
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,17 @@ export async function POST(req: NextRequest) {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json({ error: 'File exceeds 25MB limit' }, { status: 413 });
     }
+
+    const idempotencyBody = {
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type,
+      title,
+      category,
+      description,
+    };
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, idempotencyBody);
+    if (idempotency.kind === 'response') return idempotency.response;
 
     // Per-user rate limit: max 10 uploads per hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -116,13 +128,16 @@ export async function POST(req: NextRequest) {
     // 3. Extract text (async — do not block the response)
     processFileAsync(buffer, file.type, file.name, fileId, user.id, supabase);
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       fileId,
       file_url: fileUrl,
       processing_status: 'processing',
       message: 'File uploaded. Text extraction in progress.',
-    });
+    };
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200);
+
+    return NextResponse.json(responseBody);
 
   } catch (err: any) {
     console.error('[KB Upload]', err);

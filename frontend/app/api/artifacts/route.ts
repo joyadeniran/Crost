@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -90,6 +91,9 @@ export async function POST(req: NextRequest) {
     const parsed = CreateArtifactSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
+
     // Verify file_url is a valid HTTP(S) URL pointing to known storage
     let urlValid = false
     try {
@@ -130,11 +134,14 @@ export async function POST(req: NextRequest) {
       created_by: user.id,
     })
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       data,
       timestamp: new Date().toISOString()
-    }, { status: 201 })
+    }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 201)
+
+    return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({

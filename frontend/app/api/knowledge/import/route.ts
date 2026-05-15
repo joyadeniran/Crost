@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
 import { extractText } from '@/lib/knowledge/extract-text';
 import { callLLM, getModel, callEmbeddings } from '@/lib/llm-client';
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,12 +21,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { artifact_id } = await req.json();
+    const body = await req.json();
+    const { artifact_id } = body;
     if (!artifact_id) {
       return NextResponse.json({ error: 'artifact_id is required' }, { status: 400 });
     }
 
     const supabase = createServerSupabaseClient();
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body);
+    if (idempotency.kind === 'response') return idempotency.response;
 
     // 1. Fetch artifact details
     const { data: artifact, error: artErr } = await supabase
@@ -106,11 +110,14 @@ export async function POST(req: NextRequest) {
       processFileAsync(buffer, artifact.artifact_type || 'application/octet-stream', fileName, fileId, user.id, supabase);
     }
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       fileId,
       message: 'Artifact imported to Knowledge Base. Extraction in progress.'
-    });
+    };
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200);
+
+    return NextResponse.json(responseBody);
 
   } catch (err: any) {
     console.error('[KB Import]', err);

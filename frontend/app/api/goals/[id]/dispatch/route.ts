@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runWorkerTask, logEvent } from '@/lib/llm-client'
 import { getModelForTask } from '@/lib/model-routing'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import type { OrchestratorTask, WorkerDept, WorkerTask } from '@/types'
 import { z } from 'zod'
 
@@ -68,6 +69,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       )
     }
 
+    const idempotencyUserId = user?.id ?? goal.created_by
+    const idempotency = await beginIdempotentRequest(req, supabase, idempotencyUserId, body)
+    if (idempotency.kind === 'response') return idempotency.response
+
     // Auth gate check for human-initiated dispatches (with overrides)
     if (task_override && !user) {
       return NextResponse.json({ error: 'Unauthorized: Manual overrides require a user session.' }, { status: 403 })
@@ -116,7 +121,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
       }
       
-      return NextResponse.json({ success: true, count, timestamp: new Date().toISOString() })
+      const responseBody = { success: true, count, timestamp: new Date().toISOString() }
+      await completeIdempotentRequest(req, supabase, idempotencyUserId, responseBody, 200)
+      return NextResponse.json(responseBody)
     }
 
     const task = plan.tasks.find((t) => t.id === task_id) as OrchestratorTask | undefined
@@ -137,11 +144,13 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     if (existingTask) {
       if (['dispatched', 'completed', 'running', 'skipped', 'rejected'].includes(existingTask.status)) {
-        return NextResponse.json({
+        const responseBody = {
           success: true,
           data: { dispatched: false, reason: 'already_terminal', status: existingTask.status, dept: task.dept, task_id, goal_id: goal.id },
           timestamp: new Date().toISOString(),
-        })
+        }
+        await completeIdempotentRequest(req, supabase, idempotencyUserId, responseBody, 200)
+        return NextResponse.json(responseBody)
       }
     }
 
@@ -308,11 +317,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
     })
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       data: { dispatched: true, dept: task.dept, task_id, goal_id: goal.id, env_mode_snapshot: envModeSnapshot },
       timestamp: new Date().toISOString(),
-    })
+    }
+    await completeIdempotentRequest(req, supabase, idempotencyUserId, responseBody, 200)
+
+    return NextResponse.json(responseBody)
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json(

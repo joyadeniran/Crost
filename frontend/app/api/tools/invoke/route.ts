@@ -4,9 +4,10 @@
 // Returns the result immediately or signals requires_approval for HITL gating.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeToolCall } from '@/lib/tools/execute-tool-call'
 import { logEvent } from '@/lib/llm-client'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
     }
 
     // NATURAL LANGUAGE PARAMETER RESOLUTION (Spec §14)
+    const supabase = createServerSupabaseClient()
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
+
     // If the founder used a slash command with raw text (e.g. /gmail.send_email hello to joy@...),
     // the UI sends { text: "..." }. We use a fast LLM to parse this into the tool's expected schema.
     if (params && typeof params === 'object' && Object.keys(params).length === 1 && 'text' in params && typeof params.text === 'string') {
@@ -59,12 +64,14 @@ export async function POST(req: NextRequest) {
 
     // Normalise gateway responses so the UI always gets a consistent shape
     if ((result as any).status === 'requires_approval') {
-      return NextResponse.json({
+      const responseBody = {
         success: false,
         requires_approval: true,
         approval_id: (result as any).approval_id, // THE FIX: Use actual approval_id
         message: (result as any).message,
-      })
+      }
+      await completeIdempotentRequest(req, supabase, user.id, responseBody, 200)
+      return NextResponse.json(responseBody)
     }
 
     if ((result as any).status === 'missing_connection') {
@@ -83,7 +90,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true, result, artifact_id: (result as any).artifact_id ?? null })
+    const responseBody = { success: true, result, artifact_id: (result as any).artifact_id ?? null }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200)
+    return NextResponse.json(responseBody)
   } catch (err: any) {
     console.error('[POST /api/tools/invoke]', err)
     

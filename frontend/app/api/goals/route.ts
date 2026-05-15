@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/llm-client'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     const { founder_input } = CreateGoalSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
+
     // Derive a short title from the first ~60 chars of input
     const title = founder_input.length > 60
       ? founder_input.slice(0, 57) + '…'
@@ -114,11 +118,14 @@ export async function POST(req: NextRequest) {
         .eq('created_by', user.id)
     })
 
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       data: goal,
       timestamp: new Date().toISOString(),
-    }, { status: 201 })
+    }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 201)
+
+    return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json(

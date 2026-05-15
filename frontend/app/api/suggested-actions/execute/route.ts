@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { executeSuggestedAction } from '@/lib/execute-suggested-action'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const actionId = body.action_id as string
+    const supabase = createServerSupabaseClient()
 
     if (!actionId) {
       return NextResponse.json(
@@ -22,6 +24,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const idempotency = await beginIdempotentRequest(request, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
 
     const result = await executeSuggestedAction({
       actionId,
@@ -36,7 +41,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ success: true, result: result.result })
+    const responseBody = { success: true, result: result.result }
+    await completeIdempotentRequest(request, supabase, user.id, responseBody, 200)
+
+    return NextResponse.json(responseBody)
   } catch (err: any) {
     console.error('[POST /api/suggested-actions/execute]', err)
     return NextResponse.json(

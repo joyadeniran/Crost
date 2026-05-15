@@ -1,6 +1,7 @@
 import { Composio } from "@composio/core";
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerComponentClient } from "@/lib/supabase";
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from "@/lib/supabase";
+import { beginIdempotentRequest, completeIdempotentRequest } from "@/lib/idempotency";
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,12 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
 
-    const { provider } = await req.json(); // e.g., 'gmail'
+    const body = await req.json();
+    const { provider } = body; // e.g., 'gmail'
+    const supabase = createServerSupabaseClient();
+
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body);
+    if (idempotency.kind === 'response') return idempotency.response;
 
     if (!process.env.COMPOSIO_API_KEY) {
       return NextResponse.json({ error: "COMPOSIO_API_KEY is not set" }, { status: 500 });
@@ -27,7 +33,10 @@ export async function POST(req: NextRequest) {
       callbackUrl: callbackUrl
     });
     
-    return NextResponse.json({ url: connection.redirectUrl });
+    const responseBody = { url: connection.redirectUrl };
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 200);
+
+    return NextResponse.json(responseBody);
   } catch (error: any) {
     console.error("[Composio Connect Error]:", error);
     return NextResponse.json({ error: error.message || "Failed to create connection" }, { status: 500 });

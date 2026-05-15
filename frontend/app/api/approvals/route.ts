@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     const parsed = CreateApprovalSchema.parse(body)
     const supabase = createServerSupabaseClient()
 
+    const idempotency = await beginIdempotentRequest(req, supabase, user.id, body)
+    if (idempotency.kind === 'response') return idempotency.response
+
     const { data, error } = await supabase
       .from('approval_queue')
       .insert({ ...parsed, created_by: user.id })
@@ -86,7 +90,10 @@ export async function POST(req: NextRequest) {
       created_by: user.id,
     })
 
-    return NextResponse.json({ data }, { status: 201 })
+    const responseBody = { data }
+    await completeIdempotentRequest(req, supabase, user.id, responseBody, 201)
+
+    return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })

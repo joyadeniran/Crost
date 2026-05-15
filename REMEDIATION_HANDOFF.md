@@ -120,7 +120,7 @@ if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
 | ✅ 14 | `frontend/app/api/knowledge/upload/route.ts` | Add file size limit (50MB), MIME whitelist, per-user upload rate limit — auth+MIME+size already existed; added 10/hr rate limit |
 | ✅ 15 | `frontend/lib/artifact-transformers/index.ts` + callers | Surface transformer failures to event_log + memo; expose `transformFailed` flag to caller memo |
 | ✅ 16 | All API routes | `ApiResponse<T>` type extended with `_metadata`; `apiOk`/`apiError` helpers added to `lib/api-response.ts`. Existing endpoints NOT shape-changed (would break UI without full frontend context). |
-| ⚠️ 17 | All POST routes | Requires new DB table `idempotency_log` — **escalated: user must apply migration via Supabase MCP before code can be implemented** |
+| ✅ 17 | All POST routes | Added `idempotency_log` migration plus `Idempotency-Key` handling for duplicate-prone POST creation/execution routes |
 | ✅ 18 | `frontend/middleware.ts` | 10MB body size cap added for all API POST/PUT/PATCH routes; matcher extended to `/api/:path*` |
 
 ### Out of Scope for This Audit (worth a follow-up pass)
