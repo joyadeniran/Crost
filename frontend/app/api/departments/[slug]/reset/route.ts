@@ -2,20 +2,25 @@
 // Clears 'running' status back to 'idle', logs the event
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 interface Params { params: { slug: string } }
 
-export async function POST(_req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, { params }: Params) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
 
     const { data: dept } = await supabase
       .from('departments')
-      .select('id, name, slug, status, last_active_at')
+      .select('id, name, slug, status, last_active_at, created_by')
       .eq('slug', params.slug)
+      .eq('created_by', user.id)
       .single()
 
     if (!dept) return NextResponse.json({ error: 'Department not found' }, { status: 404 })
@@ -48,6 +53,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       event_type: 'error',
       description: `Department "${dept.name}" force-reset by founder after being stuck running for ${Math.round(stuckMs / 60000)} min`,
       metadata: { previous_status: 'running', reset_by: 'founder', stuck_minutes: Math.round(stuckMs / 60000) },
+      created_by: user.id,
     })
 
     return NextResponse.json({ success: true })
