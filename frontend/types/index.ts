@@ -223,6 +223,7 @@ export interface ApiResponse<T = unknown> {
   code?: string       // Machine-readable error code for UI to handle
   warning?: string
   timestamp: string
+  _metadata?: Record<string, unknown>
 }
 
 // ─── Orchestrator + Worker types ─────────────────────────────────────────────
