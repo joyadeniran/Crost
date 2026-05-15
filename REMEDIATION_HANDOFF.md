@@ -62,11 +62,11 @@ Each row is **self-sufficient** for a fix-only agent. Use this as the work backl
 | ✅ 1b | `frontend/app/api/knowledge/read/route.ts` | 10-13 | Same as 1a | Same fix |
 | ✅ 2 | `frontend/app/api/connect/route.ts` | 6-15 | `userId` from body, no auth at all | Add `auth.getUser()` gate; use `user.id` for `composio.create()` |
 | ✅ 3 | `frontend/app/api/departments/[slug]/reset/route.ts` | 11 | No auth, no ownership check | Add `auth.getUser()`; add `.eq('created_by', user.id)` to dept select |
-| 4 | `frontend/app/api/goals/[id]/report/route.ts` | 12-17 | Comment literally admits "We don't strictly auth gate this" | Add dual-mode: session auth + ownership OR internal secret header (mirror `worker/execute` pattern) |
-| 5a | `frontend/app/api/settings/tools/route.ts` | 6-9 | No auth on tool config mutation | Add session auth; verify `tool.user_id === user.id` before update |
-| 5b | `frontend/app/api/settings/tools/config/route.ts` | 6-9 | Same as 5a | Same fix |
-| 6 | `frontend/app/api/config/secret-presence/route.ts` | 11-13 | Public endpoint leaks which API keys exist | Add session auth; scope query to `created_by=user.id` |
-| 7 | `frontend/app/api/approvals/expire/route.ts` | 11-12 | `if (cronSecret)` — if env unset, auth is **skipped entirely** | Change to `if (!cronSecret) return 500`; always require the header |
+| ✅ 4 | `frontend/app/api/goals/[id]/report/route.ts` | 12-17 | Comment literally admits "We don't strictly auth gate this" | Add dual-mode: session auth + ownership OR internal secret header (mirror `worker/execute` pattern) |
+| ✅ 5a | `frontend/app/api/settings/tools/route.ts` | 6-9 | No auth on tool config mutation | Add session auth; verify `tool.user_id === user.id` before update |
+| ✅ 5b | `frontend/app/api/settings/tools/config/route.ts` | 6-9 | Same as 5a | Same fix |
+| ✅ 6 | `frontend/app/api/config/secret-presence/route.ts` | 11-13 | Public endpoint leaks which API keys exist | Add session auth; scope query to `created_by=user.id` |
+| ✅ 7 | `frontend/app/api/approvals/expire/route.ts` | 11-12 | `if (cronSecret)` — if env unset, auth is **skipped entirely** | Change to `if (!cronSecret) return 500`; always require the header |
 
 **Fix template for #1, #2, #3, #5, #6 (paste-ready):**
 ```ts
