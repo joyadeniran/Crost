@@ -430,10 +430,12 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
           return { data: null, error: null }
         }),
         insert: vi.fn().mockImplementation(() => {
-          if (table === 'company_memos') {
-            return Promise.resolve({ data: null, error: { message: 'DB write failed', code: '23505' } })
+          // Return a chainable object with select method
+          return {
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'new-artifact-id' }, error: null }),
+            }),
           }
-          return Promise.resolve({ data: [{ id: 'ok' }], error: null })
         }),
         update: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
