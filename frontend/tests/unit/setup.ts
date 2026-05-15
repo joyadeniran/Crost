@@ -14,6 +14,7 @@ process.env.FREE_SYSTEM_DAILY_TOKENS = '50000'
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://mock-supabase.test'
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'mock-anon-key'
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key'
+process.env.COMPOSIO_API_KEY = 'mock-composio-key'
 
 // ── Global fetch mock ─────────────────────────────────────────────────────
 // Tests that need specific fetch behaviour set it via vi.mocked(fetch)

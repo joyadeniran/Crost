@@ -51,8 +51,8 @@ function mockSupabaseClient() {
     from: vi.fn(() => builder),
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null }),
-      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'test-user-id' } } }, error: null }),
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
     },
     storage: {
       from: vi.fn(() => ({
@@ -279,23 +279,10 @@ describe('Onboarding store: data cleared on dashboard transition', () => {
 
 describe('POST /api/worker/execute — auth guard', () => {
   it('request without session or internal secret is rejected with 401', async () => {
-    // Clear mocks before this test
-    vi.clearAllMocks()
+    // The global mock for createSupabaseServerComponentClient returns a client
+    // with auth.getUser() that returns { data: { user: null } } by default.
+    // This test verifies the auth check works correctly.
 
-    // Import and mock createSupabaseServerComponentClient BEFORE importing POST
-    const supabaseMock = await import('@/lib/supabase')
-    const mockAuthClient = {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
-      },
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-      })),
-    }
-    vi.mocked(supabaseMock.createSupabaseServerComponentClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockAuthClient)
-
-    // Now import POST (which uses the mocked createSupabaseServerComponentClient)
     const { POST } = await import('@/app/api/worker/execute/route')
     const req = new Request('http://localhost/api/worker/execute', {
       method: 'POST',
