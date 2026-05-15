@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    const authClient = await createSupabaseServerComponentClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthenticated' }, { status: 401 })
+
     const supabase = createServerSupabaseClient()
     const { id, config, is_configured } = await req.json()
 
@@ -12,14 +16,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Tool ID is required' }, { status: 400 })
     }
 
-    // Attempt to update. If 'config' column doesn't exist yet, we might get an error.
-    // We'll try to handle it gracefully or rely on the migration.
+    const { data: tool } = await supabase
+      .from('available_tools')
+      .select('user_id')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (!tool || (tool.user_id && tool.user_id !== user.id)) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 })
+    }
+
     const { error } = await supabase
       .from('available_tools')
-      .update({ 
-        config, 
-        is_configured, 
-        connector_id: is_configured ? `mcp_${id}` : null 
+      .update({
+        config,
+        is_configured,
+        connector_id: is_configured ? `mcp_${id}` : null
       })
       .eq('id', id)
 
