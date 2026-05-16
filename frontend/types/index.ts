@@ -309,6 +309,14 @@ export interface Goal {
   last_status_check: string | null
   supervision_interval_seconds: number
   goal_tasks?: GoalTask[]
+  // Phase 1 orchestration upgrade (ORC_ORCHESTRATION_UPGRADE_PLAN.md §F.1)
+  response_mode?: 'assistant' | 'clarify' | 'quick_plan' | 'full_plan' | 'direct_action' | 'command' | 'escalate' | null
+  orc_decision?: {
+    mode: string
+    confidence: number
+    reasoning: string
+    risk_notes: string[]
+  } | null
 }
 
 // GoalTask — a single task row within a goal (replaces orchestrator_plan.tasks flat JSON)

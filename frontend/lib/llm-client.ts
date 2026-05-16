@@ -1017,6 +1017,27 @@ Rules:
 10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."
 11. RESPONSE MODE: A pre-classifier has suggested a response_mode (see ORCHESTRATOR MODE HINT in the prompt). Confirm it in your response_mode field, or override it if your analysis of the full context disagrees. This field is optional but strongly preferred.`
 
+function getModeInstructions(mode: string): string {
+  switch (mode) {
+    case 'assistant':
+      return 'Set is_direct_response=true. Answer directly from context — concise, specific, warm. End with 2-3 concrete suggested next steps embedded in your direct_response text.'
+    case 'direct_action':
+      return 'Set is_direct_response=true for read-only actions. For write actions (send, post, create), set is_valid_goal=true with exactly 1 task that triggers HITL approval. No multi-task plan — this is a single atomic action.'
+    case 'clarify':
+      return 'Set is_valid_goal=false. Write clarification_question as 1-2 focused conversational questions in prose — not a form, not bullet points, not multiple choice. State your reasonable assumptions first ("I\'m assuming X based on Y"). Then ask only what would materially change the plan. Keep it under 4 sentences total.'
+    case 'quick_plan':
+      return 'Generate a focused plan of 3-5 tasks maximum. Prefer parallel execution (minimal depends_on). All tasks should have risk_level "low" or "medium". Avoid over-engineering. Assume reasonable defaults and document them in risk_note rather than asking.'
+    case 'full_plan':
+      return 'This is a complex strategic goal. Generate a thorough plan with 5-15 tasks. Establish clear task dependencies. Organize tasks into logical phases in the risk_note. Surface all risks, resource needs, and timeline estimates in risk_note.'
+    case 'command':
+      return 'Set is_direct_response=true. Execute or acknowledge the command. Confirm what was done or provide the requested system information. Be brief.'
+    case 'escalate':
+      return 'Set is_direct_response=true. The goal may exceed current capabilities. Do NOT attempt to plan something that cannot be delivered. Instead, explain clearly what CAN be done internally, and offer 2-3 concrete alternative approaches in direct_response.'
+    default:
+      return ''
+  }
+}
+
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
   return history
@@ -1122,10 +1143,12 @@ export async function runOrchestratorTask(
   const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory)
 
   const orcContextSummary = formatOrcContextForPrompt(orcContext)
+  const modeInstructions = getModeInstructions(decision.mode)
   const modeHint = [
     `ORCHESTRATOR MODE HINT (pre-classified): ${decision.mode} (confidence: ${decision.confidence.toFixed(2)})`,
     `Reasoning: ${decision.reasoning}`,
     decision.risk_notes.length > 0 ? `Risk flags: ${decision.risk_notes.join('; ')}` : '',
+    modeInstructions ? `Mode instructions: ${modeInstructions}` : '',
   ].filter(Boolean).join('\n')
 
   const conversationContext = formatConversationHistory(conversationHistory)

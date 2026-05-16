@@ -158,6 +158,18 @@ function litellmError(status: number, message: string) {
   } as Response
 }
 
+// Decision gate response — prepend before every runOrchestratorTask LLM mock
+// (orcDecisionGate makes its own fetch call before the main orchestrator)
+function decisionGateResponse(mode = 'full_plan') {
+  return litellmResponse(JSON.stringify({
+    mode,
+    confidence: 0.9,
+    reasoning: 'Test classification.',
+    risk_notes: [],
+    followup_options: [],
+  }))
+}
+
 // ── Tests: callLLM resilient fallback chain ────────────────────────────────
 
 describe('callLLM — resilient fallback chain', () => {
@@ -364,7 +376,9 @@ describe('runOrchestratorTask', () => {
   it('inserts tasks and sets goal status to awaiting_approval on valid plan', async () => {
     const { runOrchestratorTask } = await import('@/lib/llm-client')
 
-    vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(validPlanJSON()))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(decisionGateResponse('quick_plan')) // orcDecisionGate
+      .mockResolvedValueOnce(litellmResponse(validPlanJSON()))   // main orchestrator
 
     // Should not throw
     await expect(
@@ -398,16 +412,16 @@ describe('runOrchestratorTask', () => {
     })
 
     vi.mocked(fetch)
-      .mockResolvedValueOnce(litellmResponse(hallucinatedPlan))
-      // Second call returns a valid plan
-      .mockResolvedValueOnce(litellmResponse(validPlanJSON()))
+      .mockResolvedValueOnce(decisionGateResponse('full_plan'))  // orcDecisionGate
+      .mockResolvedValueOnce(litellmResponse(hallucinatedPlan))  // initial plan (bad depts)
+      .mockResolvedValueOnce(litellmResponse(validPlanJSON()))   // redraft
 
     await expect(
       runOrchestratorTask('Invalid goal', 'goal-hallucination-id', [], false)
     ).resolves.not.toThrow()
 
-    // Must have made at least 2 LLM calls (initial + redraft)
-    expect(fetch).toHaveBeenCalledTimes(2)
+    // 1 decision gate + 2 LLM calls (initial + redraft)
+    expect(fetch).toHaveBeenCalledTimes(3)
   })
 
   it('sets goal status to completed on is_direct_response', async () => {
@@ -419,14 +433,16 @@ describe('runOrchestratorTask', () => {
       direct_response: 'Your company name is Acme Inc.',
     })
 
-    vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(directResponse))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(decisionGateResponse('assistant')) // orcDecisionGate
+      .mockResolvedValueOnce(litellmResponse(directResponse))  // main orchestrator
 
     await expect(
       runOrchestratorTask('@orc What is my company name?', 'goal-direct-id', [], false)
     ).resolves.not.toThrow()
 
-    // fetch called once — no plan retries
-    expect(fetch).toHaveBeenCalledTimes(1)
+    // 1 decision gate + 1 main LLM (no retries for direct responses)
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('sets goal status to clarifying on is_valid_goal === false', async () => {
@@ -438,7 +454,9 @@ describe('runOrchestratorTask', () => {
       clarification_question: 'What is your target market?',
     })
 
-    vi.mocked(fetch).mockResolvedValueOnce(litellmResponse(clarifyingResponse))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(decisionGateResponse('clarify'))       // orcDecisionGate
+      .mockResolvedValueOnce(litellmResponse(clarifyingResponse))   // main orchestrator
 
     await expect(
       runOrchestratorTask('vague goal', 'goal-clarify-id', [], false)
@@ -556,20 +574,22 @@ describe('runOrchestratorTask — Recent Workspace Tasks context includes task_i
       direct_response: 'Retrying the last failed task.',
     })
 
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        choices: [{ message: { content: directResponse }, finish_reason: 'stop' }],
-        model: 'groq/llama-3.3-70b-versatile',
-        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
-      }),
-    } as Response)
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(decisionGateResponse('command'))  // orcDecisionGate (calls[0])
+      .mockResolvedValueOnce({                                  // main orchestrator (calls[1])
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: directResponse }, finish_reason: 'stop' }],
+          model: 'groq/llama-3.3-70b-versatile',
+          usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+        }),
+      } as Response)
 
     await runOrchestratorTask('Retry the last failed task.', 'goal-retry-id', [], false)
 
-    // The fetch call body must contain task_id in the messages content
-    const callBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
+    // calls[1] is the main orchestrator call (calls[0] is the decision gate)
+    const callBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body)
     const userContent = callBody.messages.find((m: any) => m.role === 'user')?.content ?? ''
     // After BUG-1 fix, the formatted recent tasks string includes 'task_id:'
     expect(userContent).toContain('task_id:')
