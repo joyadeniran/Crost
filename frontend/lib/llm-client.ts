@@ -21,6 +21,13 @@ import { loadSkillsForTask } from './skills'
 import { generateAndInsertSuggestedActions } from './suggested-actions'
 import { addTaskLog, logDecision, addArtifactReference } from './company-memo'
 import { DEPARTMENT_TOOL_RULES } from './tools/execute-tool-call'
+import {
+  fetchOrcContext,
+  seedOrcContextFromMemo,
+  formatOrcContextForPrompt,
+  orcDecisionGate,
+  type OrcDecision,
+} from './orc-decision-gate'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -975,6 +982,7 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
   "is_direct_response": boolean,
   "direct_response": "string or null — use ONLY if is_direct_response is true",
   "clarification_question": "string or null — use ONLY if is_valid_goal is false",
+  "response_mode": "assistant|clarify|quick_plan|full_plan|direct_action|command|escalate — confirm or override the pre-classifier hint",
   "plan": {
     "goal": "string",
     "risk_note": "string — mandatory one-sentence risk assessment",
@@ -996,7 +1004,7 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
   }
 }
 
-Rules: 
+Rules:
 1. COMPLEX GOALS: If the goal requires substantive work that a department agent should produce (a real document, campaign, codebase, research report, etc.) set is_valid_goal=true and is_direct_response=false and provide a plan.
 2. CONVERSATIONAL QUERIES & TRIVIAL TASKS: Use is_direct_response=true for: (a) simple questions about capabilities, company state, or help ("Who are you?", "What can you do?", "What is our mission?"); (b) tiny self-contained requests answerable in a few sentences ("Write hello world HTML", "Give me a sample subject line", "Translate this word"); (c) any request where the complete answer fits in a single direct_response without needing a department agent. DO NOT draft a multi-task plan for these.
 3. PLANNING THRESHOLD: Reserve Planning Mode (is_direct_response=false) for goals that genuinely need one or more department agents to do meaningful work — a real deliverable, a real action (send email, post content, run research), or coordination across multiple steps. The presence of action verbs alone ("write", "create", "build", "make") does NOT force Planning Mode if the task is trivially small. Apply judgment: "Write hello world HTML" → direct response; "Write a full email marketing campaign targeting SMBs" → plan.
@@ -1006,7 +1014,8 @@ Rules:
 7. ALWAYS provide a risk_note in the plan.
 8. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
 9. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
-10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."`
+10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."
+11. RESPONSE MODE: A pre-classifier has suggested a response_mode (see ORCHESTRATOR MODE HINT in the prompt). Confirm it in your response_mode field, or override it if your analysis of the full context disagrees. This field is optional but strongly preferred.`
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1104,13 +1113,30 @@ export async function runOrchestratorTask(
     .join('\n')
 
   const systemMemory = await buildOrcContext(userId)
+
+  // Brain 1 + Brain 2: fetch structured context, auto-seed on first run, classify intent
+  const orcContext = await fetchOrcContext(userId)
+  if (userId) {
+    seedOrcContextFromMemo(userId).catch(() => {}) // fire-and-forget
+  }
+  const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory)
+
+  const orcContextSummary = formatOrcContextForPrompt(orcContext)
+  const modeHint = [
+    `ORCHESTRATOR MODE HINT (pre-classified): ${decision.mode} (confidence: ${decision.confidence.toFixed(2)})`,
+    `Reasoning: ${decision.reasoning}`,
+    decision.risk_notes.length > 0 ? `Risk flags: ${decision.risk_notes.join('; ')}` : '',
+  ].filter(Boolean).join('\n')
+
   const conversationContext = formatConversationHistory(conversationHistory)
   const prompt = [
     `GOAL: ${founderInput}`,
     forcePlan ? 'FORCE PLANNING MODE: The founder has explicitly bypassed clarification and trusts your judgment. You MUST draft the best possible plan now using reasonable assumptions and all available context (System Memory/Memos/KB). DO NOT return is_valid_goal=false. You are authorized to proceed with partial context.' : '',
+    modeHint,
     `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
     formattedRecentTasks ? `Recent Workspace Tasks:\n${formattedRecentTasks}` : '',
     `Conversation History:\n${conversationContext}`,
+    orcContextSummary ? `Structured Company Context:\n${orcContextSummary}` : '',
     `System Memory:\n${systemMemory}`,
   ].filter(Boolean).join('\n\n')
 
@@ -1186,6 +1212,20 @@ export async function runOrchestratorTask(
   
   if (!result.ok) throw new Error(result.reason)
 
+  // Persist the pre-classifier decision regardless of which branch we take below
+  const orcDecisionPayload: OrcDecision = result.response_mode
+    ? { ...decision, mode: result.response_mode } // LLM overrode the pre-classifier
+    : decision
+  await supabase.from('goals').update({
+    response_mode: orcDecisionPayload.mode,
+    orc_decision: {
+      mode:             orcDecisionPayload.mode,
+      confidence:       orcDecisionPayload.confidence,
+      reasoning:        orcDecisionPayload.reasoning,
+      risk_notes:       orcDecisionPayload.risk_notes,
+    },
+  }).eq('id', goalId)
+
   if (result.is_valid_goal === false) {
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: result.clarification_question, ts: new Date().toISOString() }]
     await supabase.from('goals').update({ status: 'clarifying', orc_conversation: updatedHistory }).eq('id', goalId)
@@ -1196,11 +1236,11 @@ export async function runOrchestratorTask(
   if (result.is_direct_response === true) {
     const directResponse = result.direct_response || 'I have processed your request.'
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: directResponse, ts: new Date().toISOString() }]
-    
-    await supabase.from('goals').update({ 
-      status: 'completed', 
+
+    await supabase.from('goals').update({
+      status: 'completed',
       outcome: directResponse,
-      orc_conversation: updatedHistory 
+      orc_conversation: updatedHistory
     }).eq('id', goalId)
 
     // Also create a memo so it shows up in the UI (SynthesisReportCard)
