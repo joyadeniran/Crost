@@ -259,6 +259,45 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// ─── Sandbox Status Badge ─────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  draft:       { label: 'In Sandbox',  color: '#f5a623', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.3)' },
+  review:      { label: 'In Review',   color: '#50c8ff', bg: 'rgba(80,200,255,0.12)', border: 'rgba(80,200,255,0.3)' },
+  active:      { label: 'Published',   color: '#00c866', bg: 'rgba(0,200,100,0.12)',  border: 'rgba(0,200,100,0.3)' },
+  paused:      { label: 'Paused',      color: '#aaa',    bg: 'rgba(170,170,170,0.1)', border: 'rgba(170,170,170,0.25)' },
+  deprecated:  { label: 'Archived',    color: '#888',    bg: 'rgba(136,136,136,0.08)', border: 'rgba(136,136,136,0.2)' },
+  discarded:   { label: 'Discarded',   color: '#ff6060', bg: 'rgba(255,96,96,0.1)',   border: 'rgba(255,96,96,0.25)' },
+}
+
+function SandboxBadge({ status }: { status?: string }) {
+  if (!status || status === 'active') return null
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG['draft']
+  return (
+    <span style={{
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      zIndex: 20,
+      fontSize: 9,
+      fontFamily: 'var(--font-dm-mono, monospace)',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.06em',
+      color: cfg.color,
+      background: cfg.bg,
+      border: `1px solid ${cfg.border}`,
+      borderRadius: 4,
+      padding: '3px 7px',
+      backdropFilter: 'blur(4px)',
+    }}>
+      {cfg.label}
+    </span>
+  )
+}
+
+// ─── ArtifactCard ─────────────────────────────────────────────────────────────
+
 export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const [showDrawer, setShowDrawer] = useState(false)
   const [activeTab, setActiveTab] = useState<'preview' | 'details' | 'lineage'>('preview')
@@ -266,6 +305,9 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [statusUpdating, setStatusUpdating] = useState(false)
+
+  const isImmutable = ['active', 'paused', 'deprecated'].includes(artifact.status ?? '')
 
   const [lineageData, setLineageData] = useState<(GoalTask & { goals: Goal | null }) | null>(null)
   const [loadingLineage, setLoadingLineage] = useState(false)
@@ -347,14 +389,51 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
-      toast('Artifact deleted successfully', 'success')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (res.status === 409) {
+          toast(err.error || 'Cannot discard a published artifact. Use Deprecate instead.', 'error')
+          return
+        }
+        throw new Error('Delete failed')
+      }
+      toast('Artifact discarded', 'success')
       window.location.reload()
     } catch {
-      toast('Failed to delete artifact. Please try again.', 'error')
+      toast('Failed to discard artifact. Please try again.', 'error')
       setIsDeleting(false)
     } finally {
       setShowDeleteConfirm(false)
+    }
+  }
+
+  const updateStatus = async (status: string) => {
+    setStatusUpdating(true)
+    setMenuOpen(false)
+    try {
+      const res = await fetch(`/api/artifacts/${artifact.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast(err.error || `Failed to update to ${status}`, 'error')
+        return
+      }
+      const statusLabels: Record<string, string> = {
+        review: 'Moved to Review',
+        active: 'Published',
+        paused: 'Paused',
+        deprecated: 'Archived',
+        discarded: 'Discarded',
+      }
+      toast(statusLabels[status] ?? `Updated to ${status}`, 'success')
+      window.location.reload()
+    } catch {
+      toast(`Failed to update status`, 'error')
+    } finally {
+      setStatusUpdating(false)
     }
   }
 
@@ -362,9 +441,9 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
     <>
       <ConfirmationModal
         isOpen={showDeleteConfirm}
-        title="Delete Artifact"
-        message={`Are you sure you want to delete "${displayFilename}"? This action cannot be undone.`}
-        confirmLabel={isDeleting ? 'Deleting...' : 'Yes, Delete'}
+        title="Discard Artifact"
+        message={`Discard "${displayFilename}"? It will be permanently removed from your sandbox. This cannot be undone.`}
+        confirmLabel={isDeleting ? 'Discarding...' : 'Yes, Discard'}
         onConfirm={deleteArtifact}
         onCancel={() => setShowDeleteConfirm(false)}
         isDanger
@@ -407,6 +486,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             overflow: 'hidden',
             position: 'relative',
           }}>
+            <SandboxBadge status={artifact.status} />
             {artifact.preview_url || (artifact.artifact_type === 'image' && artifact.file_url) ? (
               <Image
                 src={artifact.preview_url || artifact.file_url!}
@@ -533,57 +613,74 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 8,
                 padding: '6px 0',
-                minWidth: 140,
+                minWidth: 160,
                 zIndex: 50,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
               }}>
                 <button
                   onClick={downloadArtifact}
                   disabled={downloading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    padding: '8px 14px',
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-2)',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-dm-sans, sans-serif)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
+                  style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
                 >
-                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                  </svg>
+                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                   Download
                 </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={isDeleting}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    padding: '8px 14px',
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,90,90,0.9)',
-                    fontSize: 12,
-                    fontFamily: 'var(--font-dm-sans, sans-serif)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                  </svg>
-                  Delete
-                </button>
+
+                {/* Sandbox: promote draft → review */}
+                {artifact.status === 'draft' && (
+                  <button
+                    onClick={() => updateStatus('review')}
+                    disabled={statusUpdating}
+                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#50c8ff', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                  >
+                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    Submit for Review
+                  </button>
+                )}
+
+                {/* Sandbox: approve review → active */}
+                {artifact.status === 'review' && (
+                  <button
+                    onClick={() => updateStatus('active')}
+                    disabled={statusUpdating}
+                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#00c866', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                  >
+                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    Approve & Publish
+                  </button>
+                )}
+
+                {/* Active: immutable — show locked state */}
+                {artifact.status === 'active' && (
+                  <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', color:'var(--text-4)', fontSize:11, fontFamily:'var(--font-dm-mono,monospace)', opacity:0.6 }}>
+                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    Immutable — use Make Changes
+                  </div>
+                )}
+
+                {/* Archive active/paused */}
+                {['active', 'paused'].includes(artifact.status ?? '') && (
+                  <button
+                    onClick={() => updateStatus('deprecated')}
+                    disabled={statusUpdating}
+                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-3)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                  >
+                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                    Archive
+                  </button>
+                )}
+
+                {/* Discard draft/review only */}
+                {['draft', 'review'].includes(artifact.status ?? '') && (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={isDeleting}
+                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'rgba(255,90,90,0.9)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                  >
+                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    Discard
+                  </button>
+                )}
               </div>
             )}
           </div>

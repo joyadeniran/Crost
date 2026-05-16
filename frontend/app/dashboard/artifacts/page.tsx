@@ -12,12 +12,14 @@ export default async function ArtifactsPage() {
 
   const supabase = createServerSupabaseClient()
 
-  // Fetch artifacts + goals + departments in parallel
+  // Fetch artifacts + goals + departments in parallel.
+  // Fetch all non-discarded artifacts so the grid can split them into Gallery / Sandbox tabs.
   const [{ data: artifactsData }, { data: goalsData }, { data: deptsData }] = await Promise.all([
     supabase
       .from('artifacts')
       .select('*')
       .eq('created_by', user.id)
+      .not('status', 'eq', 'discarded')
       .order('created_at', { ascending: false })
       .limit(100),
     supabase
@@ -57,8 +59,8 @@ export default async function ArtifactsPage() {
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
           {artifacts.length > 0
-            ? `Browse, filter, and download your company's technical deliverables.`
-            : 'Your generated files will appear here'
+            ? `Browse, approve, and download your company's deliverables. New artifacts start in the Sandbox.`
+            : 'Your generated files will appear here once approved from the Sandbox.'
           }
         </p>
       </div>
