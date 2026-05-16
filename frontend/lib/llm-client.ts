@@ -1396,13 +1396,13 @@ export async function runWorkerTask(
         department_id: deptRow.id,
         artifact_type: uploaded.artifactType,
         title: `Output: ${task.label}`,
-        file_url: uploaded.fileUrl,          // ← file_url, not preview_url
-        // Gallery v1: record file size and task lineage
+        file_url: uploaded.fileUrl,
         file_size: uploaded.fileSize,
         task_id: task.id,
-        // Spec §9.5: record which skill slugs were loaded when producing this artefact.
         skills_used: loadedSkillSlugs,
-      // Spec §9: citations — populated with worker provenance data where available.
+        // Sandbox: worker artifacts land in 'draft' until founder reviews
+        status: 'draft',
+        version: 1,
         sources: {
           memo_ids: Array.from(new Set([...((workerResult.result as any)?.sources?.memo_ids || [])])),
           kb_file_ids: Array.from(new Set([...((workerResult.result as any)?.sources?.kb_file_ids || [])])),

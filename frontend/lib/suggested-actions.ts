@@ -36,6 +36,7 @@ export async function generateAndInsertSuggestedActions({
     required_tool: null,
     required_inputs: [],
     risk_level: 'low',
+    execution_path: 'internal',
     created_by
   })
 
@@ -55,6 +56,7 @@ export async function generateAndInsertSuggestedActions({
     required_tool: null,
     required_inputs: [],
     risk_level: 'low',
+    execution_path: 'internal',
     created_by
   })
 
@@ -76,6 +78,7 @@ export async function generateAndInsertSuggestedActions({
       required_tool: null,
       required_inputs: [],
       risk_level: 'low',
+      execution_path: 'internal',
       created_by
     })
   }
@@ -108,6 +111,7 @@ export async function generateAndInsertSuggestedActions({
       required_tool: 'gmail',
       required_inputs: ['destination_email'],
       risk_level: 'medium',
+      execution_path: 'external',
       created_by
     })
   }

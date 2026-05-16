@@ -100,6 +100,9 @@ export async function POST(req: NextRequest) {
           artifact_type: 'document',
           title: p.title || 'Untitled Document',
           body: p.content || '',
+          // Sandbox: manual saves land in draft
+          status: 'draft',
+          version: 1,
           metadata: { task_id: ctx.task_id, tool: 'save_document' },
           sources: { memo_ids: [], kb_file_ids: [], tool_calls: [{ tool: 'save_document', executed_at: new Date().toISOString() }] },
         }).select().single()

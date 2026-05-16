@@ -369,7 +369,9 @@ async function handleToolResultArchiving({
         title: `Tool Output: ${result.service}.${result.action}`,
         file_url: urldata.publicUrl,
         created_by: userId,
-        // Spec §9: citations — record the tool call that produced this artefact.
+        // Sandbox: tool outputs land in 'draft' until founder reviews
+        status: 'draft',
+        version: 1,
         sources: {
           memo_ids: [],
           kb_file_ids: [],

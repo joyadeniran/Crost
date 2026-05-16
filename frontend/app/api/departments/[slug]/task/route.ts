@@ -23,6 +23,7 @@ import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 import { detectOutputType } from '@/lib/artifact-transformers'
 import { loadSkillsForTask } from '@/lib/skills'
+import { classifyOutput } from '@/lib/output-classifier'
 
 export const dynamic = 'force-dynamic'
 
@@ -130,7 +131,9 @@ function isStructuredContent(content: string): boolean {
   )
 }
 
-// Helper: Create artifact from content and store file in Supabase Storage
+// Helper: Create deliverable artifact from content and store file in Supabase Storage.
+// Non-deliverable outputs (internal instructions, operational summaries) are routed
+// to the correct table by the caller after checking classifyOutput().
 async function createArtifactFromContent(
   content: string,
   deptId: string,
@@ -139,18 +142,18 @@ async function createArtifactFromContent(
   userId: string,
   supabase: any,
   taskHint?: string,
-  goalId?: string | null
+  goalId?: string | null,
+  skillsUsed?: string[]
 ): Promise<{ id: string; file_url: string; transformFailed?: boolean } | null> {
   try {
-    // Detect content type
     let isJson = false;
     try { JSON.parse(content); isJson = true; } catch { }
     if (!isJson) {
        isJson = content.trim().startsWith('{') || content.trim().startsWith('[');
     }
-    
+
     const detection = detectOutputType(content, isJson, taskHint);
-    
+
     let fileContent: string | Buffer = content;
     let transformFailed = false;
     if (detection.targetFormat !== 'json' && detection.transformer) {
@@ -163,7 +166,6 @@ async function createArtifactFromContent(
         const intendedFormat = detection.targetFormat;
         fileContent = content;
         detection.targetFormat = isJson ? 'json' : 'txt';
-        // Surface failure to event_log so it's visible in observability
         try {
           await supabase.from('event_log').insert({
             department_id: deptId,
@@ -196,11 +198,9 @@ async function createArtifactFromContent(
       artifactType = 'document';
     }
 
-    // Generate filename
     const timestamp = Date.now()
     const fileName = `dept-${deptSlug}-${timestamp}${extension}`
 
-    // Upload to Supabase Storage
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('artifacts')
       .upload(`departments/${deptId}/${fileName}`, fileContent, {
@@ -213,14 +213,12 @@ async function createArtifactFromContent(
       return null
     }
 
-    // Get public URL
     const { data: urlData } = supabase.storage
       .from('artifacts')
       .getPublicUrl(uploadData.path)
 
     const fileUrl = urlData.publicUrl
 
-    // Store metadata in artifacts table
     const { data: artifact, error: artifactErr } = await supabase
       .from('artifacts')
       .insert({
@@ -229,13 +227,19 @@ async function createArtifactFromContent(
         artifact_type: artifactType,
         title: `Department Output: ${taskPreview.slice(0, 60)}`,
         file_url: fileUrl,
+        // Sandbox: new artifacts land in 'draft' until the founder sees/approves
+        status: 'draft',
+        version: 1,
+        skills_used: skillsUsed ?? [],
         metadata: {
           source: 'department_task',
           contentType: fileType,
           sizeBytes: content.length,
-          isStructured: isJson || detection.targetFormat === 'csv' || detection.targetFormat === 'xlsx' || detection.targetFormat === 'json',
+          isStructured: isJson || ['csv', 'xlsx', 'json'].includes(detection.targetFormat),
+          classifiedAs: 'deliverable',
         },
         created_by: userId,
+        goal_id: goalId ?? null,
       })
       .select('id')
       .single()
@@ -332,12 +336,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   let tokensUsed = 0
   let modelUsed = dept.model_name
   let artifactId: string | undefined
+  let skillsUsed: string[] = []
 
   try {
     // Load skills for this task so the LLM receives the correct SKILL.md contract
-    const { content: skillContent } = await loadSkillsForTask(body.task, dept.slug, {})
+    const { content: skillContent, slugs: loadedSlugs } = await loadSkillsForTask(body.task, dept.slug, {})
+    skillsUsed = loadedSlugs
 
-    // Build prompt
     const finalPrompt = await buildFinalPrompt(dept.persona_prompt, body.task, dept.capabilities, dept.restrictions, dept.slug, goalId ?? undefined, skillContent || undefined)
 
     // Call LLM
@@ -469,14 +474,61 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
     }
 
-    // No approval needed — task complete
-    // SEPARATION LOGIC:
-    //   - Structured JSON (any size) → Artifact file (docx / xlsx / md based on content)
-    //   - Narrative text              → Memo
+    // No approval needed — task complete.
+    // Classify output into deliverable / internal / operational before routing.
     const isStructured = isStructuredContent(answer)
 
-    if (isStructured) {
-      // Any structured output → Create artifact file
+    // Detect format early so the classifier has targetFormat signal
+    let isJson = false
+    try { JSON.parse(answer); isJson = true } catch { }
+    if (!isJson) isJson = answer.trim().startsWith('{') || answer.trim().startsWith('[')
+    const detection = detectOutputType(answer, isJson, body.task)
+
+    const { tier, reason: classifyReason } = classifyOutput({
+      content: answer,
+      targetFormat: detection.targetFormat,
+      contentType: detection.contentType,
+      departmentSlug: dept.slug,
+      taskHint: body.task,
+      fileSizeBytes: Buffer.byteLength(answer, 'utf8'),
+      sourceType: 'department_task',
+    })
+
+    if (tier === 'internal') {
+      // Store as internal instruction — not in the artifact gallery
+      await supabase.from('internal_instructions').insert({
+        slug: `dept-${dept.slug}-${Date.now()}`,
+        category: 'directive',
+        content: answer,
+        version: '1.0',
+        created_by: user.id,
+      })
+      await supabase.from('company_memos').insert({
+        from_department: dept.name,
+        from_department_id: dept.id,
+        goal_id: goalId,
+        title: `[Internal] ${body.task.slice(0, 80)}`,
+        body: `Internal instruction stored (${classifyReason}).`,
+        tags: ['department_task', dept.slug, 'internal_instruction'],
+        source_type: 'agent',
+        confidence: 0.9,
+        created_by: user.id,
+      })
+    } else if (tier === 'operational') {
+      // Store directly as memo — small narrative summary, no file needed
+      await supabase.from('company_memos').insert({
+        from_department: dept.name,
+        from_department_id: dept.id,
+        goal_id: goalId,
+        title: `[Task] ${body.task.slice(0, 80)}`,
+        body: answer.slice(0, 3000),
+        tags: ['department_task', dept.slug, 'operational_output'],
+        source_type: 'agent',
+        confidence: 0.8,
+        created_by: user.id,
+      })
+    } else if (isStructured || tier === 'deliverable') {
+      // Deliverable — create artifact file in sandbox (draft)
       const artifact = await createArtifactFromContent(
         answer,
         dept.id,
@@ -485,16 +537,16 @@ export async function POST(req: NextRequest, { params }: Params) {
         user.id,
         supabase,
         body.task,
-        goalId
+        goalId,
+        skillsUsed
       )
 
       if (artifact) {
         artifactId = artifact.id
 
-        // Also store a brief memo referencing the artifact
         const memoBody = artifact.transformFailed
           ? `Output stored as artifact (ID: ${artifact.id}). ⚠️ Format conversion failed — file saved as fallback format. See artifacts section to download.`
-          : `Output stored as downloadable artifact (ID: ${artifact.id}). See artifacts section to download.`
+          : `Output stored as downloadable artifact (ID: ${artifact.id}). Awaiting your review in the sandbox.`
 
         await supabase.from('company_memos').insert({
           from_department: dept.name,

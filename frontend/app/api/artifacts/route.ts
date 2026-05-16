@@ -1,17 +1,17 @@
-// GET /api/artifacts — list artifacts (filter by type, department, goal)
-// POST /api/artifacts — create a new artifact with file_url reference
-//
-// Per CROST_SPEC Section 6:
-// - Artifacts store files in Supabase Storage (S3)
-// - Database stores metadata only (file_url, not body)
-// - Types: document, code, data, spreadsheet, image
+// GET /api/artifacts — list artifacts, filtered by status/type/department/goal
+// POST /api/artifacts — create a new artifact (lands in 'draft' sandbox by default)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
+import { classifyOutput } from '@/lib/output-classifier'
 
 export const dynamic = 'force-dynamic'
+
+// Gallery-visible statuses. Drafts are hidden until the founder promotes or the
+// system auto-promotes after approval. Discarded are never shown.
+const GALLERY_STATUSES = ['review', 'active', 'paused', 'deprecated']
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,12 +24,20 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type')
     const department = searchParams.get('department')
     const goal = searchParams.get('goal')
+    // status param: 'gallery' (default) shows review+active+paused, 'all' shows everything, or exact status
+    const statusParam = searchParams.get('status') ?? 'gallery'
 
     let query = supabase
       .from('artifacts')
       .select('*')
       .eq('created_by', user.id)
       .order('created_at', { ascending: false })
+
+    if (statusParam === 'gallery') {
+      query = query.in('status', GALLERY_STATUSES)
+    } else if (statusParam !== 'all') {
+      query = query.eq('status', statusParam)
+    }
 
     if (type) query = query.eq('artifact_type', type)
     if (department) query = query.eq('department_slug', department)
@@ -38,18 +46,10 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
     if (error) throw error
 
-    return NextResponse.json({
-      success: true,
-      data,
-      timestamp: new Date().toISOString()
-    })
+    return NextResponse.json({ success: true, data, timestamp: new Date().toISOString() })
   } catch (err) {
     console.error('[GET /api/artifacts]', err)
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch artifacts',
-      timestamp: new Date().toISOString()
-    }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Failed to fetch artifacts', timestamp: new Date().toISOString() }, { status: 500 })
   }
 }
 
@@ -111,25 +111,45 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // Classify before insert — reject non-deliverables from the artifacts table
+    const { tier, reason: classifyReason } = classifyOutput({
+      content: parsed.metadata ? JSON.stringify(parsed.metadata) : parsed.title,
+      departmentSlug: parsed.department_slug,
+      isBinaryFile: true, // manual POST implies a file was pre-uploaded
+      sourceType: 'manual',
+    })
+
+    if (tier === 'internal') {
+      return NextResponse.json({
+        success: false,
+        error: 'This output is classified as an internal instruction. Use /api/internal-instructions instead.',
+        code: 'WRONG_TIER',
+        reason: classifyReason,
+        timestamp: new Date().toISOString(),
+      }, { status: 400 })
+    }
+
+    // All artifacts created via this endpoint start in 'draft' (sandbox)
     const { data, error } = await supabase
       .from('artifacts')
-      .insert({ ...parsed, created_by: user.id })
+      .insert({ ...parsed, created_by: user.id, status: 'draft', version: 1 })
       .select()
       .single()
 
     if (error) throw error
 
-    // Log artifact creation
     await supabase.from('event_log').insert({
       department_id: parsed.department_id,
       department_slug: parsed.department_slug,
       goal_id: parsed.goal_id,
       event_type: 'artifact_created',
-      description: `Artifact created: "${parsed.title}"`,
+      description: `Artifact created: "${parsed.title}" (sandbox)`,
       metadata: {
         artifact_id: data.id,
         artifact_type: parsed.artifact_type,
-        file_url: parsed.file_url
+        file_url: parsed.file_url,
+        status: 'draft',
+        classified_as: tier,
       },
       created_by: user.id,
     })
