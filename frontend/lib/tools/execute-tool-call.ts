@@ -123,7 +123,11 @@ export async function executeToolCall(options: ExecuteOptions) {
       return { result: `### Content of ${json.title}\n\n${json.content}\n\n---` };
     }
 
-    return json;
+    // Fallback: any other response shape gets a human-readable summary instead of raw JSON
+    if (json.error) {
+      return { result: `Knowledge base operation failed: ${json.error}` };
+    }
+    return { result: 'No results found in Knowledge Base.' };
   }
 
   // 2. Connection Guard: Does the user have this service hooked up?
