@@ -22,21 +22,7 @@ function getRouteRank(pathname: string) {
   return ONBOARDING_ROUTES.findIndex((route) => pathname.startsWith(route))
 }
 
-const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MB
-
 export async function middleware(request: NextRequest) {
-  // Body size guard for all API mutation routes — checked before auth to fail fast.
-  if (
-    request.nextUrl.pathname.startsWith('/api/') &&
-    ['POST', 'PUT', 'PATCH'].includes(request.method)
-  ) {
-    const cl = request.headers.get('content-length')
-    if (cl && parseInt(cl, 10) > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
-    }
-    return NextResponse.next()
-  }
-
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -129,5 +115,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/dashboard/:path*', '/onboarding/:path*', '/login', '/signup'],
+  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login', '/signup'],
 }
