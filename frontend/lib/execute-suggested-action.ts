@@ -213,9 +213,9 @@ export async function executeSuggestedAction(
     }
 
     // Completed successfully
-    const resultSummary = typeof result.data === 'string' 
-      ? result.data.slice(0, 500) 
-      : (result.summary || `Success: ${mapping.action} completed.`);
+    const resultSummary = typeof (result as any).data === 'string'
+      ? (result as any).data.slice(0, 500)
+      : ((result as any).summary || `Success: ${mapping.action} completed.`);
 
     await supabase
       .from('suggested_actions')
