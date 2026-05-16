@@ -69,6 +69,7 @@ export type EventType =
   | 'artifact_activated'
   | 'artifact_discarded'
   | 'artifact_deprecated'
+  | 'artifact_revision_requested'
   // Orc supervision events
   | 'orc_status_check'
   | 'orc_rebalance'

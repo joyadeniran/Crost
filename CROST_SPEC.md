@@ -432,7 +432,7 @@ The MVP catalog. Every entry has a stable `action_slug` so the gateway and the U
 | `send_to_email` | Send to my email | Gmail | medium | Orc directly |
 | `send_to_contact` | Send to someone else | Gmail | medium | Orc directly |
 | `save_to_kb` | Save to Knowledge Base | — | low | Orc directly |
-| `make_changes` | Make changes | — | low | Orc (re-opens War Room with context) |
+| `make_changes` | Make changes | — | low | Creates revision task in original department (see §9.4) |
 | `schedule_recurring` | Run this every [interval] | — | low | Orc directly (post-MVP wiring — see §16/§19) |
 | `add_to_memo` | Save as a decision in the Memo | — | low | Orc directly |
 | `generate_companion` | Generate a companion artefact | — | medium | Routes to relevant department |
@@ -486,7 +486,9 @@ Per §18 Decision 1, Orc IS the office assistant. The following `action_slug` va
 
 These are routed through the `executive` pseudo-department in `executeToolCall` (§16 API route) so the founder sees Orc do the work, even though the gateway handles the mechanics.
 
-`make_changes`, `generate_companion`, and `draft_followup` route to the originating department (or a relevant one) because they require domain expertise and skills loading.
+`generate_companion` and `draft_followup` route to the originating department (or a relevant one) because they require domain expertise and skills loading.
+
+`make_changes` is special: it creates a new task in the same goal and routes to the artifact's original department (see §9.4). The founder then dispatches the revision task manually from the goal card.
 
 ### Surfacing — where the founder sees suggestions
 
@@ -633,6 +635,62 @@ The first artefact a founder sees defines whether they come back. It must:
 - Be cited so the founder can trace where it came from.
 
 This quality bar is what makes the **Skills layer** (§9.5) part of MVP, not future work.
+
+## 9.4 Artifact Sandbox Lifecycle
+
+All generated artifacts flow through an approval sandbox before publication. This mirrors Anthropic's Responsible Scaling Policy capability threshold verification: before a more powerful system ships, it must be tested, iterated, and verified.
+
+### Status model
+
+Each artifact has a **status** field tracking its position in the lifecycle:
+
+```
+draft → review → active → (paused | deprecated)
+  ↓
+discarded (only from draft/review)
+```
+
+**Status definitions:**
+
+- **draft**: Initial sandbox state. Invisible in the Gallery tab. Creator can iterate, edit title/body, upload multiple times. Version increments on each edit.
+- **review**: Founder is testing. Visible to founder in Sandbox tab. Immutable via UI but versioning still active. Ready for approval or discard.
+- **active**: Published to Gallery. Immutable at the database level — all field edits are rejected with a 409 Conflict error. Version locked. Can only transition to `paused` or `deprecated`.
+- **paused**: Published but temporarily archived. Immutable. Shown grayed-out in Gallery. Can transition back to `active` or forward to `deprecated`.
+- **deprecated**: Permanently archived. Immutable. Removed from active Gallery view but preserved in historical records.
+- **discarded**: Sandbox rejected before activation. Only reachable from `draft` or `review`. Soft-deleted (marked but not hard-removed for audit trail).
+
+### Immutability and versioning
+
+- During `review`: edits are allowed, version increments with each change. This allows safe iteration.
+- At `active` transition: a database trigger locks the artifact (`published_at` timestamp set). All subsequent PATCH requests with field changes are rejected.
+- Immutability is enforced at two layers: database trigger (`enforce_artifact_status_transition`) and API-level validation (fail-fast in `/api/artifacts/[id]`).
+
+### Make Changes workflow
+
+When a founder wants to iterate on a published (`active` or `paused`) artifact, they tap the **"Make Changes"** button. The system:
+
+1. Creates a new `goal_task` in the same goal with label "Revise: [original title]".
+2. Routes to the original department so they understand the context.
+3. Sets the task to `status='pending'` so the founder can dispatch it like any other task.
+4. Generates a suggested action to dispatch the revision task.
+5. On completion, the new artifact is created in the same goal, linked via metadata so versioning is understood.
+
+The founder can then iterate on the revision, move it to `review`, get feedback, and eventually approve a new version to `active`. The two artifacts are separate entries in the Gallery (each with their own immutable state), but their lineage is discoverable via the goal and task metadata.
+
+### Approval gates
+
+- Artifacts land in `draft` automatically on creation.
+- Only the creator (or founder, if delegated) can promote an artifact from `draft` → `review`.
+- Only the founder can approve `review` → `active`.
+- On approval, the artifact's `approved_by` field records the approving user's UUID.
+
+### Display rules
+
+- **Gallery tab**: shows all `review`, `active`, `paused`, `deprecated` artifacts (excludes `draft` and `discarded`).
+- **Sandbox tab**: shows only `draft` artifacts with a sandboxed badge and estimated/rough status hint.
+- Discarded artifacts are omitted from both views (only visible in event logs).
+
+---
 
 ## 9.5 Skills Layer (MVP)
 

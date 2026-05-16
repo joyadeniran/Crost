@@ -58,10 +58,9 @@ const ACTION_SLUG_MAP: Record<
   },
   make_changes: {
     service: 'internal',
-    action: 'save_document',
+    action: 'make_changes_workflow',
     buildParams: (ctx) => ({
-      title: ctx.title ?? 'Revised Document',
-      content: ctx.revised_content ?? ctx.body ?? '',
+      artifact_id: ctx.artifact_id,
     }),
   },
   send_to_contact: {
@@ -165,8 +164,58 @@ export async function executeSuggestedAction(
     .update({ status: 'dispatched', dispatched_at: new Date().toISOString() })
     .eq('id', actionId)
 
-  // 4. Build tool payload
-  const params = mapping.buildParams(actionRow.context ?? {})
+  // 4. Special handling for make_changes workflow
+  if (actionRow.action_slug === 'make_changes') {
+    try {
+      const artifactId = actionRow.payload?.artifact_id
+      if (!artifactId) {
+        await markFailed(supabase, actionId, userId, 'artifact_id required for make_changes')
+        return { success: false, error: 'artifact_id required for make_changes' }
+      }
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      const response = await fetch(`${appUrl}/api/artifacts/${artifactId}/make-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Pass the user's auth cookie if available
+          'Cookie': '', // Credentials will be sent automatically in client calls
+        },
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Make-changes API failed: ${response.status} ${errorText}`)
+      }
+
+      const result = await response.json()
+
+      await supabase
+        .from('suggested_actions')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          result_artifact_id: result.data?.artifact_id,
+          result_summary: `Revision task created: ${result.data?.new_task_id}`,
+        })
+        .eq('id', actionId)
+
+      await emitEvent(userId, 'suggested_action_completed', {
+        action_id: actionId,
+        action_slug: actionRow.action_slug,
+        new_task_id: result.data?.new_task_id,
+      })
+
+      return { success: true, result }
+    } catch (err: any) {
+      const message = err?.message ?? String(err)
+      await markFailed(supabase, actionId, userId, message)
+      return { success: false, error: message }
+    }
+  }
+
+  // 4. Build tool payload (non-make_changes actions)
+  const params = mapping.buildParams(actionRow.payload ?? {})
   const toolCall: ToolCallPayload = {
     service: mapping.service,
     action: mapping.action,

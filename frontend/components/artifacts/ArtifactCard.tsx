@@ -437,6 +437,28 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
     }
   }
 
+  const initiateRevision = async () => {
+    setStatusUpdating(true)
+    setMenuOpen(false)
+    try {
+      const res = await fetch(`/api/artifacts/${artifact.id}/make-changes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast(err.error || 'Failed to create revision task', 'error')
+        return
+      }
+      toast('Revision task created and queued for execution', 'success')
+      window.location.reload()
+    } catch (err) {
+      toast(`Failed to create revision`, 'error')
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
   return (
     <>
       <ConfirmationModal
@@ -640,22 +662,59 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
 
                 {/* Sandbox: approve review → active */}
                 {artifact.status === 'review' && (
-                  <button
-                    onClick={() => updateStatus('active')}
-                    disabled={statusUpdating}
-                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#00c866', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                  >
-                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                    Approve & Publish
-                  </button>
+                  <>
+                    <button
+                      onClick={() => updateStatus('active')}
+                      disabled={statusUpdating}
+                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#00c866', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                    >
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                      Approve & Publish
+                    </button>
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <button
+                      onClick={initiateRevision}
+                      disabled={statusUpdating}
+                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                    >
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Make Changes
+                    </button>
+                  </>
                 )}
 
-                {/* Active: immutable — show locked state */}
+                {/* Active: immutable — show locked state but allow make changes */}
                 {artifact.status === 'active' && (
-                  <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', color:'var(--text-4)', fontSize:11, fontFamily:'var(--font-dm-mono,monospace)', opacity:0.6 }}>
-                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                    Immutable — use Make Changes
-                  </div>
+                  <>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', color:'var(--text-4)', fontSize:11, fontFamily:'var(--font-dm-mono,monospace)', opacity:0.6 }}>
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                      Immutable — use Make Changes
+                    </div>
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <button
+                      onClick={initiateRevision}
+                      disabled={statusUpdating}
+                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                    >
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Make Changes
+                    </button>
+                  </>
+                )}
+
+                {/* Paused: can make changes or archive */}
+                {artifact.status === 'paused' && (
+                  <>
+                    <button
+                      onClick={initiateRevision}
+                      disabled={statusUpdating}
+                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
+                    >
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Make Changes
+                    </button>
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                  </>
                 )}
 
                 {/* Archive active/paused */}

@@ -120,6 +120,20 @@ export async function POST(req: NextRequest) {
         })
         if (!res.ok) throw new Error(`KB Import failed: ${await res.text()}`)
         return await res.json()
+      },
+      dispatch_task: async (p, ctx) => {
+        if (!p.goal_id || !p.task_id) throw new Error('goal_id and task_id required')
+        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${p.goal_id}/dispatch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': req.headers.get('cookie') || '',
+            'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+          },
+          body: JSON.stringify({ task_id: p.task_id })
+        })
+        if (!res.ok) throw new Error(`Task dispatch failed: ${await res.text()}`)
+        return await res.json()
       }
     }
 
