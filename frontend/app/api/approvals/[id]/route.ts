@@ -178,6 +178,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             const execPayload = { ...(approval.payload as any) }
             delete execPayload.__tool_action
             delete execPayload.__service
+            delete execPayload.__task_id
+            // Normalize Gmail field names — LLMs use various synonyms but Composio expects `to`
+            if (resolvedComposioAction === 'GMAIL_SEND_EMAIL' || resolvedComposioAction === 'GMAIL_CREATE_EMAIL_DRAFT') {
+              if (!execPayload.to) {
+                execPayload.to = execPayload.recipient_email ?? execPayload.recipient ?? execPayload.to_email ?? execPayload.to_address ?? ''
+              }
+              delete execPayload.recipient_email
+              delete execPayload.recipient
+              delete execPayload.to_email
+              delete execPayload.to_address
+            }
             result = await composio.tools.execute(resolvedComposioAction, {
               userId: user.id,
               arguments: execPayload,
