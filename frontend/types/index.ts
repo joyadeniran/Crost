@@ -1,6 +1,21 @@
 // types/index.ts — All shared TypeScript types for Crost
 
 export type ActivationStage = 'draft' | 'review' | 'active' | 'paused' | 'deprecated'
+
+// Artifact sandbox lifecycle — mirrors ActivationStage for departments.
+// Transition rules enforced by DB trigger (enforce_artifact_status_transition):
+//   'discarded'  only reachable from 'draft' | 'review'  (pre-activation)
+//   'deprecated' only reachable from 'active' | 'paused' (post-activation)
+//   'active'     is immutable — field edits are rejected by the trigger
+export type ArtifactStatus = 'draft' | 'review' | 'active' | 'paused' | 'deprecated' | 'discarded'
+
+// Output classification — determines storage destination at creation time
+export type ArtifactTier = 'deliverable' | 'internal' | 'operational'
+
+// How a suggested action is executed
+export type SuggestedActionExecutionPath = 'internal' | 'external' | 'approval_gate'
+
+export type ToolDependencyType = 'requires' | 'optional' | 'fallback'
 export type DepartmentStatus = 'idle' | 'running' | 'awaiting_approval' | 'error' | 'paused'
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 export type ModelProvider = 'local' | 'gemini' | 'claude' | 'groq'
@@ -51,6 +66,9 @@ export type EventType =
   | 'model_pulled'
   | 'constitution_updated'
   | 'artifact_created'
+  | 'artifact_activated'
+  | 'artifact_discarded'
+  | 'artifact_deprecated'
   // Orc supervision events
   | 'orc_status_check'
   | 'orc_rebalance'
@@ -147,6 +165,9 @@ export interface SuggestedAction {
   status: SuggestedActionStatus
   approval_id: string | null      // UUID if blocked on approval
   result_artifact_id: string | null
+  // Routing: how this action reaches execution
+  execution_path: SuggestedActionExecutionPath
+  target_department: string | null  // for 'make_changes', 'generate_companion'
   created_at: string
   resolved_at: string | null
   created_by: string
@@ -157,6 +178,23 @@ export interface ArtifactSources {
   memo_ids: string[]       // Company memo UUIDs that informed this artefact
   kb_file_ids: string[]    // Knowledge base file UUIDs referenced
   tool_calls: Record<string, unknown>[]  // External tool calls made (Gmail, Slack, etc.)
+}
+
+export interface ArtifactToolDependency {
+  artifact_id: string
+  tool_slug: string
+  dependency_type: ToolDependencyType
+}
+
+export interface InternalInstruction {
+  id: string
+  slug: string
+  category: 'skill' | 'prompt' | 'directive'
+  content: string
+  version: string
+  created_by: string | null
+  updated_at: string
+  created_at: string
 }
 
 export interface Artifact {
@@ -171,7 +209,6 @@ export interface Artifact {
   metadata: Record<string, unknown>
   preview_url: string | null
   // Spec §9: file_url is REQUIRED — body fields are deprecated.
-  // New artefacts must always have a Supabase Storage URL.
   file_url: string
   // Spec §9.5: which skill slugs were loaded when producing this artefact.
   skills_used: string[]
@@ -182,6 +219,11 @@ export interface Artifact {
   file_size: number | null
   // Gallery v1: task_id for lineage tracking (Goal → Task → Artefact)
   task_id: string | null
+  // Sandbox lifecycle (Spec §9 updated)
+  status: ArtifactStatus
+  version: number                 // increments during 'review'; locked at 'active'
+  published_at: string | null     // set automatically when status reaches 'active'
+  approved_by: string | null      // founder user_id who approved, null if auto-promoted
   created_by: string
   created_at: string
 }
