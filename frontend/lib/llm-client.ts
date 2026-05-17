@@ -1265,6 +1265,7 @@ export async function runOrchestratorTask(
       confidence:       orcDecisionPayload.confidence,
       reasoning:        orcDecisionPayload.reasoning,
       risk_notes:       orcDecisionPayload.risk_notes,
+      risk_tier:        riskAssessment.tier,
     },
   }).eq('id', goalId)
 
