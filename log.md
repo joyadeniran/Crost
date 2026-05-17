@@ -5,6 +5,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 3 Week 6 · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Added
+- **`lib/orc-learning.ts`** — ORC self-improvement loop (three functions):
+  - `writeOutcomeToDecisionLog(goalId, outcome, description?)` — stamps `outcome`, `outcome_description`, and `outcome_at` on any `orc_decision_log` rows for the goal that are still unresolved. Fire-and-forget safe; never throws.
+  - `computeLearningInsights(userId, lookbackDays=7)` — aggregates resolved decisions into mode-level and risk-tier-level `ModeStats` (total, successful, failed, successRate), plus an overall success rate.
+  - `adjustRecencyScores(userId, lookbackDays=7)` — nudges `orc_context.recency_score` based on recent outcomes: tier-1 success → +3 to matched preference/strategy rows; tier-1 fail with no flagged risk → −5 to matched preference rows; tier-2/3 fail with flagged risk notes → +2 to relevant constraint rows. Scores clamped to [10, 100]. Returns count of rows updated.
+- **`app/api/cron/orc-learning/route.ts`** — Weekly CRON_SECRET-authed endpoint. Finds all distinct users with resolved decisions in the past 7 days, runs `computeLearningInsights` + `adjustRecencyScores` for each in a single pass, and returns per-user stats.
+- **`tests/unit/orc-learning.test.ts`** — 16 unit tests covering `writeOutcomeToDecisionLog` (update shape, null description, never-throws), `computeLearningInsights` (empty data, DB error, mode rates, tier rates, lookback param, throws), and `adjustRecencyScores` (no decisions, no context, tier-1 boost, tier-1 penalty, tier-2 constraint boost, score clamping, throws).
+
+### Changed
+- **`app/api/goals/[id]/route.ts`** — PATCH handler now calls `writeOutcomeToDecisionLog` fire-and-forget on both `completed` (outcome `'successful'`) and `failed` (outcome `'failed'`) status transitions.
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 3 Week 5 · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Added
+- **`supabase/migrations/20260517000010_recurring_missions.sql`** — `recurring_missions` table: id, user_id, title, founder_input, cadence (daily/weekly/monthly), cadence_day, next_run_at, last_run_at, last_goal_id, source_goal_id, is_active, auto_dispatch, risk_tier_limit (1–3), run_count, created_at, updated_at. RLS with service_role bypass; partial index on `(next_run_at, is_active) WHERE is_active = true`.
+- **`lib/recurring-missions.ts`** — Core scheduling library:
+  - `calculateNextRun(cadence, fromDate, cadenceDay?)` — daily: +1 day at 9am; weekly: +7 days at 9am; monthly: +1 month at 9am (end-of-month clamped). Seconds/ms always zero.
+  - `checkAutoDispatchEligibility(mission, orcDecision)` — gate: `auto_dispatch=true` + mode in `['quick_plan','direct_action']` + zero risk notes + `risk_tier ≤ risk_tier_limit`.
+  - `createRecurringMission(userId, input)` and `listRecurringMissions(userId)` — Supabase helpers.
+- **`app/api/cron/recurring-missions/route.ts`** — Cron handler (CRON_SECRET auth, `maxDuration: 300`). Finds due missions (`is_active=true`, `next_run_at ≤ now`). Per mission: creates goal row, runs `runOrchestratorTask`, optionally auto-dispatches all pending tasks via the internal dispatch endpoint, updates `next_run_at`/`last_run_at`/`run_count`.
+- **`app/api/recurring-missions/route.ts`** — GET (list) / POST (create) with Zod validation.
+- **`app/api/recurring-missions/[id]/route.ts`** — PUT (update, recomputes `next_run_at` if cadence changed) / DELETE (hard delete).
+- **`tests/unit/recurring-missions.test.ts`** — 16 unit tests: `calculateNextRun` (daily, weekly, monthly, clamping, cadence_day, precision), `checkAutoDispatchEligibility` (all gate conditions).
+
+### Changed
+- **`components/war-room/WarRoom.tsx`** — Added `RecurringMissionModal` (cadence radio, auto_dispatch checkbox, risk_tier_limit radio when auto_dispatch on) and "↻ Set as recurring" button in `SynthesisReportCard` footer (non-direct-response goals only). Shows "✓ Recurring mission set" after success.
+- **`lib/llm-client.ts`** — Persists `risk_tier: riskAssessment.tier` inside the `orc_decision` JSONB column on the `goals` row.
+- **`types/index.ts`** — Added `risk_tier?: 1 | 2 | 3` to `Goal.orc_decision`; added `RecurringCadence` and `RecurringMission` types.
+
+---
+
+## [Unreleased] — Test Suite Remediation · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Fixed
+- **43 pre-existing test failures** resolved across 3 test files; suite now 231/231:
+  - `lib/utils.ts` — `formatErrorMessage` SYSTEM_LIMIT_EXCEEDED branch now includes `tokensUsed` and `limit` from parsed data.
+  - `lib/artifact-transformers/index.ts` — `detectOutputType` accepts `content: unknown` (short-circuits on non-string pre-parsed objects); `skill === 'image'` routes to `transformToMarkdownResearch` (was 'jpg'); narrative detection threshold corrected for multi-string objects.
+  - `tests/unit/artifact-transformers.test.ts` — xlsx mock returns `{ SheetNames: [], Sheets: {} }` from `book_new`; added `encode_cell` and `json_to_sheet` to xlsx mock; docx constructors use `vi.fn(function() {})` (not arrow functions) for `new` compatibility; KB file fixture UUIDs made valid.
+  - `tests/unit/edge-cases.test.ts` — global `mockSupabaseClient` and inline memo-write builder both add `.is: vi.fn().mockReturnThis()`; `callLLM` calls updated to positional signature `callLLM(model, prompt)`; result assertions check `result.content`; auth guard test sets `COMPOSIO_API_KEY` env var; hallucination guard uses `mockResolvedValue` + `toBeGreaterThanOrEqual(2)`.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 2 · 2026-05-17
 > Branch: `claude/orc-orchestration-phase-1-RtqTf`
 

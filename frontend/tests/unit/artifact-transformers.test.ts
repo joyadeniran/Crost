@@ -14,25 +14,28 @@ import { describe, it, expect, vi } from 'vitest'
 // Mock heavy file-generation libs — we test the JSON parsing logic, not file I/O
 vi.mock('xlsx', () => ({
   utils: {
-    book_new: vi.fn(() => ({})),
+    book_new: vi.fn(() => ({ SheetNames: [], Sheets: {} })),
     aoa_to_sheet: vi.fn(() => ({})),
-    book_append_sheet: vi.fn(),
+    book_append_sheet: vi.fn((wb: any, ws: any, name: string) => { wb.SheetNames.push(name); wb.Sheets[name] = ws; }),
     sheet_add_aoa: vi.fn(),
+    encode_cell: vi.fn(() => 'A1'),
+    json_to_sheet: vi.fn(() => ({})),
+    encode_col: vi.fn(() => 'A'),
   },
   write: vi.fn(() => Buffer.from('mock-xlsx')),
 }))
 
 vi.mock('docx', () => ({
-  Document: vi.fn(() => ({})),
-  Paragraph: vi.fn(() => ({})),
-  TextRun: vi.fn(() => ({})),
+  Document:    vi.fn(function() {}),
+  Paragraph:   vi.fn(function() {}),
+  TextRun:     vi.fn(function() {}),
   HeadingLevel: { HEADING_1: 1, HEADING_2: 2 },
   AlignmentType: { CENTER: 'center', LEFT: 'left' },
   Packer: { toBuffer: vi.fn(async () => Buffer.from('mock-docx')) },
-  Table: vi.fn(() => ({})),
-  TableRow: vi.fn(() => ({})),
-  TableCell: vi.fn(() => ({})),
-  WidthType: { AUTO: 'auto', DXA: 'dxa' },
+  Table:     vi.fn(function() {}),
+  TableRow:  vi.fn(function() {}),
+  TableCell: vi.fn(function() {}),
+  WidthType:   { AUTO: 'auto', DXA: 'dxa' },
   BorderStyle: { SINGLE: 'single' },
 }))
 
@@ -410,8 +413,8 @@ describe('Artifact sources: citations', () => {
   it('sources.kb_file_ids is populated when KB files are used', () => {
     // Test the shape expected by the artifacts table
     const sources = {
-      memo_ids: ['memo-uuid-1'],
-      kb_file_ids: ['kb-file-uuid-1', 'kb-file-uuid-2'],
+      memo_ids: ['550e8400-e29b-41d4-a716-446655440001'],
+      kb_file_ids: ['550e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440003'],
       tool_calls: [{ tool: 'gmail.search_emails', result: 'truncated' }],
     }
 
