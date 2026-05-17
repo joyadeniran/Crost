@@ -21,6 +21,17 @@ import { loadSkillsForTask } from './skills'
 import { generateAndInsertSuggestedActions } from './suggested-actions'
 import { addTaskLog, logDecision, addArtifactReference } from './company-memo'
 import { DEPARTMENT_TOOL_RULES } from './tools/execute-tool-call'
+import {
+  fetchOrcContext,
+  seedOrcContextFromMemo,
+  formatOrcContextForPrompt,
+  enrichWithKnowledgeBase,
+  formatKbContextForPrompt,
+  orcDecisionGate,
+  type OrcDecision,
+} from './orc-decision-gate'
+import { detectCapabilityGaps, formatCapabilityGapsForPrompt } from './capability-checker'
+import { assessGoalRisk } from './risk-assessor'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -975,6 +986,7 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
   "is_direct_response": boolean,
   "direct_response": "string or null — use ONLY if is_direct_response is true",
   "clarification_question": "string or null — use ONLY if is_valid_goal is false",
+  "response_mode": "assistant|clarify|quick_plan|full_plan|direct_action|command|escalate — confirm or override the pre-classifier hint",
   "plan": {
     "goal": "string",
     "risk_note": "string — mandatory one-sentence risk assessment",
@@ -996,7 +1008,7 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
   }
 }
 
-Rules: 
+Rules:
 1. COMPLEX GOALS: If the goal requires substantive work that a department agent should produce (a real document, campaign, codebase, research report, etc.) set is_valid_goal=true and is_direct_response=false and provide a plan.
 2. CONVERSATIONAL QUERIES & TRIVIAL TASKS: Use is_direct_response=true for: (a) simple questions about capabilities, company state, or help ("Who are you?", "What can you do?", "What is our mission?"); (b) tiny self-contained requests answerable in a few sentences ("Write hello world HTML", "Give me a sample subject line", "Translate this word"); (c) any request where the complete answer fits in a single direct_response without needing a department agent. DO NOT draft a multi-task plan for these.
 3. PLANNING THRESHOLD: Reserve Planning Mode (is_direct_response=false) for goals that genuinely need one or more department agents to do meaningful work — a real deliverable, a real action (send email, post content, run research), or coordination across multiple steps. The presence of action verbs alone ("write", "create", "build", "make") does NOT force Planning Mode if the task is trivially small. Apply judgment: "Write hello world HTML" → direct response; "Write a full email marketing campaign targeting SMBs" → plan.
@@ -1006,7 +1018,29 @@ Rules:
 7. ALWAYS provide a risk_note in the plan.
 8. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
 9. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
-10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."`
+10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."
+11. RESPONSE MODE: A pre-classifier has suggested a response_mode (see ORCHESTRATOR MODE HINT in the prompt). Confirm it in your response_mode field, or override it if your analysis of the full context disagrees. This field is optional but strongly preferred.`
+
+function getModeInstructions(mode: string): string {
+  switch (mode) {
+    case 'assistant':
+      return 'Set is_direct_response=true. Answer directly from context — concise, specific, warm. End with 2-3 concrete suggested next steps embedded in your direct_response text.'
+    case 'direct_action':
+      return 'Set is_direct_response=true for read-only actions. For write actions (send, post, create), set is_valid_goal=true with exactly 1 task that triggers HITL approval. No multi-task plan — this is a single atomic action.'
+    case 'clarify':
+      return 'Set is_valid_goal=false. Write clarification_question as 1-2 focused conversational questions in prose — not a form, not bullet points, not multiple choice. State your reasonable assumptions first ("I\'m assuming X based on Y"). Then ask only what would materially change the plan. Keep it under 4 sentences total.'
+    case 'quick_plan':
+      return 'Generate a focused plan of 3-5 tasks maximum. Prefer parallel execution (minimal depends_on). All tasks should have risk_level "low" or "medium". Avoid over-engineering. Assume reasonable defaults and document them in risk_note rather than asking.'
+    case 'full_plan':
+      return 'This is a complex strategic goal. Generate a thorough plan with 5-15 tasks. Establish clear task dependencies. Organize tasks into logical phases in the risk_note. Surface all risks, resource needs, and timeline estimates in risk_note.'
+    case 'command':
+      return 'Set is_direct_response=true. Execute or acknowledge the command. Confirm what was done or provide the requested system information. Be brief.'
+    case 'escalate':
+      return 'Set is_direct_response=true. The goal may exceed current capabilities. Do NOT attempt to plan something that cannot be delivered. Instead, explain clearly what CAN be done internally, and offer 2-3 concrete alternative approaches in direct_response.'
+    default:
+      return ''
+  }
+}
 
 function formatConversationHistory(history: Array<{ role: string; content: string; ts?: string }>): string {
   if (!history.length) return 'None'
@@ -1103,14 +1137,48 @@ export async function runOrchestratorTask(
     .map(t => `- [${t.status.toUpperCase()}] ${t.label} (task_id: ${t.task_id}, goal_id: ${t.goal_id}, Dept: ${t.dept_slug})`)
     .join('\n')
 
-  const systemMemory = await buildOrcContext(userId)
+  // Brains 1 + 3: parallel fetch of memo context, structured Orc context, capability
+  // inventory, and KB enrichment — all fail-open so nothing blocks goal dispatch.
+  const [systemMemory, orcContext, capSummary, kbMatches] = await Promise.all([
+    buildOrcContext(userId),
+    fetchOrcContext(userId),
+    detectCapabilityGaps(founderInput),
+    enrichWithKnowledgeBase(founderInput, userId),
+  ])
+
+  // Fire-and-forget auto-seed from company_memo on first run
+  if (userId) seedOrcContextFromMemo(userId).catch(() => {})
+
+  // Risk assessment (synchronous — uses data already fetched above)
+  const riskAssessment = assessGoalRisk(founderInput, orcContext, capSummary.gaps)
+
+  // Brain 2: classify intent, injecting pre-computed risk notes so the classifier
+  // has full context before choosing a response mode.
+  const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory, riskAssessment.risk_notes)
+
+  const orcContextSummary = formatOrcContextForPrompt(orcContext)
+  const capabilityGapsText = formatCapabilityGapsForPrompt(capSummary)
+  const kbContextText = formatKbContextForPrompt(kbMatches)
+  const modeInstructions = getModeInstructions(decision.mode)
+  const modeHint = [
+    `ORCHESTRATOR MODE HINT (pre-classified): ${decision.mode} (confidence: ${decision.confidence.toFixed(2)})`,
+    `Reasoning: ${decision.reasoning}`,
+    decision.risk_notes.length > 0 ? `Risk flags: ${decision.risk_notes.join('; ')}` : '',
+    riskAssessment.assumptions.length > 0 ? `Assumptions: ${riskAssessment.assumptions.join('; ')}` : '',
+    modeInstructions ? `Mode instructions: ${modeInstructions}` : '',
+  ].filter(Boolean).join('\n')
+
   const conversationContext = formatConversationHistory(conversationHistory)
   const prompt = [
     `GOAL: ${founderInput}`,
     forcePlan ? 'FORCE PLANNING MODE: The founder has explicitly bypassed clarification and trusts your judgment. You MUST draft the best possible plan now using reasonable assumptions and all available context (System Memory/Memos/KB). DO NOT return is_valid_goal=false. You are authorized to proceed with partial context.' : '',
+    modeHint,
+    capabilityGapsText ? `Capability Intelligence:\n${capabilityGapsText}` : '',
+    kbContextText      ? `Knowledge Base Context:\n${kbContextText}` : '',
     `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
     formattedRecentTasks ? `Recent Workspace Tasks:\n${formattedRecentTasks}` : '',
     `Conversation History:\n${conversationContext}`,
+    orcContextSummary ? `Structured Company Context:\n${orcContextSummary}` : '',
     `System Memory:\n${systemMemory}`,
   ].filter(Boolean).join('\n\n')
 
@@ -1186,6 +1254,36 @@ export async function runOrchestratorTask(
   
   if (!result.ok) throw new Error(result.reason)
 
+  // Persist the pre-classifier decision regardless of which branch we take below
+  const orcDecisionPayload: OrcDecision = result.response_mode
+    ? { ...decision, mode: result.response_mode } // LLM overrode the pre-classifier
+    : decision
+  await supabase.from('goals').update({
+    response_mode: orcDecisionPayload.mode,
+    orc_decision: {
+      mode:             orcDecisionPayload.mode,
+      confidence:       orcDecisionPayload.confidence,
+      reasoning:        orcDecisionPayload.reasoning,
+      risk_notes:       orcDecisionPayload.risk_notes,
+    },
+  }).eq('id', goalId)
+
+  // Record in decision log for the self-improvement loop (fire-and-forget)
+  if (userId) {
+    supabase.from('orc_decision_log').insert({
+      user_id:         userId,
+      goal_id:         goalId,
+      decision_type:   'response_mode_selection',
+      founder_intent:  founderInput.slice(0, 500),
+      orc_choice:      orcDecisionPayload.mode,
+      confidence:      orcDecisionPayload.confidence,
+      assumptions:     { list: riskAssessment.assumptions },
+      risk_tier:       riskAssessment.tier,
+      risk_notes:      orcDecisionPayload.risk_notes,
+      capability_gaps: capSummary.gaps.map(g => ({ slug: g.slug, name: g.name, availability: g.availability })),
+    }).then(() => {}).catch(() => {})
+  }
+
   if (result.is_valid_goal === false) {
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: result.clarification_question, ts: new Date().toISOString() }]
     await supabase.from('goals').update({ status: 'clarifying', orc_conversation: updatedHistory }).eq('id', goalId)
@@ -1196,11 +1294,11 @@ export async function runOrchestratorTask(
   if (result.is_direct_response === true) {
     const directResponse = result.direct_response || 'I have processed your request.'
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: directResponse, ts: new Date().toISOString() }]
-    
-    await supabase.from('goals').update({ 
-      status: 'completed', 
+
+    await supabase.from('goals').update({
+      status: 'completed',
       outcome: directResponse,
-      orc_conversation: updatedHistory 
+      orc_conversation: updatedHistory
     }).eq('id', goalId)
 
     // Also create a memo so it shows up in the UI (SynthesisReportCard)

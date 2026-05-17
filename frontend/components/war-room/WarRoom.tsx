@@ -16,6 +16,111 @@ import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedAc
 import { formatErrorMessage, resolveIcon } from '@/lib/utils'
 import { getRandomProcessingMessage, getProcessingMessageByIndex } from '@/lib/processing-copy'
 
+// ─── Orc mode config ──────────────────────────────────────────────────────────
+
+type OrcResponseMode = 'assistant' | 'clarify' | 'quick_plan' | 'full_plan' | 'direct_action' | 'command' | 'escalate'
+
+const MODE_META: Record<OrcResponseMode, { label: string; color: string; bg: string; border: string; description: string }> = {
+  assistant:     { label: 'ASSISTANT',     color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', description: 'Direct answer from context' },
+  clarify:       { label: 'CLARIFYING',    color: '#facc15', bg: 'rgba(234,179,8,0.10)',   border: 'rgba(234,179,8,0.25)',   description: 'A few questions before planning' },
+  quick_plan:    { label: 'QUICK PLAN',    color: '#4ade80', bg: 'rgba(34,197,94,0.10)',   border: 'rgba(34,197,94,0.25)',   description: 'Routine goal — 3-5 tasks' },
+  full_plan:     { label: 'FULL PLAN',     color: '#818cf8', bg: 'rgba(99,102,241,0.10)',  border: 'rgba(99,102,241,0.25)',  description: 'Strategic multi-department analysis' },
+  direct_action: { label: 'DIRECT ACTION', color: '#38bdf8', bg: 'rgba(56,189,248,0.10)', border: 'rgba(56,189,248,0.25)', description: 'Single action with HITL approval' },
+  command:       { label: 'COMMAND',       color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', description: 'System command' },
+  escalate:      { label: 'ESCALATE',      color: '#fb923c', bg: 'rgba(249,115,22,0.10)',  border: 'rgba(249,115,22,0.25)',  description: 'Capability gap — alternatives offered' },
+}
+
+function OrcModeBadge({ mode, confidence }: { mode: string; confidence?: number }) {
+  const meta = MODE_META[mode as OrcResponseMode]
+  if (!meta) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={meta.description}>
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        background: meta.bg,
+        color: meta.color,
+        border: `1px solid ${meta.border}`,
+        borderRadius: 4,
+        padding: '2px 7px',
+        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontSize: 9,
+        letterSpacing: '0.07em',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: meta.color, display: 'inline-block', flexShrink: 0 }} />
+        {meta.label}
+      </span>
+      {typeof confidence === 'number' && confidence < 0.75 && (
+        <span style={{ fontSize: 9, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+          {Math.round(confidence * 100)}%
+        </span>
+      )}
+    </div>
+  )
+}
+
+function OrcReasoningPanel({ decision }: {
+  decision?: { mode: string; confidence: number; reasoning: string; risk_notes: string[] } | null
+}) {
+  const [open, setOpen] = useState(false)
+  if (!decision) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontSize: 9,
+          color: 'var(--text-4)',
+          letterSpacing: '0.06em',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        <span style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
+        {open ? 'HIDE ORC\'S REASONING' : 'SHOW ORC\'S REASONING'}
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 8,
+          padding: '10px 12px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+          fontSize: 11,
+          fontFamily: 'var(--font-dm-sans, sans-serif)',
+          color: 'var(--text-3)',
+          lineHeight: 1.5,
+        }}>
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-4)', letterSpacing: '0.07em' }}>CLASSIFICATION · </span>
+            <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.07em' }}>{decision.mode.toUpperCase()} ({Math.round(decision.confidence * 100)}% confidence)</span>
+          </div>
+          <div style={{ marginBottom: decision.risk_notes?.length > 0 ? 8 : 0 }}>{decision.reasoning}</div>
+          {decision.risk_notes?.length > 0 && (
+            <div>
+              {decision.risk_notes.map((note, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 4 }}>
+                  <span style={{ color: '#fb923c', fontSize: 10, flexShrink: 0 }}>⚠</span>
+                  <span style={{ fontSize: 11 }}>{note}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Risk colours ─────────────────────────────────────────────────────────────
 const RISK_COLOURS: Record<RiskLevel, { bg: string; text: string; border: string }> = {
   low:      { bg: 'rgba(34,197,94,0.12)',  text: '#4ade80', border: 'rgba(34,197,94,0.3)' },
@@ -641,7 +746,7 @@ function CommandThread({
 
 // ─── PlanningIndicator ────────────────────────────────────────────────────────
 
-function PlanningIndicator() {
+function PlanningIndicator({ mode }: { mode?: string | null }) {
   const [dots, setDots] = useState('.')
   const [msg, setMsg] = useState(() => getRandomProcessingMessage())
 
@@ -653,6 +758,9 @@ function PlanningIndicator() {
       clearInterval(mInterval)
     }
   }, [])
+
+  const modeMeta = mode ? MODE_META[mode as OrcResponseMode] : null
+
   return (
     <div style={{
       background: 'var(--bg-2)',
@@ -665,14 +773,14 @@ function PlanningIndicator() {
         width: 32, height: 32,
         borderRadius: '50%',
         border: '2px solid var(--border)',
-        borderTopColor: '#facc15',
+        borderTopColor: modeMeta?.color ?? '#facc15',
         animation: 'spin 0.8s linear infinite',
         margin: '0 auto 12px',
       }} />
       <div style={{
         fontFamily: 'var(--font-dm-mono, monospace)',
         fontSize: 11,
-        color: '#facc15',
+        color: modeMeta?.color ?? '#facc15',
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
         minHeight: '1.2em'
@@ -685,8 +793,13 @@ function PlanningIndicator() {
         color: 'var(--text-3)',
         marginTop: 6,
       }}>
-        Orc is coordinating departments and drafting your plan
+        {modeMeta ? modeMeta.description : 'Orc is coordinating departments and drafting your plan'}
       </div>
+      {modeMeta && (
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+          <OrcModeBadge mode={mode!} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1060,15 +1173,25 @@ function PlanCard({
         justifyContent: 'space-between',
         gap: 12,
       }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
-            fontSize: 9,
-            color: 'var(--text-3)',
-            letterSpacing: '0.08em',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             marginBottom: 4,
+            flexWrap: 'wrap',
           }}>
-            ORCHESTRATOR PLAN · {plan.tasks.length} TASKS
+            <span style={{
+              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontSize: 9,
+              color: 'var(--text-3)',
+              letterSpacing: '0.08em',
+            }}>
+              ORCHESTRATOR PLAN · {plan.tasks.length} TASKS
+            </span>
+            {goal.response_mode && (
+              <OrcModeBadge mode={goal.response_mode} confidence={goal.orc_decision?.confidence} />
+            )}
           </div>
           <div style={{
             fontFamily: 'var(--font-dm-sans, sans-serif)',
@@ -1078,6 +1201,7 @@ function PlanCard({
           }}>
             {goal.title}
           </div>
+          <OrcReasoningPanel decision={goal.orc_decision ?? null} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -1291,7 +1415,7 @@ function MarkdownLite({ text }: { text: string }) {
   )
 }
 
-function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss: () => void }) {
+function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDismiss: () => void, goal?: Goal | null }) {
   const [report, setReport] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -1333,18 +1457,21 @@ function SynthesisReportCard({ goalId, onDismiss }: { goalId: string, onDismiss:
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
-          <span style={{ 
-            fontSize: 10, 
-            fontWeight: 700, 
-            color: 'var(--accent)', 
-            letterSpacing: '0.15em', 
-            textTransform: 'uppercase',
-            display: 'block',
-            marginBottom: 6,
-            fontFamily: 'var(--font-dm-mono, monospace)',
-          }}>
-            {isDirectResponseReport ? 'Orc Assistant' : 'Strategic Output'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--accent)',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--font-dm-mono, monospace)',
+            }}>
+              {isDirectResponseReport ? 'Orc Assistant' : 'Strategic Output'}
+            </span>
+            {goal?.response_mode && (
+              <OrcModeBadge mode={goal.response_mode} confidence={goal.orc_decision?.confidence} />
+            )}
+          </div>
           <h3 style={{ 
             fontFamily: 'var(--font-syne, sans-serif)', 
             fontSize: 24, 
@@ -2233,7 +2360,7 @@ export function WarRoom() {
         </div>
       )}
 
-      {isPlanning && <PlanningIndicator />}
+      {isPlanning && <PlanningIndicator mode={activeGoal?.response_mode} />}
 
       {isClarifying && (
         <OrcDialogue
@@ -2261,9 +2388,10 @@ export function WarRoom() {
       )}
 
       {isCompleted && activeGoal && (
-        <SynthesisReportCard 
-          goalId={activeGoal.id} 
-          onDismiss={() => setActiveGoal(null)} 
+        <SynthesisReportCard
+          goalId={activeGoal.id}
+          onDismiss={() => setActiveGoal(null)}
+          goal={activeGoal}
         />
       )}
 
