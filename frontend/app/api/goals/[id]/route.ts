@@ -84,6 +84,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       runOrcReport(params.id).catch(err => {
         console.error('[PATCH /api/goals/:id] Synthesis failed:', err)
       })
+      const { writeOutcomeToDecisionLog } = await import('@/lib/orc-learning')
+      writeOutcomeToDecisionLog(params.id, 'successful', data?.outcome ?? undefined).catch(() => {})
+    }
+
+    // Log failed outcome
+    if (parsed.status === 'failed') {
+      const { writeOutcomeToDecisionLog } = await import('@/lib/orc-learning')
+      writeOutcomeToDecisionLog(params.id, 'failed', data?.outcome ?? undefined).catch(() => {})
     }
 
     // On cancel: reject all non-terminal tasks so the chain stops cleanly
