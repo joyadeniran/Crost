@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (artifact.goal_id && artifact.task_id) {
       const { data: taskData } = await supabase
         .from('goal_tasks')
-        .select('action, label, reasoning, params, expected_deliverable')
+        .select('action, label, reasoning, params, expected_deliverable, risk_level, model')
         .eq('goal_id', artifact.goal_id)
         .eq('task_id', artifact.task_id)
         .single()
