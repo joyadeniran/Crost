@@ -45,6 +45,7 @@ function mockSupabaseClient() {
     match: vi.fn().mockReturnThis(),
     not: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
   }
   return {
     from: vi.fn(() => builder),
@@ -85,12 +86,9 @@ describe('callLLM — AbortError / timeout', () => {
       .mockRejectedValueOnce(abortError)         // primary times out
       .mockResolvedValueOnce(litellmResponse('fallback succeeded'))
 
-    const result = await callLLM({
-      model: 'groq/llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'test' }],
-    })
+    const result = await callLLM('groq/llama-3.3-70b-versatile', 'test')
 
-    expect(result).toBe('fallback succeeded')
+    expect(result.content).toBe('fallback succeeded')
     // AbortError should trigger fallback → 2 fetch calls
     expect(fetch).toHaveBeenCalledTimes(2)
   })
@@ -102,10 +100,7 @@ describe('callLLM — AbortError / timeout', () => {
     vi.mocked(fetch).mockRejectedValue(abortError)
 
     await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-      })
+      callLLM('groq/llama-3.3-70b-versatile', 'test')
     ).rejects.toThrow()
 
     // All 3 fallback models tried before giving up
@@ -120,13 +115,8 @@ describe('callLLM — AbortError / timeout', () => {
       .mockRejectedValueOnce(abortError)
       .mockResolvedValueOnce(litellmResponse('ok'))
 
-    // Should NOT throw SYSTEM_LIMIT_EXCEEDED; AbortError is retryable
-    await expect(
-      callLLM({
-        model: 'groq/llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'test' }],
-      })
-    ).resolves.toBe('ok')
+    const result = await callLLM('groq/llama-3.3-70b-versatile', 'test')
+    expect(result.content).toBe('ok')
   })
 })
 
@@ -279,27 +269,30 @@ describe('Onboarding store: data cleared on dashboard transition', () => {
 
 describe('POST /api/worker/execute — auth guard', () => {
   it('request without session or internal secret is rejected with 401', async () => {
-    // Mock the auth client to return no user (unauthenticated)
-    const { createSupabaseServerComponentClient } = await import('@/lib/supabase')
-    vi.mocked(createSupabaseServerComponentClient as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
-      },
-    })
+    const originalKey = process.env.COMPOSIO_API_KEY
+    process.env.COMPOSIO_API_KEY = 'mock-composio-key'
+    try {
+      const { createSupabaseServerComponentClient } = await import('@/lib/supabase')
+      vi.mocked(createSupabaseServerComponentClient as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        auth: {
+          getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+        },
+      })
 
-    // Simulate calling the route without auth cookies and without internal secret
-    const { POST } = await import('@/app/api/worker/execute/route')
-    const req = new Request('http://localhost/api/worker/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // No x-crost-internal-secret header
-      body: JSON.stringify({ taskId: 'task-123', goalId: 'goal-456', userId: 'attacker-user-id', toolName: 'TEST', args: {} }),
-    })
+      const { POST } = await import('@/app/api/worker/execute/route')
+      const req = new Request('http://localhost/api/worker/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: 'task-123', goalId: 'goal-456', userId: 'attacker-user-id', toolName: 'TEST', args: {} }),
+      })
 
-    const response = await POST(req as Parameters<typeof POST>[0])
-    expect(response.status).toBe(401)
-    const body = await response.json()
-    expect(body.error).toMatch(/unauthenticated/i)
+      const response = await POST(req as Parameters<typeof POST>[0])
+      expect(response.status).toBe(401)
+      const body = await response.json()
+      expect(body.error).toMatch(/unauthenticated/i)
+    } finally {
+      process.env.COMPOSIO_API_KEY = originalKey
+    }
   })
 
   it('internal call with valid x-crost-internal-secret passes auth gate', async () => {
@@ -344,32 +337,22 @@ describe('runOrchestratorTask — hallucination guard sets goal to error on seco
       ],
     })
 
-    // Both calls return the hallucinated plan (retry also fails)
-    vi.mocked(fetch)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [{ message: { content: hallucinatedPlan }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
-        }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [{ message: { content: hallucinatedPlan }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
-        }),
-      } as Response)
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: hallucinatedPlan }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
+      }),
+    } as Response)
 
     // Should throw (after updating goal to error state)
     await expect(
       runOrchestratorTask('invalid goal', 'goal-error-test-id', [], false)
     ).rejects.toThrow()
 
-    // fetch called twice: initial + one retry
-    expect(fetch).toHaveBeenCalledTimes(2)
+    // fetch called at least twice: initial + one retry (plus any orcDecisionGate calls)
+    expect(fetch.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 })
 
@@ -399,17 +382,34 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
     const { createServerSupabaseClient } = await import('@/lib/supabase')
     const mockClient = mockSupabaseClient()
     const fromMock = mockClient.from as ReturnType<typeof vi.fn>
+    const mockDeptRow = {
+      id: 'dept-1', slug: 'marketing', name: 'Marketing', status: 'idle',
+      user_id: 'test-user-id', created_by: 'test-user-id',
+      persona_prompt: 'You are a marketing assistant.',
+      capabilities: [], restrictions: [],
+    }
     fromMock.mockImplementation((table: string) => {
       const builder = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        single: vi.fn().mockResolvedValue(
+          table === 'goals' ? { data: { created_by: 'test-user-id' }, error: null } : { data: null, error: null }
+        ),
+        maybeSingle: vi.fn().mockResolvedValue(
+          table === 'departments' ? { data: mockDeptRow, error: null } : { data: null, error: null }
+        ),
         insert: vi.fn().mockImplementation(() => {
           if (table === 'company_memos') {
-            return Promise.resolve({ data: null, error: { message: 'DB write failed', code: '23505' } })
+            const result = Promise.resolve({ data: null, error: { message: 'DB write failed', code: '23505' } })
+            const chain: any = result
+            chain.select = vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB write failed', code: '23505' } }) })
+            return chain
           }
-          return Promise.resolve({ data: [{ id: 'ok' }], error: null })
+          const chain: any = {
+            select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'ok' }, error: null }) }),
+            then: (resolve: any) => Promise.resolve({ data: [{ id: 'ok' }], error: null }).then(resolve),
+          }
+          return chain
         }),
         update: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
@@ -418,6 +418,11 @@ describe('runWorkerTask — memo write failure surfaces CR-DB-MEMO', () => {
         or: vi.fn().mockReturnThis(),
         not: vi.fn().mockReturnThis(),
         gte: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        neq: vi.fn().mockReturnThis(),
+        match: vi.fn().mockReturnThis(),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        delete: vi.fn().mockReturnThis(),
       }
       return builder
     })

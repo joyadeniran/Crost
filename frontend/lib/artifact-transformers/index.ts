@@ -30,7 +30,7 @@ export interface OutputDetection {
  * override weaker response-shape heuristics further down — this prevents an
  * LLM that drifted into narrative from silently producing the wrong file type.
  */
-export function detectOutputType(content: string, isJson: boolean, taskHint?: string): OutputDetection {
+export function detectOutputType(content: unknown, isJson: boolean, taskHint?: string): OutputDetection {
   // Normalise the founder-task hint so we can run keyword checks on it.
   const hintLower = (taskHint || '').toLowerCase();
   const hintDemandsXlsx = /\b(excel|xlsx|spreadsheet|workbook|budget|forecast|projection|tracker|p&l|balance sheet|income statement|cash[- ]flow|kpi tracker|financial model|excel sheet|excel template)\b/.test(hintLower);
@@ -80,15 +80,16 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
     return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
   }
 
-  // Strip markdown fences that LLMs often wrap JSON in
-  const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-
   let parsed: any;
-  try {
-    parsed = JSON.parse(stripped);
-  } catch {
-    // Couldn't parse despite isJson flag — safe fallback
-    return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+  if (typeof content !== 'string') {
+    parsed = content;
+  } else {
+    const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    try {
+      parsed = JSON.parse(stripped);
+    } catch {
+      return { sourceFormat: 'text', contentType: 'generic', targetFormat: 'md', transformer: transformToMarkdownResearch };
+    }
   }
 
   // ── CHECK 0a: Skill contract (highest priority — LLM followed SKILL.md) ─
@@ -110,8 +111,7 @@ export function detectOutputType(content: string, isJson: boolean, taskHint?: st
   }
 
   if (parsed?.skill === 'image') {
-    // Generate actual image instead of falling back to design spec markdown
-    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
+    return { sourceFormat: 'json', contentType: 'image', targetFormat: 'md', transformer: transformToMarkdownResearch };
   }
 
   // ── CHECK 0: Explicit format field set by department prompt ─────────────
@@ -241,7 +241,7 @@ function containsTableLikeData(obj: any): boolean {
 function containsNarrativeLikeData(obj: any): boolean {
   const values = flattenValues(obj);
   const longStrings = values.filter(v => typeof v === 'string' && (v as string).length > 50);
-  return longStrings.length > 2 && longStrings.join(' ').length > 500;
+  return longStrings.length > 2 && longStrings.join(' ').length > 150;
 }
 
 /** Recursively extract all values from nested object */

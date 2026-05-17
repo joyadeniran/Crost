@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('goals').update({ status: 'planning' }).eq('id', goal.id)
 
       // 3. Run orchestrator — waits for completion
-      await runOrchestratorTask(mission.founder_input, goal.id, mission.user_id)
+      await runOrchestratorTask(mission.founder_input, goal.id)
 
       // 4. Reload goal to get orc_decision
       const { data: updatedGoal } = await supabase
