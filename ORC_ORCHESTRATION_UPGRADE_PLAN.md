@@ -1,7 +1,7 @@
 # ORC ORCHESTRATION UPGRADE PLAN
 ## Transforming Orc into the Founder's Chief of Staff
 
-**Status:** Planning Phase  
+**Status:** Phase 3 Complete — Phase 4 next  
 **Created:** May 16, 2026  
 **Scope:** Comprehensive orchestration layer redesign for maximum founder trust and autonomy  
 **Owner:** Engineering (Orc is the boss, not a feature — treat accordingly)
@@ -950,19 +950,20 @@ Continue? [YES, PROCEED] [SCALE DOWN] [SKIP FOR NOW]
 
 ## F.3 Phase 3: Operations (Weeks 5-6)
 
-### Week 5: Recurring Missions & Scheduling
-- [ ] Build `recurring_missions` table
-- [ ] Implement scheduler (cron job or background worker)
-- [ ] Implement auto-dispatch logic for low-risk recurring work
-- [ ] Build UI for "set up recurring goal"
+### Week 5: Recurring Missions & Scheduling ✅
+- [x] Build `recurring_missions` table (`20260517000010_recurring_missions.sql`)
+- [x] Implement scheduler (cron job — `app/api/cron/recurring-missions/route.ts`)
+- [x] Implement auto-dispatch logic for low-risk recurring work (`checkAutoDispatchEligibility`)
+- [x] Build UI for "set up recurring goal" (`RecurringMissionModal` in WarRoom)
 
 **Metrics:** 5+ recurring missions running in production
 
-### Week 6: Learning & Optimization
-- [ ] Build `orc_decision_log` table
-- [ ] Implement decision outcome tracking
-- [ ] Build weekly learning query (what worked? what didn't?)
-- [ ] Auto-adjust Orc confidence scores based on outcomes
+### Week 6: Learning & Optimization ✅
+- [x] Build `orc_decision_log` table (migration `20260516000009` — Phase 2)
+- [x] Implement decision outcome tracking (`writeOutcomeToDecisionLog` called on completed/failed)
+- [x] Build weekly learning query (`computeLearningInsights` — mode/tier success rates)
+- [x] Auto-adjust Orc confidence scores based on outcomes (`adjustRecencyScores` — [10,100] clamped)
+- [x] Weekly cron sweep (`app/api/cron/orc-learning/route.ts`)
 
 **Metrics:** Orc decision accuracy improves week-over-week by 2%+
 

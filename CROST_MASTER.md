@@ -3,9 +3,61 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.98  
+**Current Version:** 12.00  
 **Last Updated:** May 17, 2026  
-**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 1 & 2 complete on branch `claude/orc-orchestration-phase-1-RtqTf`, pending merge to main.
+**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 3 (Weeks 5 & 6) complete on branch `claude/orc-phase3-recurring-missions`, pending merge to main.
+
+---
+
+## Session v12.00 — ORC Orchestration: Learning & Optimization (Phase 3 Week 6)
+**Date**: May 17, 2026  **Status**: 🔄 In Development  
+**Impact**: Closes the ORC feedback loop. Every goal that reaches a terminal status (completed or failed) now writes its outcome back to `orc_decision_log`. A weekly cron sweeps all active users through `computeLearningInsights` + `adjustRecencyScores`, nudging Brain 1 memory toward patterns that proved correct and away from assumptions that led to failure.
+
+### What Was Built
+1. **`lib/orc-learning.ts`** — Three-function learning library:
+   - `writeOutcomeToDecisionLog(goalId, outcome, description?)` — stamps `outcome`, `outcome_description`, `outcome_at` on unresolved `orc_decision_log` rows for the goal. Fire-and-forget safe.
+   - `computeLearningInsights(userId, lookbackDays=7)` — aggregates resolved decisions into mode/tier success rates (`ModeStats`) and an overall success rate.
+   - `adjustRecencyScores(userId, lookbackDays=7)` — applies signal rules to `orc_context.recency_score`: tier-1 success → +3 to matched preference/strategy rows; tier-1 fail (no flagged risk) → −5 to matched preference rows; tier-2/3 fail (flagged risk) → +2 to relevant constraint rows. Clamped [10, 100].
+2. **`app/api/cron/orc-learning/route.ts`** — Weekly CRON_SECRET-authed sweep. Queries all users with resolved decisions in the past 7 days, runs the learning pair for each, returns per-user stats.
+3. **`app/api/goals/[id]/route.ts` PATCH** — Now calls `writeOutcomeToDecisionLog` fire-and-forget on both `completed` (→ `'successful'`) and `failed` (→ `'failed'`) transitions.
+4. **Test Coverage**: `orc-learning.test.ts` — 16 unit tests across all three functions and edge cases. Full suite: 231/231 passing.
+
+### Files Changed
+- `frontend/lib/orc-learning.ts` (new)
+- `frontend/app/api/cron/orc-learning/route.ts` (new)
+- `frontend/app/api/goals/[id]/route.ts`
+- `frontend/tests/unit/orc-learning.test.ts` (new)
+
+---
+
+## Session v11.99 — ORC Orchestration: Recurring Missions & Test Remediation (Phase 3 Week 5)
+**Date**: May 17, 2026  **Status**: 🔄 In Development  
+**Impact**: Orc can now execute goals on a repeating schedule. Founders set any goal as recurring (daily/weekly/monthly), configure an auto-dispatch gate (risk tier limit + mode allowlist), and let Orc run it autonomously. Separately, 43 pre-existing test failures were resolved; the unit suite is fully green at 231/231.
+
+### What Was Built
+1. **`recurring_missions` Table** (migration `20260517000010`): Stores cadence, auto_dispatch flag, risk_tier_limit, next_run_at, run_count. RLS with service_role bypass; partial index for efficient cron polling.
+2. **`lib/recurring-missions.ts`**: `calculateNextRun` (always fires at 9am, handles end-of-month clamping); `checkAutoDispatchEligibility` (mode + zero risk notes + tier gate); `createRecurringMission` / `listRecurringMissions` helpers.
+3. **`app/api/cron/recurring-missions/route.ts`**: CRON_SECRET-authed cron handler (`maxDuration: 300`). Per due mission: create goal → run orchestrator → check eligibility → dispatch pending tasks via internal endpoint → update `next_run_at` + `run_count`.
+4. **REST API**: `app/api/recurring-missions/route.ts` (GET/POST) and `app/api/recurring-missions/[id]/route.ts` (PUT/DELETE).
+5. **War Room UI**: `RecurringMissionModal` (cadence picker, auto_dispatch toggle, risk_tier_limit selector) wired into `SynthesisReportCard` footer via "↻ Set as recurring" button.
+6. **`lib/llm-client.ts`**: `risk_tier` persisted in `goals.orc_decision` JSONB.
+7. **Test Remediation (43 fixes)**: `utils.ts` SYSTEM_LIMIT_EXCEEDED branch; `detectOutputType` accepts `content: unknown`; `skill === 'image'` routing corrected; xlsx mock completed (`book_new`, `encode_cell`, `json_to_sheet`); docx constructors use `function()` not arrow fn; `.is()` added to Supabase mock builder; `callLLM` positional signature; auth guard env var; hallucination guard assertion relaxed.
+8. **Test Coverage**: `recurring-missions.test.ts` — 16 unit tests. Full suite: 231/231 passing.
+
+### Files Changed
+- `supabase/migrations/20260517000010_recurring_missions.sql` (new)
+- `frontend/lib/recurring-missions.ts` (new)
+- `frontend/app/api/cron/recurring-missions/route.ts` (new)
+- `frontend/app/api/recurring-missions/route.ts` (new)
+- `frontend/app/api/recurring-missions/[id]/route.ts` (new)
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/lib/llm-client.ts`
+- `frontend/types/index.ts`
+- `frontend/lib/utils.ts`
+- `frontend/lib/artifact-transformers/index.ts`
+- `frontend/tests/unit/recurring-missions.test.ts` (new)
+- `frontend/tests/unit/artifact-transformers.test.ts`
+- `frontend/tests/unit/edge-cases.test.ts`
 
 ---
 
