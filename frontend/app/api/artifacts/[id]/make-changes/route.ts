@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // 3. Create a new goal_task with same context, prefixed label
-    const newTaskId = crypto.getRandomUUID()
+    const newTaskId = crypto.randomUUID()
     const newLabel = `Revise: ${artifact.title}`
     const newReasoning = originalTask?.reasoning ?? 'Founder requested revisions'
 
