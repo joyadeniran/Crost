@@ -151,6 +151,71 @@ export function formatOrcContextForPrompt(rows: OrcContextRow[]): string {
   return parts.join('\n\n')
 }
 
+// ─── KB enrichment ───────────────────────────────────────────────────────────
+
+export interface KbMatch {
+  title: string
+  summary: string
+  category: string
+}
+
+/**
+ * Proactively retrieves up to 3 KB documents relevant to the intent.
+ * Uses a direct Supabase query (no HTTP overhead) so it can run in parallel
+ * with other pre-processing. Skips the search entirely if the KB is empty.
+ * Always returns [] on any error — fire-and-forget safe.
+ */
+export async function enrichWithKnowledgeBase(
+  intent: string,
+  userId: string | null
+): Promise<KbMatch[]> {
+  if (!userId) return []
+  try {
+    const supabase = createServerSupabaseClient()
+
+    const { count } = await supabase
+      .from('knowledge_base_files')
+      .select('*', { count: 'exact', head: true })
+      .eq('created_by', userId)
+      .eq('processing_status', 'completed')
+
+    if ((count ?? 0) === 0) return []
+
+    const searchTerm = intent.slice(0, 80)
+    const { data: files } = await supabase
+      .from('knowledge_base_files')
+      .select('title, category, extracted_summary')
+      .eq('created_by', userId)
+      .eq('processing_status', 'completed')
+      .or(`title.ilike.%${searchTerm}%,extracted_summary.ilike.%${searchTerm}%`)
+      .order('reference_count', { ascending: false })
+      .limit(3)
+
+    if (!files || files.length === 0) return []
+
+    return files.map(f => ({
+      title: f.title,
+      summary: f.extracted_summary || '',
+      category: f.category || '',
+    }))
+  } catch (err) {
+    console.error('[enrichWithKnowledgeBase] Error (non-fatal):', err)
+    return []
+  }
+}
+
+/**
+ * Formats KB matches into a compact block for Orc prompt injection.
+ */
+export function formatKbContextForPrompt(matches: KbMatch[]): string {
+  if (matches.length === 0) return ''
+  const lines = matches.map(m => {
+    const snippet = m.summary.length > 200 ? m.summary.slice(0, 200) + '...' : m.summary
+    return `- "${m.title}" (${m.category}): ${snippet}`
+  })
+  return `RELEVANT KNOWLEDGE BASE DOCUMENTS:\n${lines.join('\n')}`
+}
+
 // ─── Brain 2: Decision Tree ───────────────────────────────────────────────────
 
 const VALID_MODES: OrcResponseMode[] = [
@@ -190,11 +255,15 @@ const DEFAULT_DECISION: OrcDecision = {
  * Brain 2: Classifies founder intent using a fast LLM model before the main
  * orchestrator runs. Returns OrcDecision with mode, confidence, and risk flags.
  * Always returns a valid decision — fails open to 'full_plan' on any error.
+ *
+ * @param extraRiskNotes - Pre-computed risk notes from assessGoalRisk() to inject
+ *   into the classifier prompt so the model has full risk context when choosing a mode.
  */
 export async function orcDecisionGate(
   founderInput: string,
   orcContext: OrcContextRow[],
-  conversationHistory: Array<{ role: string; content: string }> = []
+  conversationHistory: Array<{ role: string; content: string }> = [],
+  extraRiskNotes: string[] = []
 ): Promise<OrcDecision> {
   try {
     const contextSummary = formatOrcContextForPrompt(orcContext)
@@ -207,6 +276,7 @@ export async function orcDecisionGate(
       `FOUNDER INPUT: ${founderInput}`,
       contextSummary ? `COMPANY CONTEXT:\n${contextSummary}` : '',
       recentHistory  ? `RECENT CONVERSATION:\n${recentHistory}` : '',
+      extraRiskNotes.length > 0 ? `PRE-ASSESSED RISK NOTES:\n${extraRiskNotes.map(n => `- ${n}`).join('\n')}` : '',
     ].filter(Boolean).join('\n\n')
 
     const fastModel = process.env.CLOUD_MODEL_CLASSIFIER ?? 'groq/llama-3.1-8b-instant'
@@ -249,15 +319,17 @@ export async function orcDecisionGate(
       return DEFAULT_DECISION
     }
 
+    const classifierRiskNotes: string[] = Array.isArray(parsed.risk_notes) ? parsed.risk_notes : []
+
     return {
       mode:             parsed.mode as OrcResponseMode,
       confidence:       Math.min(1.0, Math.max(0.5, Number(parsed.confidence) || 0.7)),
       reasoning:        typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
-      risk_notes:       Array.isArray(parsed.risk_notes)      ? parsed.risk_notes      : [],
+      risk_notes:       [...new Set([...classifierRiskNotes, ...extraRiskNotes])],
       followup_options: Array.isArray(parsed.followup_options) ? parsed.followup_options : [],
     }
   } catch (err) {
     console.error('[orcDecisionGate] Classification failed:', err)
-    return DEFAULT_DECISION
+    return { ...DEFAULT_DECISION, risk_notes: extraRiskNotes }
   }
 }

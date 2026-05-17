@@ -25,9 +25,13 @@ import {
   fetchOrcContext,
   seedOrcContextFromMemo,
   formatOrcContextForPrompt,
+  enrichWithKnowledgeBase,
+  formatKbContextForPrompt,
   orcDecisionGate,
   type OrcDecision,
 } from './orc-decision-gate'
+import { detectCapabilityGaps, formatCapabilityGapsForPrompt } from './capability-checker'
+import { assessGoalRisk } from './risk-assessor'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1133,21 +1137,34 @@ export async function runOrchestratorTask(
     .map(t => `- [${t.status.toUpperCase()}] ${t.label} (task_id: ${t.task_id}, goal_id: ${t.goal_id}, Dept: ${t.dept_slug})`)
     .join('\n')
 
-  const systemMemory = await buildOrcContext(userId)
+  // Brains 1 + 3: parallel fetch of memo context, structured Orc context, capability
+  // inventory, and KB enrichment — all fail-open so nothing blocks goal dispatch.
+  const [systemMemory, orcContext, capSummary, kbMatches] = await Promise.all([
+    buildOrcContext(userId),
+    fetchOrcContext(userId),
+    detectCapabilityGaps(founderInput),
+    enrichWithKnowledgeBase(founderInput, userId),
+  ])
 
-  // Brain 1 + Brain 2: fetch structured context, auto-seed on first run, classify intent
-  const orcContext = await fetchOrcContext(userId)
-  if (userId) {
-    seedOrcContextFromMemo(userId).catch(() => {}) // fire-and-forget
-  }
-  const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory)
+  // Fire-and-forget auto-seed from company_memo on first run
+  if (userId) seedOrcContextFromMemo(userId).catch(() => {})
+
+  // Risk assessment (synchronous — uses data already fetched above)
+  const riskAssessment = assessGoalRisk(founderInput, orcContext, capSummary.gaps)
+
+  // Brain 2: classify intent, injecting pre-computed risk notes so the classifier
+  // has full context before choosing a response mode.
+  const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory, riskAssessment.risk_notes)
 
   const orcContextSummary = formatOrcContextForPrompt(orcContext)
+  const capabilityGapsText = formatCapabilityGapsForPrompt(capSummary)
+  const kbContextText = formatKbContextForPrompt(kbMatches)
   const modeInstructions = getModeInstructions(decision.mode)
   const modeHint = [
     `ORCHESTRATOR MODE HINT (pre-classified): ${decision.mode} (confidence: ${decision.confidence.toFixed(2)})`,
     `Reasoning: ${decision.reasoning}`,
     decision.risk_notes.length > 0 ? `Risk flags: ${decision.risk_notes.join('; ')}` : '',
+    riskAssessment.assumptions.length > 0 ? `Assumptions: ${riskAssessment.assumptions.join('; ')}` : '',
     modeInstructions ? `Mode instructions: ${modeInstructions}` : '',
   ].filter(Boolean).join('\n')
 
@@ -1156,6 +1173,8 @@ export async function runOrchestratorTask(
     `GOAL: ${founderInput}`,
     forcePlan ? 'FORCE PLANNING MODE: The founder has explicitly bypassed clarification and trusts your judgment. You MUST draft the best possible plan now using reasonable assumptions and all available context (System Memory/Memos/KB). DO NOT return is_valid_goal=false. You are authorized to proceed with partial context.' : '',
     modeHint,
+    capabilityGapsText ? `Capability Intelligence:\n${capabilityGapsText}` : '',
+    kbContextText      ? `Knowledge Base Context:\n${kbContextText}` : '',
     `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
     formattedRecentTasks ? `Recent Workspace Tasks:\n${formattedRecentTasks}` : '',
     `Conversation History:\n${conversationContext}`,
@@ -1248,6 +1267,22 @@ export async function runOrchestratorTask(
       risk_notes:       orcDecisionPayload.risk_notes,
     },
   }).eq('id', goalId)
+
+  // Record in decision log for the self-improvement loop (fire-and-forget)
+  if (userId) {
+    supabase.from('orc_decision_log').insert({
+      user_id:         userId,
+      goal_id:         goalId,
+      decision_type:   'response_mode_selection',
+      founder_intent:  founderInput.slice(0, 500),
+      orc_choice:      orcDecisionPayload.mode,
+      confidence:      orcDecisionPayload.confidence,
+      assumptions:     { list: riskAssessment.assumptions },
+      risk_tier:       riskAssessment.tier,
+      risk_notes:      orcDecisionPayload.risk_notes,
+      capability_gaps: capSummary.gaps.map(g => ({ slug: g.slug, name: g.name, availability: g.availability })),
+    }).then(() => {}).catch(() => {})
+  }
 
   if (result.is_valid_goal === false) {
     const updatedHistory = [...conversationHistory, { role: 'assistant', content: result.clarification_question, ts: new Date().toISOString() }]
