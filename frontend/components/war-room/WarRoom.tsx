@@ -9,7 +9,8 @@ import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 import { supabaseClient } from '@/lib/supabase-browser'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
-import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus } from '@/types'
+import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus, CalendarEvent } from '@/types'
+import type { PrepSuggestion } from '@/lib/calendar-prep'
 import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
@@ -134,6 +135,107 @@ const DEFAULT_DEPT_COLOUR = '#6366f1'
 const DEFAULT_DEPT_ICON = '🏢'
 
 
+// ─── CalendarPrepPanel ────────────────────────────────────────────────────────
+
+function CalendarPrepPanel({
+  suggestions,
+  onPrefill,
+  onDismiss,
+}: {
+  suggestions: PrepSuggestion[]
+  onPrefill: (prompt: string) => void
+  onDismiss: () => void
+}) {
+  const [expanded, setExpanded] = useState(true)
+  if (suggestions.length === 0) return null
+
+  const EVENT_TYPE_EMOJI: Record<string, string> = {
+    investor_meeting: '💼',
+    customer_call: '📞',
+    board_meeting: '🏛',
+    conference: '🎤',
+    deadline: '🔴',
+    other: '📅',
+  }
+
+  return (
+    <div style={{
+      border: '1px solid rgba(99,102,241,0.25)',
+      borderRadius: 'var(--radius)',
+      marginBottom: 16,
+      overflow: 'hidden',
+      background: 'rgba(99,102,241,0.04)',
+    }}>
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', cursor: 'pointer',
+          borderBottom: expanded ? '1px solid rgba(99,102,241,0.15)' : 'none',
+        }}
+      >
+        <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
+          📅 {suggestions.length === 1
+            ? `Upcoming: ${suggestions[0].event.title} (${suggestions[0].daysUntil === 0 ? 'today' : suggestions[0].daysUntil === 1 ? 'tomorrow' : `in ${suggestions[0].daysUntil} days`})`
+            : `${suggestions.length} upcoming events — prep suggestions ready`}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span style={{ color: 'var(--muted-foreground)', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss() }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}
+            title="Dismiss"
+          >×</button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {suggestions.map(({ event, daysUntil, checklist }) => (
+            <div key={event.id}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span>{EVENT_TYPE_EMOJI[event.type] ?? '📅'}</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
+                  {event.title}
+                </span>
+                <span style={{
+                  fontSize: 11, padding: '2px 7px', borderRadius: 9999,
+                  background: daysUntil <= 1 ? 'rgba(239,68,68,0.15)' : daysUntil <= 3 ? 'rgba(234,179,8,0.15)' : 'rgba(99,102,241,0.12)',
+                  color: daysUntil <= 1 ? '#f87171' : daysUntil <= 3 ? '#ca8a04' : '#818cf8',
+                  fontFamily: 'var(--font-dm-mono, monospace)',
+                }}>
+                  {daysUntil === 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil}d`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {checklist.filter(item => item.goalPrompt).map(item => (
+                  <button
+                    key={item.label}
+                    onClick={() => onPrefill(item.goalPrompt!)}
+                    style={{
+                      background: 'rgba(99,102,241,0.1)',
+                      border: '1px solid rgba(99,102,241,0.2)',
+                      borderRadius: 6,
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      color: '#818cf8',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-dm-sans, sans-serif)',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── GoalInput ────────────────────────────────────────────────────────────────
 
 function GoalInput({
@@ -141,14 +243,23 @@ function GoalInput({
   isLoading,
   hasActiveGoal,
   departments,
+  prefillSignal,
 }: {
   onSubmit: (goal: string) => void
   isLoading: boolean
   hasActiveGoal: boolean
   departments: Department[]
+  prefillSignal?: { value: string; ts: number }
 }) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (prefillSignal?.value) {
+      setValue(prefillSignal.value)
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }, [prefillSignal?.ts])
   const [menuPrefix, setMenuPrefix] = useState<'@' | '/' | null>(null)
   const [menuQuery, setMenuQuery] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)
@@ -1928,6 +2039,30 @@ export function WarRoom() {
   // Uses the already-imported supabaseClient — no new subscription, no polling.
   const [goalErrorEvents, setGoalErrorEvents] = useState<{ description: string; event_type: string; created_at: string }[]>([])
 
+  // ── Calendar prep ──
+  const [calendarSuggestions, setCalendarSuggestions] = useState<PrepSuggestion[]>([])
+  const [calendarDismissed, setCalendarDismissed] = useState(false)
+  const [goalPrefillSignal, setGoalPrefillSignal] = useState<{ value: string; ts: number } | undefined>()
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/calendar-events?upcoming=true&days=7')
+      .then(r => r.ok ? r.json() : null)
+      .then(async json => {
+        if (cancelled || !json?.data?.length) return
+        const { buildPrepChecklist } = await import('@/lib/calendar-prep')
+        const now = Date.now()
+        const suggestions: PrepSuggestion[] = (json.data as CalendarEvent[]).map(event => ({
+          event,
+          daysUntil: Math.max(0, Math.ceil((new Date(event.date).getTime() - now) / 86_400_000)),
+          checklist: buildPrepChecklist(event),
+        }))
+        if (!cancelled) setCalendarSuggestions(suggestions)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   // Rehydrate pending-approval cards from localStorage on mount and reconcile
   // with server state — if the approval has already been decided elsewhere
   // (e.g. /dashboard/approvals), reflect that here instead of showing a stale card.
@@ -2539,11 +2674,20 @@ export function WarRoom() {
 
   return (
     <div style={{ marginBottom: 24 }}>
+      {!calendarDismissed && calendarSuggestions.length > 0 && (
+        <CalendarPrepPanel
+          suggestions={calendarSuggestions}
+          onPrefill={prompt => setGoalPrefillSignal({ value: prompt, ts: Date.now() })}
+          onDismiss={() => setCalendarDismissed(true)}
+        />
+      )}
+
       <GoalInput
         onSubmit={handleChatSubmit}
         isLoading={isSubmittingGoal || !!isPlanning}
         hasActiveGoal={!!activeGoal}
         departments={departments}
+        prefillSignal={goalPrefillSignal}
       />
 
       <CommandThread
