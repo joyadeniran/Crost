@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 4 Week 7 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`supabase/migrations/20260518000001_company_calendar_events.sql`** — `company_calendar_events` table: id, user_id, type (investor_meeting/customer_call/board_meeting/conference/deadline/other), title, date, duration_minutes, attendees, prep_required, related_goals, meeting_notes, outcomes, next_actions, source (manual|google_calendar), external_id. RLS + service_role bypass; unique index on (user_id, external_id) for sync dedup; date+user index; updated_at trigger.
+- **`lib/calendar-prep.ts`** — three functions:
+  - `getUpcomingEvents(userId, lookAheadDays=7)` — fetches events from DB within the look-ahead window, returns `[]` on any error.
+  - `buildPrepChecklist(event)` — rule-based checklist per event type (PREP_TEMPLATES); items with `goalPrompt` are one-click launchable; merges `event.prep_required` without duplicating base items.
+  - `getProactivePrepSuggestions(userId)` — combines both, computes `daysUntil` clamped to 0 by `Math.max`.
+- **`app/api/calendar-events/route.ts`** — GET (list all or `?upcoming=true&days=N` window) + POST (create manual event, Zod-validated).
+- **`app/api/calendar-events/[id]/route.ts`** — PATCH (update type/title/date/attendees/meeting_notes/outcomes/next_actions) + DELETE. Both owner-scoped via `.eq('user_id', user.id)`.
+- **`app/api/cron/calendar-sync/route.ts`** — Daily CRON_SECRET-authed sync. Finds all users in `connections` table with `service_name = 'googlecalendar'`, calls `GOOGLECALENDAR_LIST_EVENTS` via `runComposioTool` for 30-day window, infers event type from title keywords, upserts on `(user_id, external_id)` conflict. Skips users whose Composio call fails (returns error in result, doesn't fail the batch).
+- **`tests/unit/calendar-prep.test.ts`** — 17 unit tests covering `buildPrepChecklist` (all 6 types, prep_required merge, dedup, goalPrompt presence, priority values), `getUpcomingEvents` (data, DB error, throws, look-ahead window check), `getProactivePrepSuggestions` (daysUntil computation, past-event clamping, checklist present, empty case).
+
+### Changed
+- **`components/war-room/WarRoom.tsx`** — Added `CalendarPrepPanel` component: shows upcoming events with urgency colour-coded badges (today/tomorrow/in Nd) and action chips for items with goalPrompt. `GoalInput` gains `prefillSignal?: { value: string; ts: number }` prop — clicking an action chip fires `setGoalPrefillSignal({ value: prompt, ts: Date.now() })` in the parent, which GoalInput watches via a `useEffect` to set its textarea value and focus. Panel lazy-fetches `/api/calendar-events?upcoming=true&days=7` on War Room mount and is dismissible per session.
+- **`types/index.ts`** — Added `CalendarEventType` union and `CalendarEvent` interface.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 3 Week 6 · 2026-05-17
 > Branch: `claude/orc-phase3-recurring-missions`
 

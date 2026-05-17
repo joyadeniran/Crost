@@ -3,9 +3,33 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.00  
-**Last Updated:** May 17, 2026  
-**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 3 (Weeks 5 & 6) complete on branch `claude/orc-phase3-recurring-missions`, pending merge to main.
+**Current Version:** 12.01  
+**Last Updated:** May 18, 2026  
+**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 4 Week 7 complete on branch `claude/orc-phase4-calendar`, pending merge to main.
+
+---
+
+## Session v12.01 — ORC Orchestration: Calendar & Proactive Prep (Phase 4 Week 7)
+**Date**: May 18, 2026  **Status**: 🔄 In Development  
+**Impact**: Orc now surfaces upcoming founder events in the War Room with contextual prep checklists. Investors calls, board meetings, customer calls, conferences, and deadlines all get tailored action chips (e.g. "Update pitch deck", "Pull latest metrics") that one-click pre-fill the goal input. A daily cron syncs Google Calendar events via Composio into a dedicated DB table.
+
+### What Was Built
+1. **`company_calendar_events` table** (migration `20260518000001`): `type`, `date`, `attendees`, `prep_required`, `outcomes`, `next_actions`, `source` (manual | google_calendar), `external_id` for sync dedup. RLS + service_role bypass, date+user composite index, updated_at trigger.
+2. **`lib/calendar-prep.ts`**: Three functions — `getUpcomingEvents(userId, days)` (DB fetch with look-ahead window); `buildPrepChecklist(event)` (rule-based per type with goalPrompt on actionable items, merges event.prep_required without duplicates); `getProactivePrepSuggestions(userId)` (combines both, computes daysUntil clamped to 0).
+3. **REST API**: `GET/POST /api/calendar-events` (list with `?upcoming=true&days=N`, create manual event); `PATCH/DELETE /api/calendar-events/[id]` (update notes/outcomes/next_actions, delete).
+4. **`app/api/cron/calendar-sync/route.ts`**: Daily CRON_SECRET-authed sync. Queries `connections` table for googlecalendar users, calls `GOOGLECALENDAR_LIST_EVENTS` via Composio for 30-day window, infers event type from title keywords, upserts on `(user_id, external_id)` conflict.
+5. **`CalendarPrepPanel` in WarRoom**: Shows upcoming events with urgency badges (today/tomorrow/in Nd). Action chips (items with goalPrompt) prefill the GoalInput textarea via a `prefillSignal` prop (value + timestamp to allow re-trigger). Panel is dismissible; lazy-fetches `/api/calendar-events?upcoming=true&days=7` on mount.
+6. **Test Coverage**: `calendar-prep.test.ts` — 17 unit tests across all three functions. Full suite: 248/248 passing.
+
+### Files Changed
+- `supabase/migrations/20260518000001_company_calendar_events.sql` (new)
+- `frontend/lib/calendar-prep.ts` (new)
+- `frontend/app/api/calendar-events/route.ts` (new)
+- `frontend/app/api/calendar-events/[id]/route.ts` (new)
+- `frontend/app/api/cron/calendar-sync/route.ts` (new)
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/types/index.ts`
+- `frontend/tests/unit/calendar-prep.test.ts` (new)
 
 ---
 
