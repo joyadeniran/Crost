@@ -3,9 +3,89 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 11.95  
-**Last Updated:** May 15, 2026  
-**Deployment Status:** ✅ PRODUCTION — Gold-Level Observability & Multi-Tenant Hardening.
+**Current Version:** 11.98  
+**Last Updated:** May 17, 2026  
+**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 1 & 2 complete on branch `claude/orc-orchestration-phase-1-RtqTf`, pending merge to main.
+
+---
+
+## Session v11.98 — ORC Orchestration: Intelligence Layer (Phase 2)
+**Date**: May 17, 2026  **Status**: 🔄 In Development  
+**Impact**: Completes the Chief of Staff intelligence layer. Orc now has pre-goal awareness: it queries the capability inventory for gaps, enriches itself with the founder's Knowledge Base, and runs a 3-tier risk assessment — all in parallel before the main LLM call. Every routing decision is persisted to an audit log for the future self-improvement loop.
+
+### What Was Built
+1. **Brain 3 — Realism (`lib/capability-checker.ts`)**: Loads `capability_inventory`, detects capability gaps relevant to the goal intent via keyword overlap, and resolves `external_services` vendor options (name, vendors, cost, timeline) for any hard gap.
+2. **3-Tier Risk Assessor (`lib/risk-assessor.ts`)**: Pure synchronous function — Tier 1 extracts assumption statements from `orc_context` preference/strategy rows; Tier 2 detects conflicts between constraints and goal intent using pattern matching (bootstrapped, no-external, no-cold-outreach, etc.); Tier 3 escalates and surfaces vendor options when capability gaps are hard-blocked.
+3. **KB Enrichment (`enrichWithKnowledgeBase` in `orc-decision-gate.ts`)**: Direct Supabase keyword search against `knowledge_base_files`; skips entirely when KB is empty; returns top-3 relevant document summaries for prompt injection.
+4. **Extended `orcDecisionGate`**: Accepts `extraRiskNotes?: string[]`; pre-computed risk notes are injected into the classifier prompt and merged (deduplicated) into the returned `risk_notes`; falls back with risk notes preserved even on classification failure.
+5. **Parallel Pre-Processing in `runOrchestratorTask`**: Replaced sequential fetches with `Promise.all([buildOrcContext, fetchOrcContext, detectCapabilityGaps, enrichWithKnowledgeBase])`. Capability gap context, KB context, and assumption notes are all injected into the Orc prompt.
+6. **`orc_decision_log` Table** (migration `20260516000009`): Records every routing decision — mode, confidence, assumptions, risk tier, risk notes, capability gaps, outcome. RLS-protected; indexed on `(user_id, goal_id)` and `(user_id, outcome, created_at DESC)`. Persisted fire-and-forget after every dispatch.
+7. **`external_services` Table** (migration `20260516000008`): Vendor registry seeded with 5 entries: Video Editing (Fiverr/Upwork, $200–500), Legal Review (Clerky/UpCounsel, $500–2000), Financial Audit (Pilot.com/Kruze, $2000–10000), Brand Identity (99designs, $500–3000), Data Engineering (Toptal/Fiverr Pro, $1500–5000).
+8. **Test Coverage**: `capability-checker.test.ts` (13 cases) and `risk-assessor.test.ts` (17 cases); 73/73 tests pass across new and existing Phase 1/2 suites.
+
+### Files Changed
+- `frontend/lib/capability-checker.ts` (new)
+- `frontend/lib/risk-assessor.ts` (new)
+- `frontend/lib/orc-decision-gate.ts`
+- `frontend/lib/llm-client.ts`
+- `frontend/tests/unit/capability-checker.test.ts` (new)
+- `frontend/tests/unit/risk-assessor.test.ts` (new)
+- `supabase/migrations/20260516000008_external_services.sql` (new)
+- `supabase/migrations/20260516000009_orc_decision_log.sql` (new)
+
+---
+
+## Session v11.97 — ORC Orchestration: Foundation (Phase 1)
+**Date**: May 16, 2026  **Status**: 🔄 In Development  
+**Impact**: Transforms Orc from a simple goal dispatcher into a Chief of Staff orchestration engine with intent classification, 7 response modes, structured company memory, and full War Room UI transparency into Orc's reasoning and confidence.
+
+### What Was Built
+1. **Brain 1 — Memory (`fetchOrcContext`, `seedOrcContextFromMemo`)**: Fetches top-20 `orc_context` rows ranked by `recency_score`. Auto-seeds from `company_memo` on first run (idempotent, fire-and-forget). `formatOrcContextForPrompt` groups rows into profile/strategy/preference/constraint/outcome sections.
+2. **Brain 2 — Decision Tree (`orcDecisionGate`)**: Fast LLM pre-classifier (llama-3.1-8b-instant via LiteLLM, 15s timeout, temperature 0.1) runs before every main orchestrator call. Returns `OrcDecision` with mode, confidence (0.5–1.0), reasoning, risk_notes, followup_options. Fails open to `full_plan` at 0.5 confidence on any error.
+3. **7 Response Modes**: `assistant` (direct answer + next steps), `clarify` (1–2 focused prose questions), `quick_plan` (3–5 tasks, parallel), `full_plan` (5–15 tasks with phases), `direct_action` (atomic action with HITL for writes), `command` (system command acknowledgment), `escalate` (surface alternatives when capability exceeded). Each mode has dedicated `getModeInstructions` injected into the prompt.
+4. **`ORCHESTRATOR_SYSTEM_NOTE` Rule 11**: LLM must confirm or override the pre-classifier's mode in its `response_mode` JSON field.
+5. **War Room UI — `OrcModeBadge`**: Color-coded pill per mode; shows confidence % when below 75%. Wired into `PlanningIndicator` (spinner color and description driven by mode) and `SynthesisReportCard` header.
+6. **War Room UI — `OrcReasoningPanel`**: Collapsible ▶ panel below each plan card title showing pre-classifier reasoning, risk flags, and follow-up options.
+7. **DB Migrations Applied**:
+   - `20260516000005_orc_context`: `orc_context` table with RLS, indexes on `(user_id, recency_score)` and `updated_at`.
+   - `20260516000006_capability_inventory`: Global capability registry seeded with 22 capabilities across writing, research, design, engineering, operations, finance/legal, and external service markers.
+   - `20260516000007_goals_response_mode`: `response_mode TEXT` (7-value check constraint) and `orc_decision JSONB` columns added to `goals` (additive, backwards-compatible).
+8. **Test Coverage**: `orc-decision-gate.test.ts` (19 cases) — all 7 mode classifications, 4 resilience scenarios, confidence clamping, context/history injection. `llm-client.test.ts` updated for decision gate call (+1 fetch per test).
+
+### Files Changed
+- `frontend/lib/orc-decision-gate.ts` (new)
+- `frontend/lib/llm-client.ts`
+- `frontend/components/war-room/WarRoom.tsx`
+- `frontend/types/index.ts`
+- `frontend/tests/unit/orc-decision-gate.test.ts` (new)
+- `frontend/tests/unit/llm-client.test.ts`
+- `supabase/migrations/20260516000005_orc_context.sql` (new)
+- `supabase/migrations/20260516000006_capability_inventory.sql` (new)
+- `supabase/migrations/20260516000007_goals_response_mode.sql` (new)
+
+---
+
+## Session v11.96 — Artifact Sandbox System
+**Date**: May 16, 2026  **Status**: ✅  
+**Impact**: Artifacts now go through a structured review lifecycle before finalisation. Workers produce drafts; founders approve, discard, or request changes. Output type is auto-detected and transformed (docx/xlsx/md/json). Full Make Changes revision loop implemented.
+
+### What Was Built
+1. **Sandbox Lifecycle Schema**: Added `status` field to artifacts — `pending_review → approved | discarded`. Workers write drafts into the sandbox; the artifact is only surfaced to the founder's workspace once approved.
+2. **Output Classifier** (`artifact-transformers.ts`): `detectOutputType` auto-detects content type from LLM output (document/spreadsheet/data) and applies the correct transformer. All 6 department entry points (email, content, research, analysis, code, operations) rewired through the classifier.
+3. **Sandbox UI** (`ArtifactSandbox` component): Status badges (`pending_review`, `approved`, `discarded`), approve/discard controls with branded confirmation, responsive card layout.
+4. **Make Changes Workflow** (Phase 4): Founders can leave inline revision notes on a draft artifact. The original worker task re-dispatches with the founder's feedback prepended as high-priority context and produces an updated draft.
+5. **ORC Upgrade Plan**: `ORC_ORCHESTRATION_UPGRADE_PLAN.md` added — full architectural design document for the Chief of Staff transformation (the plan this and subsequent sessions implement).
+6. **Test Suite**: Comprehensive artifact sandbox lifecycle tests added.
+
+### Files Changed
+- `frontend/lib/artifact-transformers.ts`
+- `frontend/components/artifacts/ArtifactSandbox.tsx` (new)
+- `frontend/app/api/artifacts/route.ts`
+- `frontend/app/api/worker/execute/route.ts`
+- `supabase/migrations/` (sandbox lifecycle schema)
+- `frontend/tests/` (sandbox lifecycle tests)
+- `ORC_ORCHESTRATION_UPGRADE_PLAN.md` (new)
+- `CROST_SPEC.md`
 
 ---
 
