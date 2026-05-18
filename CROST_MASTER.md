@@ -3,9 +3,31 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.01  
+**Current Version:** 12.02  
 **Last Updated:** May 18, 2026  
-**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 4 Week 7 complete on branch `claude/orc-phase4-calendar`, pending merge to main.
+**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 4 complete (Weeks 7 & 8) on branch `claude/orc-phase4-calendar`, pending merge to main.
+
+---
+
+## Session v12.02 — ORC Orchestration: Cost Tracking & Budget Alerts (Phase 4 Week 8)
+**Date**: May 18, 2026  **Status**: 🔄 In Development  
+**Impact**: Real-time API cost tracking is now wired end-to-end into the orchestrator. Every goal dispatch checks the founder's monthly spend in parallel with the other pre-processing steps; if spend crosses 80% or 95% of their configured budget, a risk note is injected before the plan is drafted. Founders can also query their spend summary via `/api/usage/summary`. Three security issues in the calendar sync cron were hardened.
+
+### What Was Built
+1. **`lib/cost-tracker.ts`**: `computeMonthlySpend(userId)` aggregates `api_usage_logs` for the current calendar month into `MonthlyCostSummary` (total cost, tokens, byModel, byProvider, budgetUsedPct, alertLevel); `getBudgetConstraint(userId)` reads the monthly API budget from `orc_context` constraint rows (JSONB `monthly_api_budget` field or parsed from summary text); `classifyBudgetAlert` applies 80%/95% thresholds.
+2. **`lib/llm-client.ts`**: `computeMonthlySpend` added to the `Promise.all` parallel pre-processing block in `runOrchestratorTask`. Warning/critical alerts are appended to `riskAssessment.risk_notes` before `orcDecisionGate` — so budget pressure surfaces in the mode hint and plan card.
+3. **`app/api/usage/summary/route.ts`**: Authenticated GET endpoint returning the full `MonthlyCostSummary` for the logged-in user.
+4. **Security hardening on `calendar-sync/route.ts`**: (a) Email addresses validated with regex before insert; (b) Composio response parsed defensively with array fallback chain; (c) Raw error messages stripped from API response — logged server-side only.
+5. **`tests/unit/cost-tracker.test.ts`**: 22 unit tests — all threshold boundaries, JSONB + text budget parsing, aggregation correctness, fail-open behavior.
+6. **`tests/unit/e2e-flows.test.ts`**: 16 integration-style tests across 5 critical flows: budget alert injection, calendar event type inference, prep checklist goalPrompt coverage, orc-learning outcome writes, recurring mission eligibility gate. Full suite: 286/286.
+
+### Files Changed
+- `frontend/lib/cost-tracker.ts` (new)
+- `frontend/lib/llm-client.ts`
+- `frontend/app/api/usage/summary/route.ts` (new)
+- `frontend/app/api/cron/calendar-sync/route.ts` (security hardening)
+- `frontend/tests/unit/cost-tracker.test.ts` (new)
+- `frontend/tests/unit/e2e-flows.test.ts` (new)
 
 ---
 

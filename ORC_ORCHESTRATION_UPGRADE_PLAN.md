@@ -1,7 +1,7 @@
 # ORC ORCHESTRATION UPGRADE PLAN
 ## Transforming Orc into the Founder's Chief of Staff
 
-**Status:** Phase 4 Week 7 Complete — Week 8 next  
+**Status:** Phase 4 Complete ✅ — Phase 5 (Refinement) next  
 **Created:** May 16, 2026  
 **Scope:** Comprehensive orchestration layer redesign for maximum founder trust and autonomy  
 **Owner:** Engineering (Orc is the boss, not a feature — treat accordingly)
@@ -977,11 +977,11 @@ Continue? [YES, PROCEED] [SCALE DOWN] [SKIP FOR NOW]
 - [x] Implement proactive prep notifications (`CalendarPrepPanel` in WarRoom — urgency badges + action chips)
 - [x] Build "prep checklist" for upcoming events (`buildPrepChecklist` — rule-based per event type with one-click goalPrompts)
 
-### Week 8: Cost Tracking & Stress Testing
-- [ ] Implement real-time cost tracking
-- [ ] Add budget alerts to decision gateway
-- [ ] E2E testing with real founder workflows
-- [ ] Production readiness audit
+### Week 8: Cost Tracking & Stress Testing ✅
+- [x] Implement real-time cost tracking (`lib/cost-tracker.ts` — `computeMonthlySpend`, byModel/byProvider breakdown, `GET /api/usage/summary`)
+- [x] Add budget alerts to decision gateway (`computeMonthlySpend` in `runOrchestratorTask` parallel block; warning/critical risk notes injected before `orcDecisionGate`)
+- [x] E2E testing with real founder workflows (`tests/unit/e2e-flows.test.ts` — 5 flows, 16 tests)
+- [x] Production readiness audit (security review completed; 3 issues hardened in `calendar-sync/route.ts`)
 
 ---
 

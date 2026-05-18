@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 4 Week 8 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`lib/cost-tracker.ts`** — real-time cost tracking library:
+  - `getBudgetConstraint(userId)` — reads `monthly_api_budget` from `orc_context` constraint rows (JSONB field or `$N` parsed from summary text). Returns null when unconfigured.
+  - `classifyBudgetAlert(spent, limit)` — `ok` (<80%), `warning` (80–94%), `critical` (≥95%), `null` (no budget set).
+  - `computeMonthlySpend(userId)` — aggregates `api_usage_logs` for the current UTC calendar month into `MonthlyCostSummary`: totalCostUsd, totalTokens, byModel (calls/tokens/costUsd), byProvider, budgetLimitUsd, budgetUsedPct, alertLevel. Fail-open on any error.
+- **`app/api/usage/summary/route.ts`** — authenticated GET endpoint returning `MonthlyCostSummary` for the logged-in user.
+- **`tests/unit/cost-tracker.test.ts`** — 22 unit tests: `classifyBudgetAlert` (all threshold boundaries), `getBudgetConstraint` (JSONB, text parse, no amount, errors), `computeMonthlySpend` (aggregation, all alert levels, no budget, fail-open, month string).
+- **`tests/unit/e2e-flows.test.ts`** — 16 integration-style tests across 5 flows: budget alert injection (warning/critical/ok), calendar event type inference (6 title patterns), prep checklist goalPrompt coverage (investor_meeting, board_meeting), orc-learning outcome writes (completed, failed), recurring mission eligibility gate (5 conditions).
+
+### Changed
+- **`lib/llm-client.ts`** — `computeMonthlySpend` added as 5th entry in the `Promise.all` parallel pre-processing block of `runOrchestratorTask`. If `alertLevel` is `warning` or `critical`, a descriptive budget risk note is pushed into `riskAssessment.risk_notes` before `orcDecisionGate` — surfaces in the mode hint, plan card, and `orc_decision_log`.
+- **`app/api/cron/calendar-sync/route.ts`** (security hardening):
+  - Email addresses in Google Calendar attendee lists now validated with `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` before insert (was `.filter(Boolean)` only).
+  - Composio response parsed defensively: checks `.items`, `.events`, and raw array in sequence before defaulting to `[]`.
+  - Raw `err.message` removed from API response body — error logged server-side, response returns `'sync_failed'` string.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 4 Week 7 · 2026-05-18
 > Branch: `claude/orc-phase4-calendar`
 
