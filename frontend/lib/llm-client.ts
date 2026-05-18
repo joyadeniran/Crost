@@ -32,6 +32,7 @@ import {
 } from './orc-decision-gate'
 import { detectCapabilityGaps, formatCapabilityGapsForPrompt } from './capability-checker'
 import { assessGoalRisk } from './risk-assessor'
+import { computeMonthlySpend } from './cost-tracker'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1139,11 +1140,12 @@ export async function runOrchestratorTask(
 
   // Brains 1 + 3: parallel fetch of memo context, structured Orc context, capability
   // inventory, and KB enrichment — all fail-open so nothing blocks goal dispatch.
-  const [systemMemory, orcContext, capSummary, kbMatches] = await Promise.all([
+  const [systemMemory, orcContext, capSummary, kbMatches, monthlyCost] = await Promise.all([
     buildOrcContext(userId),
     fetchOrcContext(userId),
     detectCapabilityGaps(founderInput),
     enrichWithKnowledgeBase(founderInput, userId),
+    userId ? computeMonthlySpend(userId) : Promise.resolve(null),
   ])
 
   // Fire-and-forget auto-seed from company_memo on first run
@@ -1151,6 +1153,17 @@ export async function runOrchestratorTask(
 
   // Risk assessment (synchronous — uses data already fetched above)
   const riskAssessment = assessGoalRisk(founderInput, orcContext, capSummary.gaps)
+
+  // Budget alert: inject into risk_notes so the decision gate and plan surface it
+  if (monthlyCost?.alertLevel === 'critical') {
+    riskAssessment.risk_notes.push(
+      `API budget is ${monthlyCost.budgetUsedPct}% used this month ($${monthlyCost.totalCostUsd.toFixed(2)} of $${monthlyCost.budgetLimitUsd}) — very close to limit`,
+    )
+  } else if (monthlyCost?.alertLevel === 'warning') {
+    riskAssessment.risk_notes.push(
+      `API budget is ${monthlyCost.budgetUsedPct}% used this month ($${monthlyCost.totalCostUsd.toFixed(2)} of $${monthlyCost.budgetLimitUsd})`,
+    )
+  }
 
   // Brain 2: classify intent, injecting pre-computed risk notes so the classifier
   // has full context before choosing a response mode.

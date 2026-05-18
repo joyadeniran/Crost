@@ -5,6 +5,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 4 Week 8 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`lib/cost-tracker.ts`** — real-time cost tracking library:
+  - `getBudgetConstraint(userId)` — reads `monthly_api_budget` from `orc_context` constraint rows (JSONB field or `$N` parsed from summary text). Returns null when unconfigured.
+  - `classifyBudgetAlert(spent, limit)` — `ok` (<80%), `warning` (80–94%), `critical` (≥95%), `null` (no budget set).
+  - `computeMonthlySpend(userId)` — aggregates `api_usage_logs` for the current UTC calendar month into `MonthlyCostSummary`: totalCostUsd, totalTokens, byModel (calls/tokens/costUsd), byProvider, budgetLimitUsd, budgetUsedPct, alertLevel. Fail-open on any error.
+- **`app/api/usage/summary/route.ts`** — authenticated GET endpoint returning `MonthlyCostSummary` for the logged-in user.
+- **`tests/unit/cost-tracker.test.ts`** — 22 unit tests: `classifyBudgetAlert` (all threshold boundaries), `getBudgetConstraint` (JSONB, text parse, no amount, errors), `computeMonthlySpend` (aggregation, all alert levels, no budget, fail-open, month string).
+- **`tests/unit/e2e-flows.test.ts`** — 16 integration-style tests across 5 flows: budget alert injection (warning/critical/ok), calendar event type inference (6 title patterns), prep checklist goalPrompt coverage (investor_meeting, board_meeting), orc-learning outcome writes (completed, failed), recurring mission eligibility gate (5 conditions).
+
+### Changed
+- **`lib/llm-client.ts`** — `computeMonthlySpend` added as 5th entry in the `Promise.all` parallel pre-processing block of `runOrchestratorTask`. If `alertLevel` is `warning` or `critical`, a descriptive budget risk note is pushed into `riskAssessment.risk_notes` before `orcDecisionGate` — surfaces in the mode hint, plan card, and `orc_decision_log`.
+- **`app/api/cron/calendar-sync/route.ts`** (security hardening):
+  - Email addresses in Google Calendar attendee lists now validated with `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` before insert (was `.filter(Boolean)` only).
+  - Composio response parsed defensively: checks `.items`, `.events`, and raw array in sequence before defaulting to `[]`.
+  - Raw `err.message` removed from API response body — error logged server-side, response returns `'sync_failed'` string.
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 4 Week 7 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`supabase/migrations/20260518000001_company_calendar_events.sql`** — `company_calendar_events` table: id, user_id, type (investor_meeting/customer_call/board_meeting/conference/deadline/other), title, date, duration_minutes, attendees, prep_required, related_goals, meeting_notes, outcomes, next_actions, source (manual|google_calendar), external_id. RLS + service_role bypass; unique index on (user_id, external_id) for sync dedup; date+user index; updated_at trigger.
+- **`lib/calendar-prep.ts`** — three functions:
+  - `getUpcomingEvents(userId, lookAheadDays=7)` — fetches events from DB within the look-ahead window, returns `[]` on any error.
+  - `buildPrepChecklist(event)` — rule-based checklist per event type (PREP_TEMPLATES); items with `goalPrompt` are one-click launchable; merges `event.prep_required` without duplicating base items.
+  - `getProactivePrepSuggestions(userId)` — combines both, computes `daysUntil` clamped to 0 by `Math.max`.
+- **`app/api/calendar-events/route.ts`** — GET (list all or `?upcoming=true&days=N` window) + POST (create manual event, Zod-validated).
+- **`app/api/calendar-events/[id]/route.ts`** — PATCH (update type/title/date/attendees/meeting_notes/outcomes/next_actions) + DELETE. Both owner-scoped via `.eq('user_id', user.id)`.
+- **`app/api/cron/calendar-sync/route.ts`** — Daily CRON_SECRET-authed sync. Finds all users in `connections` table with `service_name = 'googlecalendar'`, calls `GOOGLECALENDAR_LIST_EVENTS` via `runComposioTool` for 30-day window, infers event type from title keywords, upserts on `(user_id, external_id)` conflict. Skips users whose Composio call fails (returns error in result, doesn't fail the batch).
+- **`tests/unit/calendar-prep.test.ts`** — 17 unit tests covering `buildPrepChecklist` (all 6 types, prep_required merge, dedup, goalPrompt presence, priority values), `getUpcomingEvents` (data, DB error, throws, look-ahead window check), `getProactivePrepSuggestions` (daysUntil computation, past-event clamping, checklist present, empty case).
+
+### Changed
+- **`components/war-room/WarRoom.tsx`** — Added `CalendarPrepPanel` component: shows upcoming events with urgency colour-coded badges (today/tomorrow/in Nd) and action chips for items with goalPrompt. `GoalInput` gains `prefillSignal?: { value: string; ts: number }` prop — clicking an action chip fires `setGoalPrefillSignal({ value: prompt, ts: Date.now() })` in the parent, which GoalInput watches via a `useEffect` to set its textarea value and focus. Panel lazy-fetches `/api/calendar-events?upcoming=true&days=7` on War Room mount and is dismissible per session.
+- **`types/index.ts`** — Added `CalendarEventType` union and `CalendarEvent` interface.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 3 Week 6 · 2026-05-17
 > Branch: `claude/orc-phase3-recurring-missions`
 

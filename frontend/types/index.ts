@@ -424,3 +424,32 @@ export interface UserModelAssignment {
   created_at: string
   updated_at: string
 }
+
+// ─── CalendarEvent ─────────────────────────────────────────────────────────────
+
+export type CalendarEventType =
+  | 'investor_meeting'
+  | 'customer_call'
+  | 'board_meeting'
+  | 'conference'
+  | 'deadline'
+  | 'other'
+
+export interface CalendarEvent {
+  id: string
+  user_id: string
+  type: CalendarEventType
+  title: string
+  date: string
+  duration_minutes?: number
+  attendees: string[]
+  prep_required: string[]
+  related_goals: string[]
+  meeting_notes?: string
+  outcomes?: string
+  next_actions: string[]
+  source: 'manual' | 'google_calendar'
+  external_id?: string
+  created_at: string
+  updated_at: string
+}
