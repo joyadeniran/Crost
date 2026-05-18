@@ -1108,6 +1108,9 @@ export async function runOrchestratorTask(
   conversationHistory: any[] = [],
   forcePlan: boolean = false
 ): Promise<any> {
+  const requestId = Math.random().toString(36).slice(2, 10)
+  const t = { start: Date.now(), preProcess: 0, decisionGate: 0, llm: 0 }
+
   const supabase = createServerSupabaseClient()
   const { data: goalRow } = await supabase.from('goals').select('created_by').eq('id', goalId).single()
   const userId = goalRow?.created_by
@@ -1147,6 +1150,7 @@ export async function runOrchestratorTask(
     enrichWithKnowledgeBase(founderInput, userId),
     userId ? computeMonthlySpend(userId) : Promise.resolve(null),
   ])
+  t.preProcess = Date.now()
 
   // Fire-and-forget auto-seed from company_memo on first run
   if (userId) seedOrcContextFromMemo(userId).catch(() => {})
@@ -1168,6 +1172,7 @@ export async function runOrchestratorTask(
   // Brain 2: classify intent, injecting pre-computed risk notes so the classifier
   // has full context before choosing a response mode.
   const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory, riskAssessment.risk_notes)
+  t.decisionGate = Date.now()
 
   const orcContextSummary = formatOrcContextForPrompt(orcContext)
   const capabilityGapsText = formatCapabilityGapsForPrompt(capSummary)
@@ -1206,6 +1211,19 @@ export async function runOrchestratorTask(
 
   const { model: planModel, provider: planProvider } = await getModel('planning', userId)
   const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
+  t.llm = Date.now()
+  console.log(JSON.stringify({
+    type: 'orc_timing',
+    requestId,
+    userId: userId ?? null,
+    goalId,
+    phases: {
+      preProcess:   t.preProcess   - t.start,
+      decisionGate: t.decisionGate - t.preProcess,
+      llm:          t.llm          - t.decisionGate,
+    },
+    totalMs: t.llm - t.start,
+  }))
   let result = parseOrchestratorResponse(content)
 
   // ─── Hallucination Protection ──────────────────────────────────────────────
@@ -1291,7 +1309,7 @@ export async function runOrchestratorTask(
       founder_intent:  founderInput.slice(0, 500),
       orc_choice:      orcDecisionPayload.mode,
       confidence:      orcDecisionPayload.confidence,
-      assumptions:     { list: riskAssessment.assumptions },
+      assumptions:     { list: riskAssessment.assumptions, request_id: requestId },
       risk_tier:       riskAssessment.tier,
       risk_notes:      orcDecisionPayload.risk_notes,
       capability_gaps: capSummary.gaps.map(g => ({ slug: g.slug, name: g.name, availability: g.availability })),
@@ -1333,7 +1351,7 @@ export async function runOrchestratorTask(
       description: `Direct response provided: "${directResponse.slice(0, 100)}..."`,
       tokens_used: tokensUsed,
       created_by: userId,
-      metadata: { direct_response: directResponse }
+      metadata: { direct_response: directResponse, request_id: requestId }
     })
 
     return result
@@ -1375,7 +1393,8 @@ export async function runOrchestratorTask(
     goal_id: goalId,
     description: `Plan drafted — ${plan.tasks.length} tasks.`,
     tokens_used: tokensUsed,
-    created_by: userId
+    created_by: userId,
+    metadata: { request_id: requestId },
   })
 
   return result

@@ -27,18 +27,20 @@ function makeChain(terminal: () => Promise<any>) {
 }
 
 let supabaseFromImpl: (table: string) => any
+let rpcImpl: (fnName: string, args: any) => Promise<{ data: any; error: any }>
 
 vi.mock('@/lib/supabase', () => ({
   createServerSupabaseClient: () => ({
     from: (table: string) => supabaseFromImpl(table),
+    rpc: (fnName: string, args: any) => rpcImpl(fnName, args),
   }),
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Default: all DB calls succeed with empty data
   supabaseFromImpl = (_table: string) =>
     makeChain(async () => ({ data: null, error: null }))
+  rpcImpl = async (_fnName: string, _args: any) => ({ data: null, error: null })
 })
 
 // ─── writeOutcomeToDecisionLog ────────────────────────────────────────────────
@@ -225,39 +227,32 @@ describe('adjustRecencyScores', () => {
       { id: 'ctx-3', context_type: 'constraint', summary: 'budget limit', recency_score: 40 },
     ]
 
-    const updates: Array<{ id: string; score: number }> = []
-    let callCount = 0
+    const rpcUpdates: Array<{ id: string; score: number }> = []
+    rpcImpl = async (fnName, args) => {
+      if (fnName === 'adjust_orc_context_recency_score') {
+        const ctx = contextRows.find(c => c.id === args.p_context_id)
+        if (!ctx) return { data: -1, error: null }
+        const newScore = Math.max(10, Math.min(100, ctx.recency_score + args.p_delta))
+        rpcUpdates.push({ id: args.p_context_id, score: newScore })
+        return { data: newScore, error: null }
+      }
+      return { data: null, error: null }
+    }
 
     supabaseFromImpl = (table) => {
-      if (table === 'orc_decision_log') {
-        return makeChain(async () => ({ data: decisionRows, error: null }))
-      }
-      // orc_context
-      callCount++
-      if (callCount === 1) {
-        return makeChain(async () => ({ data: contextRows, error: null }))
-      }
-      // subsequent calls are updates — capture them
-      const chain: any = {}
-      let capturedScore: number
-      chain.update = (d: any) => { capturedScore = d.recency_score; return chain }
-      chain.eq = (col: string, val: string) => {
-        if (col === 'id') updates.push({ id: val, score: capturedScore })
-        return chain
-      }
-      chain.then = (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
-      return chain
+      if (table === 'orc_decision_log') return makeChain(async () => ({ data: decisionRows, error: null }))
+      return makeChain(async () => ({ data: contextRows, error: null }))
     }
 
     const count = await adjustRecencyScores('user-3')
-    // ctx-1 (preference) and ctx-2 (strategy) should get +3
+    // ctx-1 (preference, score 50) and ctx-2 (strategy, score 60) both get +3
     expect(count).toBeGreaterThanOrEqual(1)
-    const ctx1Update = updates.find(u => u.id === 'ctx-1')
-    const ctx2Update = updates.find(u => u.id === 'ctx-2')
-    if (ctx1Update) expect(ctx1Update.score).toBe(53)
-    if (ctx2Update) expect(ctx2Update.score).toBe(63)
+    const ctx1 = rpcUpdates.find(u => u.id === 'ctx-1')
+    const ctx2 = rpcUpdates.find(u => u.id === 'ctx-2')
+    expect(ctx1?.score).toBe(53)
+    expect(ctx2?.score).toBe(63)
     // constraint should not be updated
-    expect(updates.find(u => u.id === 'ctx-3')).toBeUndefined()
+    expect(rpcUpdates.find(u => u.id === 'ctx-3')).toBeUndefined()
   })
 
   it('penalises preference rows on tier-1 fail with no risk notes', async () => {
@@ -274,35 +269,30 @@ describe('adjustRecencyScores', () => {
       { id: 'ctx-11', context_type: 'strategy', summary: 'prefer sync execution', recency_score: 50 },
     ]
 
-    const updates: Array<{ id: string; score: number }> = []
-    let callCount = 0
+    const rpcUpdates: Array<{ id: string; score: number }> = []
+    rpcImpl = async (fnName, args) => {
+      if (fnName === 'adjust_orc_context_recency_score') {
+        const ctx = contextRows.find(c => c.id === args.p_context_id)
+        if (!ctx) return { data: -1, error: null }
+        const newScore = Math.max(10, Math.min(100, ctx.recency_score + args.p_delta))
+        rpcUpdates.push({ id: args.p_context_id, score: newScore })
+        return { data: newScore, error: null }
+      }
+      return { data: null, error: null }
+    }
 
     supabaseFromImpl = (table) => {
-      if (table === 'orc_decision_log') {
-        return makeChain(async () => ({ data: decisionRows, error: null }))
-      }
-      callCount++
-      if (callCount === 1) {
-        return makeChain(async () => ({ data: contextRows, error: null }))
-      }
-      const chain: any = {}
-      let capturedScore: number
-      chain.update = (d: any) => { capturedScore = d.recency_score; return chain }
-      chain.eq = (col: string, val: string) => {
-        if (col === 'id') updates.push({ id: val, score: capturedScore })
-        return chain
-      }
-      chain.then = (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
-      return chain
+      if (table === 'orc_decision_log') return makeChain(async () => ({ data: decisionRows, error: null }))
+      return makeChain(async () => ({ data: contextRows, error: null }))
     }
 
     await adjustRecencyScores('user-4')
 
-    // Only preference gets -5, not strategy
-    const ctx10 = updates.find(u => u.id === 'ctx-10')
+    // Only preference gets -5 (score 50 → 45), not strategy
+    const ctx10 = rpcUpdates.find(u => u.id === 'ctx-10')
     expect(ctx10?.score).toBe(45)
     // strategy not penalised for tier-1 fail
-    expect(updates.find(u => u.id === 'ctx-11')).toBeUndefined()
+    expect(rpcUpdates.find(u => u.id === 'ctx-11')).toBeUndefined()
   })
 
   it('boosts constraint rows on tier-2/3 fail when risk was flagged', async () => {
@@ -320,37 +310,32 @@ describe('adjustRecencyScores', () => {
       { id: 'ctx-22', context_type: 'preference', summary: 'prefer fast mode', recency_score: 50 },
     ]
 
-    const updates: Array<{ id: string; score: number }> = []
-    let callCount = 0
+    const rpcUpdates: Array<{ id: string; score: number }> = []
+    rpcImpl = async (fnName, args) => {
+      if (fnName === 'adjust_orc_context_recency_score') {
+        const ctx = contextRows.find(c => c.id === args.p_context_id)
+        if (!ctx) return { data: -1, error: null }
+        const newScore = Math.max(10, Math.min(100, ctx.recency_score + args.p_delta))
+        rpcUpdates.push({ id: args.p_context_id, score: newScore })
+        return { data: newScore, error: null }
+      }
+      return { data: null, error: null }
+    }
 
     supabaseFromImpl = (table) => {
-      if (table === 'orc_decision_log') {
-        return makeChain(async () => ({ data: decisionRows, error: null }))
-      }
-      callCount++
-      if (callCount === 1) {
-        return makeChain(async () => ({ data: contextRows, error: null }))
-      }
-      const chain: any = {}
-      let capturedScore: number
-      chain.update = (d: any) => { capturedScore = d.recency_score; return chain }
-      chain.eq = (col: string, val: string) => {
-        if (col === 'id') updates.push({ id: val, score: capturedScore })
-        return chain
-      }
-      chain.then = (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
-      return chain
+      if (table === 'orc_decision_log') return makeChain(async () => ({ data: decisionRows, error: null }))
+      return makeChain(async () => ({ data: contextRows, error: null }))
     }
 
     await adjustRecencyScores('user-5')
 
-    // ctx-20 ('budget limit') matches risk note 'budget exceeded threshold' → +2
-    const ctx20 = updates.find(u => u.id === 'ctx-20')
+    // ctx-20 ('budget limit') matches risk note 'budget limit was exceeded' → +2 (50 → 52)
+    const ctx20 = rpcUpdates.find(u => u.id === 'ctx-20')
     expect(ctx20?.score).toBe(52)
     // ctx-21 ('time constraint') doesn't match the risk note → no update
-    expect(updates.find(u => u.id === 'ctx-21')).toBeUndefined()
-    // preference rows not boosted
-    expect(updates.find(u => u.id === 'ctx-22')).toBeUndefined()
+    expect(rpcUpdates.find(u => u.id === 'ctx-21')).toBeUndefined()
+    // preference rows not boosted on tier-2 fail
+    expect(rpcUpdates.find(u => u.id === 'ctx-22')).toBeUndefined()
   })
 
   it('clamps recency_score to [10, 100]', async () => {
@@ -359,38 +344,36 @@ describe('adjustRecencyScores', () => {
       { outcome: 'successful', risk_tier: 1, risk_notes: [], assumptions: { list: ['prefer cache'] } },
       { outcome: 'successful', risk_tier: 1, risk_notes: [], assumptions: { list: ['prefer cache'] } },
       { outcome: 'successful', risk_tier: 1, risk_notes: [], assumptions: { list: ['prefer cache'] } },
-      // ... enough to push score to >100
     ]
     const contextRows = [
       { id: 'ctx-high', context_type: 'preference', summary: 'prefer cache', recency_score: 99 },
     ]
 
-    const updates: Array<{ id: string; score: number }> = []
-    let callCount = 0
+    const rpcUpdates: Array<{ id: string; score: number }> = []
+    rpcImpl = async (fnName, args) => {
+      if (fnName === 'adjust_orc_context_recency_score') {
+        const ctx = contextRows.find(c => c.id === args.p_context_id)
+        if (!ctx) return { data: -1, error: null }
+        // RPC itself clamps — simulate the DB clamping
+        const newScore = Math.max(10, Math.min(100, ctx.recency_score + args.p_delta))
+        rpcUpdates.push({ id: args.p_context_id, score: newScore })
+        return { data: newScore, error: null }
+      }
+      return { data: null, error: null }
+    }
 
     supabaseFromImpl = (table) => {
-      if (table === 'orc_decision_log') {
-        return makeChain(async () => ({ data: decisionRows, error: null }))
-      }
-      callCount++
-      if (callCount === 1) {
-        return makeChain(async () => ({ data: contextRows, error: null }))
-      }
-      const chain: any = {}
-      let capturedScore: number
-      chain.update = (d: any) => { capturedScore = d.recency_score; return chain }
-      chain.eq = (col: string, val: string) => {
-        if (col === 'id') updates.push({ id: val, score: capturedScore })
-        return chain
-      }
-      chain.then = (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
-      return chain
+      if (table === 'orc_decision_log') return makeChain(async () => ({ data: decisionRows, error: null }))
+      return makeChain(async () => ({ data: contextRows, error: null }))
     }
 
     await adjustRecencyScores('user-6')
 
-    const ctxHigh = updates.find(u => u.id === 'ctx-high')
-    if (ctxHigh) expect(ctxHigh.score).toBeLessThanOrEqual(100)
+    // 4 successful decisions → delta = +3 accumulated but RPC clamps to 100
+    const ctxHigh = rpcUpdates.find(u => u.id === 'ctx-high')
+    expect(ctxHigh).toBeDefined()
+    expect(ctxHigh!.score).toBeLessThanOrEqual(100)
+    expect(ctxHigh!.score).toBeGreaterThanOrEqual(10)
   })
 
   it('returns 0 when supabase throws', async () => {

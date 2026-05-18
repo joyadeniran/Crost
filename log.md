@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 5 (Refinement) · 2026-05-18
+> Branch: `claude/orc-phase5-refinement`
+
+### Added
+- **`lib/orc-decision-gate.ts`** — `fetchOrcContext` in-memory cache (60s TTL per user). Module-level `Map<userId, {rows, cachedAt}>`. `invalidateOrcContextCache(userId)` export clears on demand; `seedOrcContextFromMemo` calls it after insert. Eliminates 1 Supabase round-trip on every orchestration request.
+- **`app/api/goals/[id]/feedback/route.ts`** — POST endpoint recording founder thumbs-up/down: validates `{ outcome: 'successful'|'failed', override_reason?: string }` (Zod), finds the most recent `orc_decision_log` row for the goal, and writes `founder_override=true` + `outcome` + `outcome_at`. Falls through to `writeOutcomeToDecisionLog` when no log row exists (direct-response path). Returns 401/404/400/500 on failure.
+- **`supabase/migrations/20260518000002_adjust_recency_score_rpc.sql`** — `adjust_orc_context_recency_score(p_context_id, p_user_id, p_delta)` Postgres function. Atomically applies `GREATEST(10, LEAST(100, recency_score + p_delta))` in a single UPDATE, returning the new score or -1 if the row wasn't found. Grants `EXECUTE` to `authenticated` and `service_role`.
+- **`tests/unit/phase5-refinement.test.ts`** — 18 unit tests: `fetchOrcContext` cache hit/miss, `invalidateOrcContextCache` forced re-fetch, null userId short-circuit, per-user isolation, DB-error fail-open; fake-timer TTL expiry; timing struct shape/field types; `orc_timing` log payload correctness; feedback Zod schema (all valid/invalid combos).
+
+### Changed
+- **`lib/orc-learning.ts`** — `adjustRecencyScores` now calls the atomic Supabase RPC `adjust_orc_context_recency_score` instead of client-side read-modify-write. Avoids concurrent-update races. Returns count of rows where RPC returned a valid non-(-1) score.
+- **`lib/llm-client.ts`** — `runOrchestratorTask`:
+  - `requestId` (8-char random alphanumeric) and timing struct `t = {start, preProcess, decisionGate, llm}` initialised at function entry.
+  - `t.preProcess` set immediately after the `Promise.all` pre-processing block.
+  - `t.decisionGate` set after `orcDecisionGate` returns.
+  - `t.llm` set after `callLLM`; structured `orc_timing` JSON log emitted to stdout (`type`, `requestId`, `userId`, `goalId`, `phases.preProcess`, `phases.decisionGate`, `phases.llm`, `totalMs`).
+  - `requestId` included in `orc_decision_log` insert (`assumptions.request_id`) and in `logEvent` metadata for `goal_completed` and `plan_drafted` events — enables correlated log tracing.
+- **`components/war-room/WarRoom.tsx`** — `SynthesisReportCard` gains thumbs-up/down feedback UI: `feedbackState` (`null | 'sending' | 'up' | 'down'`) drives a three-state render (buttons → spinner-disabled buttons → confirmation text). Click fires `POST /api/goals/${goalId}/feedback` fire-and-forget, then transitions to `'up'` or `'down'`.
+- **`tests/unit/orc-learning.test.ts`** — Mock updated to expose `rpc` on the Supabase client mock; four `adjustRecencyScores` tests rewritten to use `rpcImpl` capture pattern instead of `from().update()` capture (matching the RPC refactor).
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 4 Week 8 · 2026-05-18
 > Branch: `claude/orc-phase4-calendar`
 

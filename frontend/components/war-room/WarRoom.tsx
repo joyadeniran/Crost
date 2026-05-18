@@ -1704,6 +1704,7 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
   const [isLoading, setIsLoading] = useState(true)
   const [showRecurringModal, setShowRecurringModal] = useState(false)
   const [recurringCreated, setRecurringCreated] = useState(false)
+  const [feedbackState, setFeedbackState] = useState<null | 'sending' | 'up' | 'down'>(null)
 
   useEffect(() => {
     async function fetchReport() {
@@ -1829,33 +1830,81 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
           </div>
         </div>
 
-        {/* Set as Recurring */}
-        {!isDirectResponseReport && (
-          recurringCreated ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Founder feedback: thumbs up / down */}
+          {feedbackState === 'up' || feedbackState === 'down' ? (
             <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
-              ✓ Recurring mission set
+              {feedbackState === 'up' ? '👍 Thanks!' : '👎 Noted'}
             </div>
           ) : (
-            <button
-              onClick={() => setShowRecurringModal(true)}
-              style={{
-                padding: '7px 14px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'transparent',
-                color: 'var(--text-3)',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontFamily: 'var(--font-dm-mono, monospace)',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'var(--text-3)' }}
-            >
-              ↻ Set as recurring
-            </button>
-          )
-        )}
+            <>
+              {(['up', 'down'] as const).map(dir => (
+                <button
+                  key={dir}
+                  disabled={feedbackState === 'sending'}
+                  onClick={async () => {
+                    setFeedbackState('sending')
+                    try {
+                      await fetch(`/api/goals/${goalId}/feedback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ outcome: dir === 'up' ? 'successful' : 'failed' }),
+                      })
+                    } catch { /* best-effort */ }
+                    setFeedbackState(dir)
+                  }}
+                  title={dir === 'up' ? 'This went well' : 'This could be better'}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'transparent',
+                    color: 'var(--text-3)',
+                    cursor: feedbackState === 'sending' ? 'wait' : 'pointer',
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { if (feedbackState !== 'sending') { e.currentTarget.style.borderColor = dir === 'up' ? 'var(--accent)' : 'var(--red, #f87171)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' } }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.background = 'transparent' }}
+                >
+                  {dir === 'up' ? '👍' : '👎'}
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Set as Recurring */}
+          {!isDirectResponseReport && (
+            recurringCreated ? (
+              <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                ✓ Recurring mission set
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowRecurringModal(true)}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'transparent',
+                  color: 'var(--text-3)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-dm-mono, monospace)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'var(--text-3)' }}
+              >
+                ↻ Set as recurring
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* Suggest Contextual Follow-ups per §6.1 */}
