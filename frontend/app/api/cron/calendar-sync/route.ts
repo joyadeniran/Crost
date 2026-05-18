@@ -46,9 +46,10 @@ function parseGoogleEvent(raw: any): {
   const start = raw.start?.dateTime ?? raw.start?.date
   if (!start || !raw.id) return null
   const title = raw.summary ?? '(No title)'
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const attendees: string[] = (raw.attendees ?? [])
-    .map((a: any) => a.email as string)
-    .filter(Boolean)
+    .map((a: any) => (typeof a.email === 'string' ? a.email.trim() : ''))
+    .filter((e: string) => EMAIL_RE.test(e))
 
   let duration_minutes: number | undefined
   if (raw.start?.dateTime && raw.end?.dateTime) {
@@ -119,7 +120,14 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      const rawEvents: any[] = toolResult.data?.items ?? toolResult.data?.events ?? []
+      const rawData = toolResult.data
+      const rawEvents: any[] = Array.isArray(rawData?.items)
+        ? rawData.items
+        : Array.isArray(rawData?.events)
+          ? rawData.events
+          : Array.isArray(rawData)
+            ? rawData
+            : []
       let synced = 0
       let skipped = 0
 
@@ -149,7 +157,8 @@ export async function POST(req: NextRequest) {
       results.push({ userId, synced, skipped })
     } catch (err: any) {
       console.error(`[cron/calendar-sync] Failed for user ${userId}:`, err)
-      results.push({ userId, synced: 0, skipped: 0, error: err?.message ?? 'unknown' })
+      // Omit raw error message from response to avoid leaking internal details
+      results.push({ userId, synced: 0, skipped: 0, error: 'sync_failed' })
     }
   }
 
