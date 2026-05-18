@@ -3,9 +3,33 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.02  
+**Current Version:** 12.03  
 **Last Updated:** May 18, 2026  
-**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 4 complete (Weeks 7 & 8) on branch `claude/orc-phase4-calendar`, pending merge to main.
+**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 5 (Refinement) complete on branch `claude/orc-phase5-refinement`, pending merge to main.
+
+---
+
+## Session v12.03 — ORC Orchestration: Phase 5 Refinement & Polish
+**Date**: May 18, 2026  **Status**: 🔄 In Development  
+**Impact**: Four engineering improvements that harden the orchestration layer's performance, correctness, and trust loop. The `orc_context` cache eliminates a round-trip on every goal dispatch. The atomic RPC eliminates a race condition in the learning loop. Structured timing logs enable latency observability per request. Founder feedback (thumbs up/down) closes the trust loop between Orc's routing decisions and actual outcomes.
+
+### What Was Built
+1. **`orc_context` In-Memory Cache** (`lib/orc-decision-gate.ts`): 60-second TTL per user. Module-level `Map<userId, {rows, cachedAt}>`. `invalidateOrcContextCache(userId)` is exported and called by `seedOrcContextFromMemo` on write. Saves one Supabase SELECT on every call to `runOrchestratorTask`.
+2. **Atomic Recency Score RPC** (`supabase/migrations/20260518000002_adjust_recency_score_rpc.sql`): `adjust_orc_context_recency_score(p_context_id, p_user_id, p_delta)` uses a single `UPDATE ... RETURNING` to atomically clamp scores to [10, 100], returning -1 for row-not-found. `adjustRecencyScores` now calls this RPC instead of doing a client-side read-modify-write. Applied to Supabase project.
+3. **Timing Observability** (`lib/llm-client.ts`): `runOrchestratorTask` now initialises a `requestId` (8-char random) and a `t` struct (`start`, `preProcess`, `decisionGate`, `llm`). A structured `orc_timing` JSON line is emitted to stdout after the LLM call with per-phase durations and `totalMs`. `requestId` is propagated into `orc_decision_log.assumptions.request_id` and into `logEvent` metadata for `plan_drafted` and `goal_completed` events — enabling correlated log traces.
+4. **Founder Feedback Loop** (`app/api/goals/[id]/feedback/route.ts` + `WarRoom.tsx`): `POST /api/goals/[id]/feedback` accepts `{ outcome: 'successful'|'failed', override_reason? }` (Zod-validated), finds the most recent `orc_decision_log` row, and writes `founder_override=true` + `outcome` + `outcome_at`. `SynthesisReportCard` gains thumbs-up/down buttons — fire-and-forget fetch, state machine `null → sending → 'up'/'down'` shows confirmation text after submission.
+
+### Files Changed
+- `lib/orc-decision-gate.ts` — cache + `invalidateOrcContextCache`
+- `lib/orc-learning.ts` — `adjustRecencyScores` → atomic RPC
+- `lib/llm-client.ts` — `requestId`, timing struct, `orc_timing` log, `requestId` in event metadata
+- `app/api/goals/[id]/feedback/route.ts` — NEW: founder feedback POST endpoint
+- `components/war-room/WarRoom.tsx` — thumbs-up/down in `SynthesisReportCard`
+- `supabase/migrations/20260518000002_adjust_recency_score_rpc.sql` — NEW: atomic RPC migration (applied)
+- `tests/unit/phase5-refinement.test.ts` — NEW: 18 unit tests
+- `tests/unit/orc-learning.test.ts` — RPC mock updated (4 tests rewritten)
+- `ORC_ORCHESTRATION_UPGRADE_PLAN.md` — Phase 5 marked complete
+- `log.md` — Phase 5 entry added
 
 ---
 

@@ -4,6 +4,17 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+// ─── orc_context in-memory cache ─────────────────────────────────────────────
+// 60-second TTL per user. Avoids a Supabase round-trip on every orchestration
+// call. Invalidated on seedOrcContextFromMemo writes.
+
+const ORC_CONTEXT_CACHE = new Map<string, { rows: OrcContextRow[]; cachedAt: number }>()
+const ORC_CONTEXT_CACHE_TTL = 60_000 // ms
+
+export function invalidateOrcContextCache(userId: string): void {
+  ORC_CONTEXT_CACHE.delete(userId)
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type OrcResponseMode =
@@ -40,6 +51,12 @@ export interface OrcContextRow {
  */
 export async function fetchOrcContext(userId: string | null): Promise<OrcContextRow[]> {
   if (!userId) return []
+
+  const cached = ORC_CONTEXT_CACHE.get(userId)
+  if (cached && Date.now() - cached.cachedAt < ORC_CONTEXT_CACHE_TTL) {
+    return cached.rows
+  }
+
   try {
     const supabase = createServerSupabaseClient()
     const { data } = await supabase
@@ -49,7 +66,9 @@ export async function fetchOrcContext(userId: string | null): Promise<OrcContext
       .order('recency_score', { ascending: false })
       .order('updated_at', { ascending: false })
       .limit(20)
-    return (data ?? []) as OrcContextRow[]
+    const rows = (data ?? []) as OrcContextRow[]
+    ORC_CONTEXT_CACHE.set(userId, { rows, cachedAt: Date.now() })
+    return rows
   } catch (err) {
     console.error('[fetchOrcContext] Error:', err)
     return []
@@ -121,6 +140,7 @@ export async function seedOrcContextFromMemo(userId: string): Promise<void> {
 
     if (rows.length > 0) {
       await supabase.from('orc_context').insert(rows)
+      invalidateOrcContextCache(userId)
     }
   } catch (err) {
     console.error('[seedOrcContextFromMemo] Failed (non-fatal):', err)

@@ -208,21 +208,17 @@ export async function adjustRecencyScores(userId: string, lookbackDays = 7): Pro
       }
     }
 
-    // Apply clamped deltas
+    // Apply deltas atomically via RPC — avoids read-modify-write races
+    // when adjustRecencyScores is called concurrently for the same user.
     let updatedCount = 0
     for (const [ctxId, delta] of Object.entries(deltas)) {
       if (delta === 0) continue
-      const current = contextRows.find(c => c.id === ctxId)?.recency_score ?? 50
-      const next = Math.min(100, Math.max(10, current + delta))
-      if (next === current) continue
-
-      await supabase
-        .from('orc_context')
-        .update({ recency_score: next })
-        .eq('id', ctxId)
-        .eq('user_id', userId)
-
-      updatedCount++
+      const { data: newScore } = await supabase.rpc('adjust_orc_context_recency_score', {
+        p_context_id: ctxId,
+        p_user_id:    userId,
+        p_delta:      delta,
+      })
+      if (newScore !== null && newScore !== -1) updatedCount++
     }
 
     return updatedCount

@@ -1,7 +1,7 @@
 # ORC ORCHESTRATION UPGRADE PLAN
 ## Transforming Orc into the Founder's Chief of Staff
 
-**Status:** Phase 4 Complete ✅ — Phase 5 (Refinement) next  
+**Status:** Phase 5 Complete ✅ — All phases shipped  
 **Created:** May 16, 2026  
 **Scope:** Comprehensive orchestration layer redesign for maximum founder trust and autonomy  
 **Owner:** Engineering (Orc is the boss, not a feature — treat accordingly)
@@ -985,12 +985,13 @@ Continue? [YES, PROCEED] [SCALE DOWN] [SKIP FOR NOW]
 
 ---
 
-## F.5 Phase 5: Refinement & Polish (Weeks 9+)
+## F.5 Phase 5: Refinement & Polish (Weeks 9+) ✅
 
-- [ ] Feedback incorporation from beta founders
-- [ ] Performance optimization (context injection latency)
-- [ ] Edge case hardening
-- [ ] Comprehensive logging for observability
+- [x] `fetchOrcContext` in-memory cache (60s TTL, per-user) — eliminates 1 Supabase round-trip per orchestration call; `invalidateOrcContextCache` export; `seedOrcContextFromMemo` invalidates on write
+- [x] `adjustRecencyScores` atomic RPC (`adjust_orc_context_recency_score`) — fixes read-modify-write race for concurrent users (migration `20260518000002_adjust_recency_score_rpc.sql`)
+- [x] Timing observability — `requestId` + `t` struct in `runOrchestratorTask`; structured JSON `orc_timing` log after each phase (preProcess / decisionGate / llm); `requestId` propagated to `orc_decision_log` and `logEvent` metadata
+- [x] Founder feedback loop — `POST /api/goals/[id]/feedback` writes `founder_override=true` + `outcome` to `orc_decision_log`; thumbs-up/down UI in `SynthesisReportCard` (fire-and-forget fetch, state machine: idle → sending → up/down)
+- [x] 304 tests passing (18 new in `phase5-refinement.test.ts`: cache TTL, per-user isolation, fail-open, timing struct shape, feedback Zod schema)
 
 ---
 
