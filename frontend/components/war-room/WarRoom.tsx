@@ -259,7 +259,7 @@ function GoalInput({
       setValue(prefillSignal.value)
       setTimeout(() => inputRef.current?.focus(), 0)
     }
-  }, [prefillSignal?.ts])
+  }, [prefillSignal])
   const [menuPrefix, setMenuPrefix] = useState<'@' | '/' | null>(null)
   const [menuQuery, setMenuQuery] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)

@@ -1284,7 +1284,7 @@ export async function runOrchestratorTask(
 
   // Record in decision log for the self-improvement loop (fire-and-forget)
   if (userId) {
-    supabase.from('orc_decision_log').insert({
+    void Promise.resolve(supabase.from('orc_decision_log').insert({
       user_id:         userId,
       goal_id:         goalId,
       decision_type:   'response_mode_selection',
@@ -1295,7 +1295,7 @@ export async function runOrchestratorTask(
       risk_tier:       riskAssessment.tier,
       risk_notes:      orcDecisionPayload.risk_notes,
       capability_gaps: capSummary.gaps.map(g => ({ slug: g.slug, name: g.name, availability: g.availability })),
-    }).then(() => {}).catch(() => {})
+    })).catch(() => {})
   }
 
   if (result.is_valid_goal === false) {
