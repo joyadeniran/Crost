@@ -117,13 +117,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
       const eventType = eventMap[parsed.status]
       if (eventType) {
-        await supabase.from('event_log').insert({
+        void Promise.resolve(supabase.from('event_log').insert({
           department_slug: artifact.department_slug,
           event_type: eventType,
           description: `Artifact "${artifact.title}" moved to ${parsed.status}`,
           metadata: { artifact_id: params.id, from_status: artifact.status, to_status: parsed.status },
           created_by: user.id,
-        }).then(() => {}).catch(() => {})
+        })).catch(() => {})
       }
     }
 

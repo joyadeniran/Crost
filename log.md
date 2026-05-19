@@ -5,6 +5,118 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — ORC Orchestration Phase 5 (Refinement) · 2026-05-18
+> Branch: `claude/orc-phase5-refinement`
+
+### Added
+- **`lib/orc-decision-gate.ts`** — `fetchOrcContext` in-memory cache (60s TTL per user). Module-level `Map<userId, {rows, cachedAt}>`. `invalidateOrcContextCache(userId)` export clears on demand; `seedOrcContextFromMemo` calls it after insert. Eliminates 1 Supabase round-trip on every orchestration request.
+- **`app/api/goals/[id]/feedback/route.ts`** — POST endpoint recording founder thumbs-up/down: validates `{ outcome: 'successful'|'failed', override_reason?: string }` (Zod), finds the most recent `orc_decision_log` row for the goal, and writes `founder_override=true` + `outcome` + `outcome_at`. Falls through to `writeOutcomeToDecisionLog` when no log row exists (direct-response path). Returns 401/404/400/500 on failure.
+- **`supabase/migrations/20260518000002_adjust_recency_score_rpc.sql`** — `adjust_orc_context_recency_score(p_context_id, p_user_id, p_delta)` Postgres function. Atomically applies `GREATEST(10, LEAST(100, recency_score + p_delta))` in a single UPDATE, returning the new score or -1 if the row wasn't found. Grants `EXECUTE` to `authenticated` and `service_role`.
+- **`tests/unit/phase5-refinement.test.ts`** — 18 unit tests: `fetchOrcContext` cache hit/miss, `invalidateOrcContextCache` forced re-fetch, null userId short-circuit, per-user isolation, DB-error fail-open; fake-timer TTL expiry; timing struct shape/field types; `orc_timing` log payload correctness; feedback Zod schema (all valid/invalid combos).
+
+### Changed
+- **`lib/orc-learning.ts`** — `adjustRecencyScores` now calls the atomic Supabase RPC `adjust_orc_context_recency_score` instead of client-side read-modify-write. Avoids concurrent-update races. Returns count of rows where RPC returned a valid non-(-1) score.
+- **`lib/llm-client.ts`** — `runOrchestratorTask`:
+  - `requestId` (8-char random alphanumeric) and timing struct `t = {start, preProcess, decisionGate, llm}` initialised at function entry.
+  - `t.preProcess` set immediately after the `Promise.all` pre-processing block.
+  - `t.decisionGate` set after `orcDecisionGate` returns.
+  - `t.llm` set after `callLLM`; structured `orc_timing` JSON log emitted to stdout (`type`, `requestId`, `userId`, `goalId`, `phases.preProcess`, `phases.decisionGate`, `phases.llm`, `totalMs`).
+  - `requestId` included in `orc_decision_log` insert (`assumptions.request_id`) and in `logEvent` metadata for `goal_completed` and `plan_drafted` events — enables correlated log tracing.
+- **`components/war-room/WarRoom.tsx`** — `SynthesisReportCard` gains thumbs-up/down feedback UI: `feedbackState` (`null | 'sending' | 'up' | 'down'`) drives a three-state render (buttons → spinner-disabled buttons → confirmation text). Click fires `POST /api/goals/${goalId}/feedback` fire-and-forget, then transitions to `'up'` or `'down'`.
+- **`tests/unit/orc-learning.test.ts`** — Mock updated to expose `rpc` on the Supabase client mock; four `adjustRecencyScores` tests rewritten to use `rpcImpl` capture pattern instead of `from().update()` capture (matching the RPC refactor).
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 4 Week 8 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`lib/cost-tracker.ts`** — real-time cost tracking library:
+  - `getBudgetConstraint(userId)` — reads `monthly_api_budget` from `orc_context` constraint rows (JSONB field or `$N` parsed from summary text). Returns null when unconfigured.
+  - `classifyBudgetAlert(spent, limit)` — `ok` (<80%), `warning` (80–94%), `critical` (≥95%), `null` (no budget set).
+  - `computeMonthlySpend(userId)` — aggregates `api_usage_logs` for the current UTC calendar month into `MonthlyCostSummary`: totalCostUsd, totalTokens, byModel (calls/tokens/costUsd), byProvider, budgetLimitUsd, budgetUsedPct, alertLevel. Fail-open on any error.
+- **`app/api/usage/summary/route.ts`** — authenticated GET endpoint returning `MonthlyCostSummary` for the logged-in user.
+- **`tests/unit/cost-tracker.test.ts`** — 22 unit tests: `classifyBudgetAlert` (all threshold boundaries), `getBudgetConstraint` (JSONB, text parse, no amount, errors), `computeMonthlySpend` (aggregation, all alert levels, no budget, fail-open, month string).
+- **`tests/unit/e2e-flows.test.ts`** — 16 integration-style tests across 5 flows: budget alert injection (warning/critical/ok), calendar event type inference (6 title patterns), prep checklist goalPrompt coverage (investor_meeting, board_meeting), orc-learning outcome writes (completed, failed), recurring mission eligibility gate (5 conditions).
+
+### Changed
+- **`lib/llm-client.ts`** — `computeMonthlySpend` added as 5th entry in the `Promise.all` parallel pre-processing block of `runOrchestratorTask`. If `alertLevel` is `warning` or `critical`, a descriptive budget risk note is pushed into `riskAssessment.risk_notes` before `orcDecisionGate` — surfaces in the mode hint, plan card, and `orc_decision_log`.
+- **`app/api/cron/calendar-sync/route.ts`** (security hardening):
+  - Email addresses in Google Calendar attendee lists now validated with `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` before insert (was `.filter(Boolean)` only).
+  - Composio response parsed defensively: checks `.items`, `.events`, and raw array in sequence before defaulting to `[]`.
+  - Raw `err.message` removed from API response body — error logged server-side, response returns `'sync_failed'` string.
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 4 Week 7 · 2026-05-18
+> Branch: `claude/orc-phase4-calendar`
+
+### Added
+- **`supabase/migrations/20260518000001_company_calendar_events.sql`** — `company_calendar_events` table: id, user_id, type (investor_meeting/customer_call/board_meeting/conference/deadline/other), title, date, duration_minutes, attendees, prep_required, related_goals, meeting_notes, outcomes, next_actions, source (manual|google_calendar), external_id. RLS + service_role bypass; unique index on (user_id, external_id) for sync dedup; date+user index; updated_at trigger.
+- **`lib/calendar-prep.ts`** — three functions:
+  - `getUpcomingEvents(userId, lookAheadDays=7)` — fetches events from DB within the look-ahead window, returns `[]` on any error.
+  - `buildPrepChecklist(event)` — rule-based checklist per event type (PREP_TEMPLATES); items with `goalPrompt` are one-click launchable; merges `event.prep_required` without duplicating base items.
+  - `getProactivePrepSuggestions(userId)` — combines both, computes `daysUntil` clamped to 0 by `Math.max`.
+- **`app/api/calendar-events/route.ts`** — GET (list all or `?upcoming=true&days=N` window) + POST (create manual event, Zod-validated).
+- **`app/api/calendar-events/[id]/route.ts`** — PATCH (update type/title/date/attendees/meeting_notes/outcomes/next_actions) + DELETE. Both owner-scoped via `.eq('user_id', user.id)`.
+- **`app/api/cron/calendar-sync/route.ts`** — Daily CRON_SECRET-authed sync. Finds all users in `connections` table with `service_name = 'googlecalendar'`, calls `GOOGLECALENDAR_LIST_EVENTS` via `runComposioTool` for 30-day window, infers event type from title keywords, upserts on `(user_id, external_id)` conflict. Skips users whose Composio call fails (returns error in result, doesn't fail the batch).
+- **`tests/unit/calendar-prep.test.ts`** — 17 unit tests covering `buildPrepChecklist` (all 6 types, prep_required merge, dedup, goalPrompt presence, priority values), `getUpcomingEvents` (data, DB error, throws, look-ahead window check), `getProactivePrepSuggestions` (daysUntil computation, past-event clamping, checklist present, empty case).
+
+### Changed
+- **`components/war-room/WarRoom.tsx`** — Added `CalendarPrepPanel` component: shows upcoming events with urgency colour-coded badges (today/tomorrow/in Nd) and action chips for items with goalPrompt. `GoalInput` gains `prefillSignal?: { value: string; ts: number }` prop — clicking an action chip fires `setGoalPrefillSignal({ value: prompt, ts: Date.now() })` in the parent, which GoalInput watches via a `useEffect` to set its textarea value and focus. Panel lazy-fetches `/api/calendar-events?upcoming=true&days=7` on War Room mount and is dismissible per session.
+- **`types/index.ts`** — Added `CalendarEventType` union and `CalendarEvent` interface.
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 3 Week 6 · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Added
+- **`lib/orc-learning.ts`** — ORC self-improvement loop (three functions):
+  - `writeOutcomeToDecisionLog(goalId, outcome, description?)` — stamps `outcome`, `outcome_description`, and `outcome_at` on any `orc_decision_log` rows for the goal that are still unresolved. Fire-and-forget safe; never throws.
+  - `computeLearningInsights(userId, lookbackDays=7)` — aggregates resolved decisions into mode-level and risk-tier-level `ModeStats` (total, successful, failed, successRate), plus an overall success rate.
+  - `adjustRecencyScores(userId, lookbackDays=7)` — nudges `orc_context.recency_score` based on recent outcomes: tier-1 success → +3 to matched preference/strategy rows; tier-1 fail with no flagged risk → −5 to matched preference rows; tier-2/3 fail with flagged risk notes → +2 to relevant constraint rows. Scores clamped to [10, 100]. Returns count of rows updated.
+- **`app/api/cron/orc-learning/route.ts`** — Weekly CRON_SECRET-authed endpoint. Finds all distinct users with resolved decisions in the past 7 days, runs `computeLearningInsights` + `adjustRecencyScores` for each in a single pass, and returns per-user stats.
+- **`tests/unit/orc-learning.test.ts`** — 16 unit tests covering `writeOutcomeToDecisionLog` (update shape, null description, never-throws), `computeLearningInsights` (empty data, DB error, mode rates, tier rates, lookback param, throws), and `adjustRecencyScores` (no decisions, no context, tier-1 boost, tier-1 penalty, tier-2 constraint boost, score clamping, throws).
+
+### Changed
+- **`app/api/goals/[id]/route.ts`** — PATCH handler now calls `writeOutcomeToDecisionLog` fire-and-forget on both `completed` (outcome `'successful'`) and `failed` (outcome `'failed'`) status transitions.
+
+---
+
+## [Unreleased] — ORC Orchestration Phase 3 Week 5 · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Added
+- **`supabase/migrations/20260517000010_recurring_missions.sql`** — `recurring_missions` table: id, user_id, title, founder_input, cadence (daily/weekly/monthly), cadence_day, next_run_at, last_run_at, last_goal_id, source_goal_id, is_active, auto_dispatch, risk_tier_limit (1–3), run_count, created_at, updated_at. RLS with service_role bypass; partial index on `(next_run_at, is_active) WHERE is_active = true`.
+- **`lib/recurring-missions.ts`** — Core scheduling library:
+  - `calculateNextRun(cadence, fromDate, cadenceDay?)` — daily: +1 day at 9am; weekly: +7 days at 9am; monthly: +1 month at 9am (end-of-month clamped). Seconds/ms always zero.
+  - `checkAutoDispatchEligibility(mission, orcDecision)` — gate: `auto_dispatch=true` + mode in `['quick_plan','direct_action']` + zero risk notes + `risk_tier ≤ risk_tier_limit`.
+  - `createRecurringMission(userId, input)` and `listRecurringMissions(userId)` — Supabase helpers.
+- **`app/api/cron/recurring-missions/route.ts`** — Cron handler (CRON_SECRET auth, `maxDuration: 300`). Finds due missions (`is_active=true`, `next_run_at ≤ now`). Per mission: creates goal row, runs `runOrchestratorTask`, optionally auto-dispatches all pending tasks via the internal dispatch endpoint, updates `next_run_at`/`last_run_at`/`run_count`.
+- **`app/api/recurring-missions/route.ts`** — GET (list) / POST (create) with Zod validation.
+- **`app/api/recurring-missions/[id]/route.ts`** — PUT (update, recomputes `next_run_at` if cadence changed) / DELETE (hard delete).
+- **`tests/unit/recurring-missions.test.ts`** — 16 unit tests: `calculateNextRun` (daily, weekly, monthly, clamping, cadence_day, precision), `checkAutoDispatchEligibility` (all gate conditions).
+
+### Changed
+- **`components/war-room/WarRoom.tsx`** — Added `RecurringMissionModal` (cadence radio, auto_dispatch checkbox, risk_tier_limit radio when auto_dispatch on) and "↻ Set as recurring" button in `SynthesisReportCard` footer (non-direct-response goals only). Shows "✓ Recurring mission set" after success.
+- **`lib/llm-client.ts`** — Persists `risk_tier: riskAssessment.tier` inside the `orc_decision` JSONB column on the `goals` row.
+- **`types/index.ts`** — Added `risk_tier?: 1 | 2 | 3` to `Goal.orc_decision`; added `RecurringCadence` and `RecurringMission` types.
+
+---
+
+## [Unreleased] — Test Suite Remediation · 2026-05-17
+> Branch: `claude/orc-phase3-recurring-missions`
+
+### Fixed
+- **43 pre-existing test failures** resolved across 3 test files; suite now 231/231:
+  - `lib/utils.ts` — `formatErrorMessage` SYSTEM_LIMIT_EXCEEDED branch now includes `tokensUsed` and `limit` from parsed data.
+  - `lib/artifact-transformers/index.ts` — `detectOutputType` accepts `content: unknown` (short-circuits on non-string pre-parsed objects); `skill === 'image'` routes to `transformToMarkdownResearch` (was 'jpg'); narrative detection threshold corrected for multi-string objects.
+  - `tests/unit/artifact-transformers.test.ts` — xlsx mock returns `{ SheetNames: [], Sheets: {} }` from `book_new`; added `encode_cell` and `json_to_sheet` to xlsx mock; docx constructors use `vi.fn(function() {})` (not arrow functions) for `new` compatibility; KB file fixture UUIDs made valid.
+  - `tests/unit/edge-cases.test.ts` — global `mockSupabaseClient` and inline memo-write builder both add `.is: vi.fn().mockReturnThis()`; `callLLM` calls updated to positional signature `callLLM(model, prompt)`; result assertions check `result.content`; auth guard test sets `COMPOSIO_API_KEY` env var; hallucination guard uses `mockResolvedValue` + `toBeGreaterThanOrEqual(2)`.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 2 · 2026-05-17
 > Branch: `claude/orc-orchestration-phase-1-RtqTf`
 

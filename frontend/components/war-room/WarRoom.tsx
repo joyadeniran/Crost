@@ -9,7 +9,8 @@ import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 import { supabaseClient } from '@/lib/supabase-browser'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
-import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus } from '@/types'
+import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus, CalendarEvent } from '@/types'
+import type { PrepSuggestion } from '@/lib/calendar-prep'
 import { parseInput, getActivePrefix } from '@/lib/hooks/useInputParser'
 import { ChatCommandMenu } from '@/components/chat/ChatCommandMenu'
 import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
@@ -134,6 +135,107 @@ const DEFAULT_DEPT_COLOUR = '#6366f1'
 const DEFAULT_DEPT_ICON = '🏢'
 
 
+// ─── CalendarPrepPanel ────────────────────────────────────────────────────────
+
+function CalendarPrepPanel({
+  suggestions,
+  onPrefill,
+  onDismiss,
+}: {
+  suggestions: PrepSuggestion[]
+  onPrefill: (prompt: string) => void
+  onDismiss: () => void
+}) {
+  const [expanded, setExpanded] = useState(true)
+  if (suggestions.length === 0) return null
+
+  const EVENT_TYPE_EMOJI: Record<string, string> = {
+    investor_meeting: '💼',
+    customer_call: '📞',
+    board_meeting: '🏛',
+    conference: '🎤',
+    deadline: '🔴',
+    other: '📅',
+  }
+
+  return (
+    <div style={{
+      border: '1px solid rgba(99,102,241,0.25)',
+      borderRadius: 'var(--radius)',
+      marginBottom: 16,
+      overflow: 'hidden',
+      background: 'rgba(99,102,241,0.04)',
+    }}>
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', cursor: 'pointer',
+          borderBottom: expanded ? '1px solid rgba(99,102,241,0.15)' : 'none',
+        }}
+      >
+        <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
+          📅 {suggestions.length === 1
+            ? `Upcoming: ${suggestions[0].event.title} (${suggestions[0].daysUntil === 0 ? 'today' : suggestions[0].daysUntil === 1 ? 'tomorrow' : `in ${suggestions[0].daysUntil} days`})`
+            : `${suggestions.length} upcoming events — prep suggestions ready`}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span style={{ color: 'var(--muted-foreground)', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss() }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}
+            title="Dismiss"
+          >×</button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {suggestions.map(({ event, daysUntil, checklist }) => (
+            <div key={event.id}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span>{EVENT_TYPE_EMOJI[event.type] ?? '📅'}</span>
+                <span style={{ fontFamily: 'var(--font-dm-sans, sans-serif)', fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
+                  {event.title}
+                </span>
+                <span style={{
+                  fontSize: 11, padding: '2px 7px', borderRadius: 9999,
+                  background: daysUntil <= 1 ? 'rgba(239,68,68,0.15)' : daysUntil <= 3 ? 'rgba(234,179,8,0.15)' : 'rgba(99,102,241,0.12)',
+                  color: daysUntil <= 1 ? '#f87171' : daysUntil <= 3 ? '#ca8a04' : '#818cf8',
+                  fontFamily: 'var(--font-dm-mono, monospace)',
+                }}>
+                  {daysUntil === 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil}d`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {checklist.filter(item => item.goalPrompt).map(item => (
+                  <button
+                    key={item.label}
+                    onClick={() => onPrefill(item.goalPrompt!)}
+                    style={{
+                      background: 'rgba(99,102,241,0.1)',
+                      border: '1px solid rgba(99,102,241,0.2)',
+                      borderRadius: 6,
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      color: '#818cf8',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-dm-sans, sans-serif)',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── GoalInput ────────────────────────────────────────────────────────────────
 
 function GoalInput({
@@ -141,14 +243,23 @@ function GoalInput({
   isLoading,
   hasActiveGoal,
   departments,
+  prefillSignal,
 }: {
   onSubmit: (goal: string) => void
   isLoading: boolean
   hasActiveGoal: boolean
   departments: Department[]
+  prefillSignal?: { value: string; ts: number }
 }) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (prefillSignal?.value) {
+      setValue(prefillSignal.value)
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }, [prefillSignal])
   const [menuPrefix, setMenuPrefix] = useState<'@' | '/' | null>(null)
   const [menuQuery, setMenuQuery] = useState('')
   const [menuIndex, setMenuIndex] = useState(0)
@@ -1318,6 +1429,179 @@ function PlanCard({
   )
 }
 
+// ─── RecurringMissionModal ────────────────────────────────────────────────────
+
+function RecurringMissionModal({
+  goalId,
+  founderInput,
+  goalTitle,
+  onClose,
+  onSuccess,
+}: {
+  goalId: string
+  founderInput: string
+  goalTitle: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [cadence, setCadence] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [autoDispatch, setAutoDispatch] = useState(false)
+  const [riskTierLimit, setRiskTierLimit] = useState<1 | 2 | 3>(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/recurring-missions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: goalTitle.slice(0, 200),
+          founder_input: founderInput,
+          cadence,
+          auto_dispatch: autoDispatch,
+          risk_tier_limit: riskTierLimit,
+          source_goal_id: goalId,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error ?? 'Failed to create recurring mission')
+      }
+      onSuccess()
+    } catch (err: any) {
+      setError(err?.message ?? 'Something went wrong')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const CADENCE_LABELS: Record<string, string> = {
+    daily: 'Daily — every morning at 9am',
+    weekly: 'Weekly — same day each week at 9am',
+    monthly: 'Monthly — same date each month at 9am',
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{
+        background: 'var(--bg-2)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16,
+        padding: 28,
+        width: '100%',
+        maxWidth: 440,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.15em', textTransform: 'uppercase', fontFamily: 'var(--font-dm-mono, monospace)', marginBottom: 6 }}>
+            Recurring Mission
+          </div>
+          <h3 style={{ fontFamily: 'var(--font-syne, sans-serif)', fontSize: 18, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+            Set as Recurring
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6, marginBottom: 0, lineHeight: 1.5 }}>
+            Orc will re-run this goal automatically on your chosen cadence.
+          </p>
+        </div>
+
+        {/* Cadence */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 8 }}>Cadence</div>
+          {(['daily', 'weekly', 'monthly'] as const).map(c => (
+            <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="cadence"
+                value={c}
+                checked={cadence === c}
+                onChange={() => setCadence(c)}
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              <span style={{ fontSize: 13, color: 'var(--text)' }}>{CADENCE_LABELS[c]}</span>
+            </label>
+          ))}
+        </div>
+
+        {/* Auto-dispatch */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={autoDispatch}
+            onChange={e => setAutoDispatch(e.target.checked)}
+            style={{ accentColor: 'var(--accent)', width: 14, height: 14 }}
+          />
+          <span style={{ fontSize: 13, color: 'var(--text)' }}>
+            Auto-dispatch low-risk tasks
+          </span>
+        </label>
+
+        {/* Risk tier limit — only when auto_dispatch is on */}
+        {autoDispatch && (
+          <div style={{ marginBottom: 16, paddingLeft: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 8 }}>
+              Auto-dispatch up to risk tier
+            </div>
+            {([1, 2, 3] as const).map(t => (
+              <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="risk_tier"
+                  value={t}
+                  checked={riskTierLimit === t}
+                  onChange={() => setRiskTierLimit(t)}
+                  style={{ accentColor: 'var(--accent)' }}
+                />
+                <span style={{ fontSize: 12, color: riskTierLimit === t ? 'var(--text)' : 'var(--text-3)' }}>
+                  Tier {t} — {t === 1 ? 'assumptions only' : t === 2 ? 'minor conflicts flagged' : 'capability gaps ok'}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div style={{ fontSize: 12, color: '#f87171', marginBottom: 12 }}>{error}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            style={{
+              padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)',
+              background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', fontSize: 13,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            style={{
+              padding: '8px 18px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: '#000', fontWeight: 600,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: 13,
+              opacity: isSubmitting ? 0.6 : 1,
+            }}
+          >
+            {isSubmitting ? 'Creating…' : 'Create Recurring Mission'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── SynthesisReportCard (Phase 4) ────────────────────────────────────────────
 
 function renderInline(text: string) {
@@ -1418,6 +1702,9 @@ function MarkdownLite({ text }: { text: string }) {
 function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDismiss: () => void, goal?: Goal | null }) {
   const [report, setReport] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [showRecurringModal, setShowRecurringModal] = useState(false)
+  const [recurringCreated, setRecurringCreated] = useState(false)
+  const [feedbackState, setFeedbackState] = useState<null | 'sending' | 'up' | 'down'>(null)
 
   useEffect(() => {
     async function fetchReport() {
@@ -1542,11 +1829,100 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
             </div>
           </div>
         </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Founder feedback: thumbs up / down */}
+          {feedbackState === 'up' || feedbackState === 'down' ? (
+            <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+              {feedbackState === 'up' ? '👍 Thanks!' : '👎 Noted'}
+            </div>
+          ) : (
+            <>
+              {(['up', 'down'] as const).map(dir => (
+                <button
+                  key={dir}
+                  disabled={feedbackState === 'sending'}
+                  onClick={async () => {
+                    setFeedbackState('sending')
+                    try {
+                      await fetch(`/api/goals/${goalId}/feedback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ outcome: dir === 'up' ? 'successful' : 'failed' }),
+                      })
+                    } catch { /* best-effort */ }
+                    setFeedbackState(dir)
+                  }}
+                  title={dir === 'up' ? 'This went well' : 'This could be better'}
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'transparent',
+                    color: 'var(--text-3)',
+                    cursor: feedbackState === 'sending' ? 'wait' : 'pointer',
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { if (feedbackState !== 'sending') { e.currentTarget.style.borderColor = dir === 'up' ? 'var(--accent)' : 'var(--red, #f87171)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' } }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.background = 'transparent' }}
+                >
+                  {dir === 'up' ? '👍' : '👎'}
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Set as Recurring */}
+          {!isDirectResponseReport && (
+            recurringCreated ? (
+              <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                ✓ Recurring mission set
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowRecurringModal(true)}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'transparent',
+                  color: 'var(--text-3)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-dm-mono, monospace)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'var(--text-3)' }}
+              >
+                ↻ Set as recurring
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* Suggest Contextual Follow-ups per §6.1 */}
       {report.id && (
         <SuggestedActionChips entityType="mission_report" entityId={report.id} />
+      )}
+
+      {showRecurringModal && goal && (
+        <RecurringMissionModal
+          goalId={goalId}
+          founderInput={goal.founder_input}
+          goalTitle={goal.title}
+          onClose={() => setShowRecurringModal(false)}
+          onSuccess={() => {
+            setShowRecurringModal(false)
+            setRecurringCreated(true)
+          }}
+        />
       )}
     </div>
   )
@@ -1711,6 +2087,30 @@ export function WarRoom() {
   // One-shot error detail fetch: populated only when goal status flips to 'failed'.
   // Uses the already-imported supabaseClient — no new subscription, no polling.
   const [goalErrorEvents, setGoalErrorEvents] = useState<{ description: string; event_type: string; created_at: string }[]>([])
+
+  // ── Calendar prep ──
+  const [calendarSuggestions, setCalendarSuggestions] = useState<PrepSuggestion[]>([])
+  const [calendarDismissed, setCalendarDismissed] = useState(false)
+  const [goalPrefillSignal, setGoalPrefillSignal] = useState<{ value: string; ts: number } | undefined>()
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/calendar-events?upcoming=true&days=7')
+      .then(r => r.ok ? r.json() : null)
+      .then(async json => {
+        if (cancelled || !json?.data?.length) return
+        const { buildPrepChecklist } = await import('@/lib/calendar-prep')
+        const now = Date.now()
+        const suggestions: PrepSuggestion[] = (json.data as CalendarEvent[]).map(event => ({
+          event,
+          daysUntil: Math.max(0, Math.ceil((new Date(event.date).getTime() - now) / 86_400_000)),
+          checklist: buildPrepChecklist(event),
+        }))
+        if (!cancelled) setCalendarSuggestions(suggestions)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // Rehydrate pending-approval cards from localStorage on mount and reconcile
   // with server state — if the approval has already been decided elsewhere
@@ -2323,11 +2723,20 @@ export function WarRoom() {
 
   return (
     <div style={{ marginBottom: 24 }}>
+      {!calendarDismissed && calendarSuggestions.length > 0 && (
+        <CalendarPrepPanel
+          suggestions={calendarSuggestions}
+          onPrefill={prompt => setGoalPrefillSignal({ value: prompt, ts: Date.now() })}
+          onDismiss={() => setCalendarDismissed(true)}
+        />
+      )}
+
       <GoalInput
         onSubmit={handleChatSubmit}
         isLoading={isSubmittingGoal || !!isPlanning}
         hasActiveGoal={!!activeGoal}
         departments={departments}
+        prefillSignal={goalPrefillSignal}
       />
 
       <CommandThread

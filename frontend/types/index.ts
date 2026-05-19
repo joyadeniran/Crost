@@ -316,7 +316,31 @@ export interface Goal {
     confidence: number
     reasoning: string
     risk_notes: string[]
+    risk_tier?: 1 | 2 | 3
   } | null
+}
+
+// ─── RecurringMission ─────────────────────────────────────────────────────────
+
+export type RecurringCadence = 'daily' | 'weekly' | 'monthly'
+
+export interface RecurringMission {
+  id: string
+  user_id: string
+  title: string
+  founder_input: string
+  cadence: RecurringCadence
+  cadence_day: number | null
+  next_run_at: string
+  last_run_at: string | null
+  last_goal_id: string | null
+  source_goal_id: string | null
+  is_active: boolean
+  auto_dispatch: boolean
+  risk_tier_limit: 1 | 2 | 3
+  run_count: number
+  created_at: string
+  updated_at: string
 }
 
 // GoalTask — a single task row within a goal (replaces orchestrator_plan.tasks flat JSON)
@@ -397,6 +421,35 @@ export interface UserModelAssignment {
   model_name: string
   provider: 'gemini' | 'claude' | 'groq'
   preset_config: PresetConfig | null
+  created_at: string
+  updated_at: string
+}
+
+// ─── CalendarEvent ─────────────────────────────────────────────────────────────
+
+export type CalendarEventType =
+  | 'investor_meeting'
+  | 'customer_call'
+  | 'board_meeting'
+  | 'conference'
+  | 'deadline'
+  | 'other'
+
+export interface CalendarEvent {
+  id: string
+  user_id: string
+  type: CalendarEventType
+  title: string
+  date: string
+  duration_minutes?: number
+  attendees: string[]
+  prep_required: string[]
+  related_goals: string[]
+  meeting_notes?: string
+  outcomes?: string
+  next_actions: string[]
+  source: 'manual' | 'google_calendar'
+  external_id?: string
   created_at: string
   updated_at: string
 }

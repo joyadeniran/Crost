@@ -32,6 +32,7 @@ import {
 } from './orc-decision-gate'
 import { detectCapabilityGaps, formatCapabilityGapsForPrompt } from './capability-checker'
 import { assessGoalRisk } from './risk-assessor'
+import { computeMonthlySpend } from './cost-tracker'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -1107,6 +1108,9 @@ export async function runOrchestratorTask(
   conversationHistory: any[] = [],
   forcePlan: boolean = false
 ): Promise<any> {
+  const requestId = Math.random().toString(36).slice(2, 10)
+  const t = { start: Date.now(), preProcess: 0, decisionGate: 0, llm: 0 }
+
   const supabase = createServerSupabaseClient()
   const { data: goalRow } = await supabase.from('goals').select('created_by').eq('id', goalId).single()
   const userId = goalRow?.created_by
@@ -1139,12 +1143,14 @@ export async function runOrchestratorTask(
 
   // Brains 1 + 3: parallel fetch of memo context, structured Orc context, capability
   // inventory, and KB enrichment — all fail-open so nothing blocks goal dispatch.
-  const [systemMemory, orcContext, capSummary, kbMatches] = await Promise.all([
+  const [systemMemory, orcContext, capSummary, kbMatches, monthlyCost] = await Promise.all([
     buildOrcContext(userId),
     fetchOrcContext(userId),
     detectCapabilityGaps(founderInput),
     enrichWithKnowledgeBase(founderInput, userId),
+    userId ? computeMonthlySpend(userId) : Promise.resolve(null),
   ])
+  t.preProcess = Date.now()
 
   // Fire-and-forget auto-seed from company_memo on first run
   if (userId) seedOrcContextFromMemo(userId).catch(() => {})
@@ -1152,9 +1158,21 @@ export async function runOrchestratorTask(
   // Risk assessment (synchronous — uses data already fetched above)
   const riskAssessment = assessGoalRisk(founderInput, orcContext, capSummary.gaps)
 
+  // Budget alert: inject into risk_notes so the decision gate and plan surface it
+  if (monthlyCost?.alertLevel === 'critical') {
+    riskAssessment.risk_notes.push(
+      `API budget is ${monthlyCost.budgetUsedPct}% used this month ($${monthlyCost.totalCostUsd.toFixed(2)} of $${monthlyCost.budgetLimitUsd}) — very close to limit`,
+    )
+  } else if (monthlyCost?.alertLevel === 'warning') {
+    riskAssessment.risk_notes.push(
+      `API budget is ${monthlyCost.budgetUsedPct}% used this month ($${monthlyCost.totalCostUsd.toFixed(2)} of $${monthlyCost.budgetLimitUsd})`,
+    )
+  }
+
   // Brain 2: classify intent, injecting pre-computed risk notes so the classifier
   // has full context before choosing a response mode.
   const decision = await orcDecisionGate(founderInput, orcContext, conversationHistory, riskAssessment.risk_notes)
+  t.decisionGate = Date.now()
 
   const orcContextSummary = formatOrcContextForPrompt(orcContext)
   const capabilityGapsText = formatCapabilityGapsForPrompt(capSummary)
@@ -1193,6 +1211,19 @@ export async function runOrchestratorTask(
 
   const { model: planModel, provider: planProvider } = await getModel('planning', userId)
   const { content, tokensUsed } = await callLLM(planModel, finalPrompt, ORCHESTRATOR_SYSTEM_NOTE, userId, planProvider)
+  t.llm = Date.now()
+  console.log(JSON.stringify({
+    type: 'orc_timing',
+    requestId,
+    userId: userId ?? null,
+    goalId,
+    phases: {
+      preProcess:   t.preProcess   - t.start,
+      decisionGate: t.decisionGate - t.preProcess,
+      llm:          t.llm          - t.decisionGate,
+    },
+    totalMs: t.llm - t.start,
+  }))
   let result = parseOrchestratorResponse(content)
 
   // ─── Hallucination Protection ──────────────────────────────────────────────
@@ -1265,23 +1296,24 @@ export async function runOrchestratorTask(
       confidence:       orcDecisionPayload.confidence,
       reasoning:        orcDecisionPayload.reasoning,
       risk_notes:       orcDecisionPayload.risk_notes,
+      risk_tier:        riskAssessment.tier,
     },
   }).eq('id', goalId)
 
   // Record in decision log for the self-improvement loop (fire-and-forget)
   if (userId) {
-    supabase.from('orc_decision_log').insert({
+    void Promise.resolve(supabase.from('orc_decision_log').insert({
       user_id:         userId,
       goal_id:         goalId,
       decision_type:   'response_mode_selection',
       founder_intent:  founderInput.slice(0, 500),
       orc_choice:      orcDecisionPayload.mode,
       confidence:      orcDecisionPayload.confidence,
-      assumptions:     { list: riskAssessment.assumptions },
+      assumptions:     { list: riskAssessment.assumptions, request_id: requestId },
       risk_tier:       riskAssessment.tier,
       risk_notes:      orcDecisionPayload.risk_notes,
       capability_gaps: capSummary.gaps.map(g => ({ slug: g.slug, name: g.name, availability: g.availability })),
-    }).then(() => {}).catch(() => {})
+    })).catch(() => {})
   }
 
   if (result.is_valid_goal === false) {
@@ -1319,7 +1351,7 @@ export async function runOrchestratorTask(
       description: `Direct response provided: "${directResponse.slice(0, 100)}..."`,
       tokens_used: tokensUsed,
       created_by: userId,
-      metadata: { direct_response: directResponse }
+      metadata: { direct_response: directResponse, request_id: requestId }
     })
 
     return result
@@ -1361,7 +1393,8 @@ export async function runOrchestratorTask(
     goal_id: goalId,
     description: `Plan drafted — ${plan.tasks.length} tasks.`,
     tokens_used: tokensUsed,
-    created_by: userId
+    created_by: userId,
+    metadata: { request_id: requestId },
   })
 
   return result
