@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [12.04] — Egress Audit & Background Traffic Fix · 2026-05-19
+
+### Fixed
+- **`app/api/health/route.ts`** — Render pings `healthCheckPath: /api/health` every ~5s; the route was querying `system_config` on each ping (17,280 DB calls/day). Shallow GET now returns `200` with no DB access. Add `?deep=1` for a full dependency check from monitoring tools.
+- **`scripts/worker.ts`** — Replaced fixed `setInterval` at 15s with adaptive `scheduleNextPoll()`: 15s while executing goals or live watchdogs exist, 5-minute backoff when idle. Realtime events still wake the worker instantly on new work, so active-goal latency is unchanged.
+
+---
+
 ## [Unreleased] — ORC Orchestration Phase 5 (Refinement) · 2026-05-18
 > Branch: `claude/orc-phase5-refinement`
 

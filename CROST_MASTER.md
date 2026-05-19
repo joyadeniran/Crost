@@ -3,9 +3,29 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.03  
-**Last Updated:** May 18, 2026  
-**Deployment Status:** 🔄 IN DEVELOPMENT — ORC Chief of Staff Phase 5 (Refinement) complete on branch `claude/orc-phase5-refinement`, pending merge to main.
+**Current Version:** 12.04  
+**Last Updated:** May 19, 2026  
+**Deployment Status:** ✅ PRODUCTION — All ORC phases shipped to main. Egress fix deployed.
+
+---
+
+## Session v12.04 — Egress Audit & Background Traffic Fix
+**Date**: May 19, 2026  **Status**: ✅ Shipped  
+**Impact**: Eliminated ~7 GB/month of idle Supabase egress that was exhausting the free-tier quota (5 GB) without any user activity. Two root causes fixed.
+
+### Problem
+Supabase services were restricted (402) due to 7.15 GB egress — 2.15 GB over the 5 GB free limit — despite no active user sessions. API log analysis revealed two culprits generating continuous background DB traffic:
+
+1. **Render health checks** hitting `GET /api/health` every ~5 seconds. The route was querying `system_config` on each ping → 17,280 DB calls/day, 24/7.
+2. **Worker polling loop** running at fixed 15-second intervals regardless of whether any goals were executing → 5,760 DB cycles/day of idle supervision queries.
+
+### What Was Fixed
+1. **`frontend/app/api/health/route.ts`** — Shallow path (no query params) now returns `200 { status: "healthy" }` with zero DB access. Render's health check only needs a 200 to confirm process liveness. Full dependency check available at `?deep=1` for monitoring dashboards.
+2. **`scripts/worker.ts`** — Replaced fixed `setInterval(pollSupervisor, 15s)` with adaptive `scheduleNextPoll()`: polls every **15s when active work is in-flight** (executing goals or live watchdogs), backs off to **5-minute intervals when idle**. Realtime subscriptions already wake the worker instantly on `goal_tasks INSERT` and `goals UPDATE`, so active-goal latency is unchanged.
+
+### Files Changed
+- `frontend/app/api/health/route.ts`
+- `scripts/worker.ts`
 
 ---
 
