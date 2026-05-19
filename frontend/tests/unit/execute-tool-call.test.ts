@@ -236,4 +236,43 @@ describe('executeToolCall — graceful returns for blocked requests', () => {
 
     expect((result as any).status).toBe('permission_denied')
   })
+
+  it('humanizes knowledge base search results instead of leaking raw JSON', async () => {
+    const priorFetch = global.fetch
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        matches: [
+          { title: 'Plan', category: 'marketing', file_id: 'file-1', relevance: 0.92, summary: 'A strong plan.' },
+          { title: 'Deck', category: 'sales', file_id: 'file-2', relevance: 0.84, summary: 'Pitch deck notes.' }
+        ]
+      })
+    }))
+
+    try {
+      const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+
+      const result = await executeToolCall({
+        userId: 'user-1',
+        departmentId: 'executive',
+        taskId: 'task-4',
+        goalId: 'goal-1',
+        toolCall: {
+          service: 'knowledge_base_search',
+          action: 'search',
+          params: { query: 'customer insights' },
+          reasoning: 'Search KB',
+          risk: 'low',
+          requiresApproval: false,
+        },
+      })
+
+      expect((result as any).result).toContain('I found 2 relevant documents:')
+      expect((result as any).result).not.toContain('matches')
+    } finally {
+      if (priorFetch) {
+        vi.stubGlobal('fetch', priorFetch)
+      }
+    }
+  })
 })

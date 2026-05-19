@@ -426,37 +426,56 @@ export interface ApprovalRequest {
   context: string
 }
 
+function extractJsonObject(text: string, fromIndex: number): string | null {
+  const start = text.indexOf('{', fromIndex)
+  if (start === -1) return null
+
+  // Scan from the end backward to find the longest valid JSON substring.
+  // This is robust against nested braces and text after the JSON block.
+  for (let end = text.length; end > start; end--) {
+    if (text[end - 1] !== '}') continue
+    const candidate = text.slice(start, end)
+    try {
+      JSON.parse(candidate)
+      return candidate
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 export function parseApprovalRequest(response: string): ApprovalRequest | null | 'BLOCKED' {
   const hasSignal = response.includes(APPROVAL_SIGNAL_MARKER)
   if (!hasSignal) return null
 
-  // Search for the outermost JSON block in the entire response
-  const firstBrace = response.indexOf('{')
-  const lastBrace = response.lastIndexOf('}')
-
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-    if (response.includes('\nREQUEST_APPROVAL') || response.startsWith('REQUEST_APPROVAL')) {
-      return 'BLOCKED'
-    }
-    return null
+  const stripCodeFence = (text: string): string => {
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+    return fenced ? fenced[1] : text
   }
 
-  const jsonStr = response.slice(firstBrace, lastBrace + 1)
+  const rawText = stripCodeFence(response)
+  const jsonStart = rawText.indexOf('{')
+  if (jsonStart === -1) {
+    return response.includes('\nREQUEST_APPROVAL') || response.startsWith('REQUEST_APPROVAL') ? 'BLOCKED' : null
+  }
+
+  const jsonStr = extractJsonObject(rawText, jsonStart)
+  if (!jsonStr) {
+    return response.includes('\nREQUEST_APPROVAL') || response.startsWith('REQUEST_APPROVAL') ? 'BLOCKED' : null
+  }
 
   try {
     const parsed = JSON.parse(jsonStr) as Partial<ApprovalRequest>
-    
-    // If it's a wrapped response like {"REQUEST_APPROVAL": {...}}, unwrap it
     const actual = (parsed as any).REQUEST_APPROVAL || parsed
 
-    if (!actual.reasoning || actual.reasoning.trim() === '' || !actual.action_type || !actual.action_label) {
-      return null
-    }
+    if (!actual.action_type || !actual.action_label) return null
+    if (!actual.reasoning && !actual.context) return null
 
     return {
       action_type: actual.action_type,
       action_label: actual.action_label,
-      reasoning: actual.reasoning,
+      reasoning: actual.reasoning ?? '',
       payload: actual.payload ?? {},
       context: actual.context ?? '',
     }
@@ -1009,13 +1028,15 @@ const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You
   }
 }
 
+<<<<<<< Updated upstream
 Rules:
-1. COMPLEX GOALS: If the goal requires substantive work that a department agent should produce (a real document, campaign, codebase, research report, etc.) set is_valid_goal=true and is_direct_response=false and provide a plan.
-2. CONVERSATIONAL QUERIES & TRIVIAL TASKS: Use is_direct_response=true for: (a) simple questions about capabilities, company state, or help ("Who are you?", "What can you do?", "What is our mission?"); (b) tiny self-contained requests answerable in a few sentences ("Write hello world HTML", "Give me a sample subject line", "Translate this word"); (c) any request where the complete answer fits in a single direct_response without needing a department agent. DO NOT draft a multi-task plan for these.
-3. PLANNING THRESHOLD: Reserve Planning Mode (is_direct_response=false) for goals that genuinely need one or more department agents to do meaningful work — a real deliverable, a real action (send email, post content, run research), or coordination across multiple steps. The presence of action verbs alone ("write", "create", "build", "make") does NOT force Planning Mode if the task is trivially small. Apply judgment: "Write hello world HTML" → direct response; "Write a full email marketing campaign targeting SMBs" → plan.
-4. ASSUMPTION OVER INTERROGATION: Do not ask pedantic clarification questions for common abbreviations, social platforms, or standard business terms (e.g., assuming "X" = Twitter, "Insta" = Instagram, "Deck" = Pitch Deck). Make the industry-standard assumption, proceed with the plan, and explicitly document your assumption in the plan's risk_note.
+1. COMPLEX GOALS: If the goal is clear but requires substantive work, multiple steps, or coordination across departments, set is_valid_goal=true and is_direct_response=false and provide a plan.
+2. CONVERSATIONAL QUERIES & TRIVIAL TASKS: If the founder asks a simple question, help request, status check, or explanatory question about the company, or if the request can be answered in a single direct_response without needing a department agent, set is_valid_goal=true and is_direct_response=true and provide the direct_response. DO NOT draft a multi-task plan for these.
+3. ACTION VERB TRIGGER: If the goal contains substantive action verbs like "design", "write", "create", "build", "research", "analyze", "draft", "make", "generate", "schedule", "publish", or "execute", you MUST use Planning Mode (is_valid_goal=true, is_direct_response=false). Do NOT perform creative or substantive work in the direct_response; assign it to the correct department.
+4. PLANNING THRESHOLD: Reserve Planning Mode for goals that genuinely need one or more department agents to do meaningful work — a real deliverable, a real action (send email, post content, run research), or coordination across multiple steps. The presence of action verbs alone does NOT force Planning Mode if the task is trivially small. Apply judgment: "Write hello world HTML" → direct response; "Write a full email marketing campaign targeting SMBs" → plan.
+5. ASSUMPTION OVER INTERROGATION: Do not ask pedantic clarification questions for common abbreviations, social platforms, or standard business terms (e.g., assuming "X" = Twitter, "Insta" = Instagram, "Deck" = Pitch Deck). Make the industry-standard assumption, proceed with the plan, and explicitly document your assumption in the plan's risk_note.
 5. AMBIGUOUS GOALS: If the goal is truly non-sensical or critically ambiguous, set is_valid_goal=false and provide a clarification_question.
-6. NEVER provide both a plan and a direct_response.
+6. NEVER provide both a plan and a direct_response. If the request is informational or conversational, reply only with direct_response and no plan.
 7. ALWAYS provide a risk_note in the plan.
 8. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
 9. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.

@@ -113,7 +113,7 @@ export async function executeToolCall(options: ExecuteOptions) {
     if (json.matches && Array.isArray(json.matches)) {
       if (json.matches.length === 0) return { result: 'No matching documents found in Knowledge Base.' };
       const list = json.matches.map((m: any) => 
-        `📄 **${m.title}** (${m.category})\nID: \`${m.file_id || 'available'}\`\nRelevance: ${Math.round(m.relevance * 100)}%\nSummary: ${m.summary}\n`
+        `📄 **${m.title}** (${m.category})\nID: \`${m.file_id || 'available'}\`\nRelevance: ${Math.round((m.relevance ?? 0) * 100)}%\nSummary: ${m.summary}\n`
       ).join('\n---\n\n');
       return { result: `I found ${json.matches.length} relevant documents:\n\n${list}` };
     }
@@ -123,11 +123,21 @@ export async function executeToolCall(options: ExecuteOptions) {
       return { result: `### Content of ${json.title}\n\n${json.content}\n\n---` };
     }
 
-    // Fallback: any other response shape gets a human-readable summary instead of raw JSON
-    if (json.error) {
-      return { result: `Knowledge base operation failed: ${json.error}` };
+<<<<<<< Updated upstream
+    if (json?.error) {
+      return { result: `Knowledge Base error: ${json.error}` };
     }
-    return { result: 'No results found in Knowledge Base.' };
+
+    if (typeof json === 'string') {
+      return { result: json };
+    }
+
+    if (!json || (typeof json === 'object' && Object.keys(json).length === 0)) {
+      return { result: 'No results found in Knowledge Base.' };
+    }
+
+    const fallback = JSON.stringify(json);
+    return { result: `Knowledge Base response: ${fallback.length > 1200 ? `${fallback.slice(0, 1200)}...` : fallback}` };
   }
 
   // 2. Connection Guard: Does the user have this service hooked up?

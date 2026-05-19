@@ -556,9 +556,25 @@ describe('runWorkerTask', () => {
       runWorkerTask('marketing', mockTask as Parameters<typeof runWorkerTask>[1], 'goal-id-1')
     ).rejects.toThrow('Unexpected network collapse')
   })
+
+  it('parses REQUEST_APPROVAL from fenced code blocks and nested JSON safely', async () => {
+    const { parseApprovalRequest } = await import('@/lib/llm-client')
+
+    const response = `Here is the action:\nREQUEST_APPROVAL:\n\n\`\`\`json\n{\n  \"action_type\": \"gmail.send_email\",\n  \"action_label\": \"Send follow-up email\",\n  \"reasoning\": \"The founder asked to contact the lead.\",\n  \"payload\": {\n    \"to\": \"test@example.com\",\n    \"subject\": \"Following up\",\n    \"body\": \"Hi there\"\n  }\n}\n\`\`\``
+
+    const parsed = parseApprovalRequest(response)
+    expect(parsed).not.toBeNull()
+    expect(parsed).not.toBe('BLOCKED')
+    expect(parsed).toEqual(expect.objectContaining({
+      action_type: 'gmail.send_email',
+      action_label: 'Send follow-up email',
+      reasoning: 'The founder asked to contact the lead.',
+      payload: { to: 'test@example.com', subject: 'Following up', body: 'Hi there' },
+    }))
+  })
 })
 
-// ── Tests: BUG-1 — task_id in Recent Workspace Tasks context ─────────────────
+// ── Tests: BUG-1 — task_id in Recent Workspace Tasks context —───────────────────────
 
 describe('runOrchestratorTask — Recent Workspace Tasks context includes task_id', () => {
   it('formats recent tasks with task_id so Orc can reference them for retry', async () => {
