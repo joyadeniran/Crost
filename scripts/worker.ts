@@ -28,8 +28,12 @@ if (fs.existsSync(localEnvPath)) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-const STALL_THRESHOLD_MS = 5 * 60_000   // 5 minutes = stalled
-const POLL_INTERVAL_MS   = 15_000       // 15 seconds between supervisor cycles
+const STALL_THRESHOLD_MS    = 5 * 60_000   // 5 minutes = stalled
+const POLL_INTERVAL_ACTIVE  = 15_000       // 15 s when work is in-flight
+const POLL_INTERVAL_IDLE    = 5 * 60_000   // 5 min when nothing is executing
+// Adaptive backoff: the worker runs fast when there are active goals/tasks,
+// and backs off to 5-min cycles when idle. Realtime events wake it instantly
+// when new work arrives, so nothing is delayed in practice.
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('[worker] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
@@ -354,10 +358,34 @@ async function pollSupervisor() {
   }
 }
 
+// ─── Adaptive polling loop ────────────────────────────────────────────────────
+
+let pollTimer: NodeJS.Timeout | null = null
+
+async function scheduleNextPoll() {
+  // Determine whether there is active work to decide the next poll interval.
+  // We re-check the DB state here (one lightweight query) rather than relying
+  // on stale in-memory counters that could drift after crashes/restarts.
+  const { data: executingGoals } = await supabase
+    .from('goals')
+    .select('id')
+    .eq('status', 'executing')
+    .limit(1)
+
+  const hasActiveWork = (executingGoals?.length ?? 0) > 0 || activeWatchdogs.size > 0
+  const interval = hasActiveWork ? POLL_INTERVAL_ACTIVE : POLL_INTERVAL_IDLE
+
+  log(`Next poll in ${interval / 1000}s (${hasActiveWork ? 'active work detected' : 'idle — backing off'})`)
+  pollTimer = setTimeout(async () => {
+    await pollSupervisor()
+    await scheduleNextPoll()
+  }, interval)
+}
+
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 async function main() {
-  log('Orc supervisor starting... [mode: polling-primary + realtime-bonus]')
+  log('Orc supervisor starting... [mode: polling-primary + realtime-bonus + adaptive-backoff]')
 
   // 1. Initial State Recovery — re-sync on boot in case of crash/restart
   const { data: runningTasks } = await supabase
@@ -411,12 +439,19 @@ async function main() {
           await dispatchTask(task_id, goal_id)
         }
       }
+      // Wake the poll loop immediately when new work arrives
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
+      await pollSupervisor()
+      await scheduleNextPoll()
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goals' }, async (payload) => {
       if (payload.new.status === 'executing' && payload.old.status !== 'executing') {
         log(`[Realtime] Goal ${payload.new.id} switched to executing — running supervision...`)
         await unblockDependentTasks(payload.new.id)
         await tryCloseGoal(payload.new.id)
+        // Wake the poll loop immediately
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
+        await scheduleNextPoll()
       }
     })
     .subscribe((status) => {
@@ -430,12 +465,12 @@ async function main() {
       }
     })
 
-  // 3. Start the polling loop — always runs, regardless of Realtime status
-  log(`Starting polling supervisor (every ${POLL_INTERVAL_MS / 1000}s)...`)
+  // 3. Start the adaptive polling loop — runs immediately, then backs off when idle
+  log(`Starting adaptive polling supervisor (active: ${POLL_INTERVAL_ACTIVE / 1000}s, idle: ${POLL_INTERVAL_IDLE / 1000}s)...`)
   await pollSupervisor() // Run immediately on boot
-  setInterval(pollSupervisor, POLL_INTERVAL_MS)
+  await scheduleNextPoll()
 
-  log(`Supervisor ready. [Poll: every ${POLL_INTERVAL_MS / 1000}s] [Realtime: ${realtimeConnected ? 'bonus-active' : 'connecting...'}]`)
+  log(`Supervisor ready. [Realtime: ${realtimeConnected ? 'bonus-active' : 'connecting...'}]`)
 }
 
 process.on('unhandledRejection', (reason, promise) => {
