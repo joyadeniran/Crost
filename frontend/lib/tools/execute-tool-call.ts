@@ -123,7 +123,6 @@ export async function executeToolCall(options: ExecuteOptions) {
       return { result: `### Content of ${json.title}\n\n${json.content}\n\n---` };
     }
 
-<<<<<<< Updated upstream
     if (json?.error) {
       return { result: `Knowledge Base error: ${json.error}` };
     }
