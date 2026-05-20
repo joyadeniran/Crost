@@ -3,9 +3,25 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.04  
-**Last Updated:** May 19, 2026  
+**Current Version:** 12.05  
+**Last Updated:** May 20, 2026  
 **Deployment Status:** ✅ PRODUCTION — All ORC phases shipped to main. Egress fix deployed.
+
+---
+
+## Session v12.05 — Git Sync & Conflict Resolution
+**Date**: May 20, 2026  **Status**: ✅ Shipped  
+**Impact**: Resolved git merge conflict blocks and stray conflict markers in key LLM orchestration files, restoring a clean compile state, passing all 29/29 unit tests, and verifying 100% ESLint lint-free compliance.
+
+### What Was Built
+1. **Git Conflict Resolution**: Successfully pulled the latest from git and merged branches. Surgically removed stray git conflict markers (`<<<<<<< HEAD`, `=======`, `>>>>>>> ...`) left in `frontend/lib/llm-client.ts` and `frontend/lib/tools/execute-tool-call.ts`.
+2. **Quality Assurance & Verification**: Ran the full unit test suite, confirming all 29/29 tests across the modified files pass cleanly. Verified that the type check has no core application compilation errors and ESLint reported 0 errors/warnings.
+3. **Pushed Clean State**: Committed the conflict resolutions and pushed the stable state to the remote repository.
+
+### Files Changed
+- `frontend/lib/llm-client.ts`
+- `frontend/lib/tools/execute-tool-call.ts`
+- `CROST_MASTER.md`
 
 ---
 
