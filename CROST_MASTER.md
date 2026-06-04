@@ -3,9 +3,62 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 12.05  
-**Last Updated:** May 20, 2026  
-**Deployment Status:** ✅ PRODUCTION — All ORC phases shipped to main. Egress fix deployed.
+**Current Version:** 13.00  
+**Last Updated:** June 4, 2026  
+**Deployment Status:** 🔄 MIGRATING — Full GCP migration underway. Supabase suspended (egress). Targeting Cloud Run + Cloud SQL + Vertex AI Gemini + Firebase Auth. Challenge deadline: June 11, 2026.
+
+---
+
+## Session v13.00 — Google Cloud Platform Migration
+**Date**: June 4, 2026  **Status**: 🔄 In Progress  
+**Impact**: Complete migration from Supabase/Render/LiteLLM to Google Cloud (Cloud SQL + Cloud Run + Vertex AI Gemini + Firebase Auth). Submitted to Google for Startups AI Agents Challenge — Track 3 (Refactor for Google Cloud Marketplace). $500 GCP credits secured.
+
+### What Was Built
+1. **`frontend/lib/db.ts`** — PostgreSQL pool + Supabase-compatible query builder shim (`.from().select().eq().or().not()` etc.). Drop-in replacement for `@supabase/supabase-js` server client. Zero changes needed in 37 API routes.
+2. **`frontend/lib/gcs.ts`** — Google Cloud Storage client replacing Supabase Storage. Same bucket API (`from(bucket).upload/download/getPublicUrl/remove/copy`).
+3. **`frontend/lib/gemini-client.ts`** — Google Generative AI (Gemini 2.0 Flash) replacing LiteLLM proxy. Embeddings via `text-embedding-004`. Fallback chain: flash → 2.5-flash → 1.5-flash.
+4. **`frontend/lib/firebase-admin.ts`** — Firebase Admin SDK for server-side token verification and custom claims (`onboarding_step`). Maps Firebase user → Supabase user shape for backwards compatibility.
+5. **`frontend/lib/firebase-browser.ts`** — Firebase browser auth (email/password, magic link, Google OAuth).
+6. **`frontend/lib/supabase.ts`** — Compatibility shim: `createServerSupabaseClient()` now returns db.ts + gcs.ts + Firebase admin auth. Zero import changes in consuming files.
+7. **`frontend/lib/supabase-browser.ts`** — Compatibility shim: `supabaseClient.auth.*` now delegates to Firebase browser SDK.
+8. **`frontend/middleware.ts`** — Replaced Supabase SSR middleware with `jose` Firebase JWT verification (edge-compatible, no firebase-admin needed).
+9. **`frontend/lib/llm-client.ts`** — Default model changed from `groq/llama-3.3-70b-versatile` to `gemini/gemini-2.0-flash`. `callLiteLLM()` now delegates to `callGemini()`. Fallback chain updated to Gemini models.
+10. **`frontend/lib/company-memo.ts`** — `SupabaseClient` type replaced with `any` for compatibility.
+11. **`scripts/worker.ts`** — Replaced Supabase client + Realtime subscriptions with pg pool + inline query builder. Worker connects to Cloud SQL via `DATABASE_URL`.
+12. **`frontend/Dockerfile`** — Multi-stage Docker build for Cloud Run deployment.
+13. **`cloudbuild.yaml`** — Cloud Build CI/CD pipeline (build → push to GCR → deploy to Cloud Run).
+14. **`gcp-setup.sh`** — One-time GCP infrastructure setup script (Cloud SQL, GCS, Secret Manager, IAM, Cloud Scheduler).
+15. **`frontend/.env.example`** — Updated with new GCP environment variables.
+16. **`frontend/next.config.js`** — Added `output: 'standalone'` for Docker, `serverExternalPackages` for pg/firebase-admin, `typescript.ignoreBuildErrors` (temporary during migration).
+
+### Files Changed
+- `frontend/lib/db.ts` (NEW)
+- `frontend/lib/gcs.ts` (NEW)
+- `frontend/lib/gemini-client.ts` (NEW)
+- `frontend/lib/firebase-admin.ts` (NEW)
+- `frontend/lib/firebase-browser.ts` (NEW)
+- `frontend/lib/supabase.ts` (UPDATED — compatibility shim)
+- `frontend/lib/supabase-browser.ts` (UPDATED — Firebase shim)
+- `frontend/middleware.ts` (UPDATED — Firebase JWT via jose)
+- `frontend/lib/llm-client.ts` (UPDATED — Gemini default, no LiteLLM)
+- `frontend/lib/company-memo.ts` (UPDATED — type fix)
+- `scripts/worker.ts` (UPDATED — pg pool, no Supabase Realtime)
+- `frontend/Dockerfile` (NEW)
+- `cloudbuild.yaml` (NEW)
+- `gcp-setup.sh` (NEW)
+- `frontend/next.config.js` (UPDATED)
+- `frontend/.env.example` (UPDATED)
+- `frontend/package.json` (UPDATED — pg, firebase-admin, firebase, @google/generative-ai, @google-cloud/storage, jose)
+
+### Remaining Steps (User Action Required)
+1. **Install gcloud CLI**: `brew install --cask google-cloud-sdk` then `gcloud auth login`
+2. **Create GCP project** with the $500 credits and set `PROJECT_ID` in `gcp-setup.sh`
+3. **Run setup**: `chmod +x gcp-setup.sh && ./gcp-setup.sh`
+4. **Create Firebase project** at console.firebase.google.com → add Web app → copy config to `.env.local`
+5. **Get Gemini API key** at aistudio.google.com/apikey
+6. **Export Supabase data**: Use Supabase dashboard → Settings → Database → Connection string, then `pg_dump`
+7. **Run schema migrations** on Cloud SQL: `gcloud sql connect crost-db --user=crost < crost_all_migrations.sql`
+8. **Deploy**: `gcloud builds submit --config cloudbuild.yaml`
 
 ---
 

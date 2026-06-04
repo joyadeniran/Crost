@@ -36,12 +36,9 @@ import { computeMonthlySpend } from './cost-tracker'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-// Default models - names must match litellm config.yaml model_list entries
-export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile'
-const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
-
-const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL ?? 'http://localhost:4000'
-const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || process.env.LITELLM_KEY
+// Default model — Gemini 2.0 Flash on Google Cloud Vertex AI
+export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash'
+const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash'
 
 export async function getModel(
   taskType: 'planning' | 'execution' | 'analysis' | 'summarization',
@@ -64,10 +61,10 @@ export async function getModel(
   }
 
   const MODELS: Record<string, string> = {
-    planning: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
-    execution: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile',
-    analysis: process.env.CLOUD_MODEL ?? 'groq/llama-3.3-70b-versatile',
-    summarization: process.env.CLOUD_MODEL_WORKER ?? 'groq/llama-3.3-70b-versatile'
+    planning: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash',
+    execution: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash',
+    analysis: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash',
+    summarization: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash'
   }
   const model = MODELS[taskType] || MODELS.execution
   return { model, provider: model.split('/')[0] }
@@ -689,7 +686,7 @@ async function saveContextMemo(goalId: string, content: string, userId: string |
   }
 }
 
-// ─── LiteLLM Integration ─────────────────────────────────────────────────────
+// ─── Gemini Integration (Google Cloud Vertex AI) ─────────────────────────────
 
 async function callLiteLLM(
   model: string,
@@ -699,18 +696,10 @@ async function callLiteLLM(
   providerOverride?: string,
   isBootstrap?: boolean
 ): Promise<{ content: string; tokensUsed: number }> {
-  const modelName = model
+  const provider = providerOverride ?? model.split('/')[0]
 
-  // Derive provider from model name prefix (e.g. 'groq/llama-3.3-70b-versatile' → 'groq')
-  // providerOverride takes precedence when explicitly supplied by the caller
-  const provider = providerOverride ?? modelName.split('/')[0]
+  const { apiKey: _apiKey, keyType } = await resolveApiKey({ userId, provider, isBootstrap })
 
-  // ── Key resolution: exactly ONE key per request ───────────────────────────
-  // User BYOK if valid, else system key. Never both simultaneously.
-  const { apiKey, keyType } = await resolveApiKey({ userId, provider, isBootstrap })
-
-  // ── Token budget check (system-key calls from authenticated users only) ───
-  // Bootstrap calls are exempt. User-key calls are always exempt.
   if (keyType === 'system' && !isBootstrap && userId) {
     const budget = await checkTokenBudget(userId)
     if (!budget.allowed) {
@@ -724,75 +713,22 @@ async function callLiteLLM(
     }
   }
 
-  const messages: any[] = []
-  if (systemNote) {
-    messages.push({ role: 'system', content: systemNote })
-  }
-  messages.push({ role: 'user', content: prompt })
+  const { callGemini } = await import('./gemini-client')
+  const result = await callGemini({ model, prompt, systemNote })
 
-  const body: any = {
-    model: modelName,
-    messages,
-    temperature: 0.3,
-  }
-
-  // Pass user's own API key to LiteLLM for key-passthrough mode.
-  // RULE: body.api_key ONLY — never extra_body.api_key.
-  if (apiKey) {
-    body.api_key = apiKey
-  }
-
-  const res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(90_000),
-  })
-
-  if (!res.ok) {
-    const errText = await res.text()
-    let cleanMessage = `LiteLLM error ${res.status}`
-    try {
-      const parsed = JSON.parse(errText)
-      // Extract the nested error message from LiteLLM's standard response
-      if (parsed.error?.message) {
-        cleanMessage = parsed.error.message
-      } else if (parsed.message) {
-        cleanMessage = parsed.message
-      }
-    } catch {
-      // Not JSON, use technical fallback
-    }
-    
-    // We keep 'LiteLLM error' in the prefix so formatErrorMessage() can still detect it
-    throw new Error(`LiteLLM error ${res.status}: ${cleanMessage}`)
-  }
-
-  const data = await res.json()
-  const promptTokens     = data.usage?.prompt_tokens     ?? 0
-  const completionTokens = data.usage?.completion_tokens ?? 0
-  const totalTokens      = data.usage?.total_tokens      ?? 0
-
-  // Fire-and-forget usage log — skipped silently when userId is null
   if (userId) {
     logUsage({
       userId,
-      model: modelName,
+      model,
       provider,
       keyType,
-      promptTokens,
-      completionTokens,
-      totalTokens,
-    }).catch(() => {}) // logUsage never rethrows, but be safe
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: result.tokensUsed,
+    }).catch(() => {})
   }
 
-  return {
-    content: data.choices?.[0]?.message?.content ?? '',
-    tokensUsed: totalTokens,
-  }
+  return result
 }
 
 // ─── Resilient Fallback Logic ────────────────────────────────────────────────
@@ -800,9 +736,9 @@ async function callLiteLLM(
 // Canonical fallback chain for high-reliability operations.
 // Evaluated in order if the primary model fails.
 const RESILIENT_FALLBACK_CHAIN = [
-  'groq/llama-3.3-70b-versatile', // Smartest/Fastest (Primary)
-  'gemini/gemini-2.0-flash',       // Reliable Backup (Corrected version name)
-  'groq/llama-3.1-8b-instant'     // Fast Cloud Fallback (Replaced local/gemma3)
+  'gemini/gemini-2.0-flash',            // Primary (Google Cloud)
+  'gemini/gemini-2.5-flash-preview-05-20', // Enhanced reasoning backup
+  'gemini/gemini-1.5-flash',            // Stable fallback
 ]
 
 export async function callLLM(
@@ -878,36 +814,12 @@ export async function callLLM(
 
 export async function callEmbeddings(
   input: string | string[],
-  userId?: string | null
+  _userId?: string | null
 ): Promise<number[][]> {
-  const model = process.env.EMBEDDING_MODEL ?? 'text-embedding-3-small'
-  const provider = model.split('/')[0]
-
-  // Key resolution
-  const { apiKey } = await resolveApiKey({ userId, provider })
-
-  const body: any = {
-    model,
-    input: Array.isArray(input) ? input : [input],
-  }
-  if (apiKey) body.api_key = apiKey
-
-  const res = await fetch(`${LITELLM_BASE_URL}/v1/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
-    },
-    body: JSON.stringify(body),
-  })
-
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`Embedding error ${res.status}: ${errText}`)
-  }
-
-  const data = await res.json()
-  return data.data.map((item: any) => item.embedding)
+  const { getGeminiEmbedding } = await import('./gemini-client')
+  const inputs = Array.isArray(input) ? input : [input]
+  const results = await Promise.all(inputs.map(text => getGeminiEmbedding(text)))
+  return results
 }
 
 // ─── Token budget check (per-user, per-day) ──────────────────────────────────

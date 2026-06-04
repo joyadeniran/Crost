@@ -1,12 +1,10 @@
 #!/usr/bin/env tsx
 // scripts/worker.ts
-// Orc's supervision worker.
+// Orc's supervision worker — migrated to Google Cloud SQL (pg).
 //
-// Architecture: Polling-primary + Realtime bonus
-//   - A 15-second poll loop is the PRIMARY supervision engine (reliable on all Supabase tiers)
-//   - Supabase Realtime subscriptions (postgres_changes) are an OPPORTUNISTIC bonus:
-//     when available they provide instant event delivery; when unavailable the poll covers everything.
-//   - All operations are idempotent — safe to run from both poll and Realtime simultaneously.
+// Architecture: Polling-primary (Supabase Realtime removed — GCP migration)
+//   - A 15-second poll loop is the PRIMARY supervision engine
+//   - Adaptive backoff: 15s when active, 5 min when idle
 //
 // Responsibilities:
 //   1. Polling supervisor — watchdog sync, dependency unblocking, goal closure, pending dispatch.
@@ -14,7 +12,7 @@
 //   3. Goal closure and Mission Report generation.
 //   4. Multi-tenant context preservation.
 
-import { createClient } from '@supabase/supabase-js'
+import { Pool } from 'pg'
 import * as dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -23,36 +21,108 @@ const localEnvPath = path.resolve(process.cwd(), 'frontend/.env.local')
 if (fs.existsSync(localEnvPath)) {
   dotenv.config({ path: localEnvPath })
 } else {
-  dotenv.config() // Fallback to process.env and standard .env for production
+  dotenv.config()
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+const DATABASE_URL = process.env.DATABASE_URL ?? ''
 const STALL_THRESHOLD_MS    = 5 * 60_000   // 5 minutes = stalled
 const POLL_INTERVAL_ACTIVE  = 15_000       // 15 s when work is in-flight
 const POLL_INTERVAL_IDLE    = 5 * 60_000   // 5 min when nothing is executing
-// Adaptive backoff: the worker runs fast when there are active goals/tasks,
-// and backs off to 5-min cycles when idle. Realtime events wake it instantly
-// when new work arrives, so nothing is delayed in practice.
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('[worker] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
+if (!DATABASE_URL) {
+  console.error('[worker] DATABASE_URL is required.')
   process.exit(1)
 }
 
-// Log Supabase connection details (URL masked for security)
-const urlHost = new URL(SUPABASE_URL).hostname
-console.log(`[worker] Connecting to Supabase: https://${urlHost}/`)
-console.log(`[worker] Using Service Role Key: ${SUPABASE_SERVICE_KEY.slice(0, 20)}...`)
+console.log('[worker] Connecting to Cloud SQL PostgreSQL...')
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-  realtime: {
-    params: {
-      events_per_second: 10,
-    },
-  },
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  max: 5,
 })
+
+pool.on('error', (err) => console.error('[worker] Pool error:', err))
+
+// Supabase-compatible query builder shim for the worker
+const supabase = {
+  from: (table: string) => {
+    const state: {
+      cols: string; wheres: string[]; vals: unknown[]; orders: string[];
+      limitN: number; insertData: any; updateData: any; upsertData: any;
+      upsertConflict: string; isDelete: boolean; isSingle: boolean; isMaybe: boolean;
+    } = { cols: '*', wheres: [], vals: [], orders: [], limitN: 1000, insertData: null, updateData: null, upsertData: null, upsertConflict: 'id', isDelete: false, isSingle: false, isMaybe: false }
+    const b: any = {
+      select(c = '*') { state.cols = c; return b },
+      eq(col: string, val: unknown) { state.vals.push(val); state.wheres.push(`"${col}" = $${state.vals.length}`); return b },
+      neq(col: string, val: unknown) { state.vals.push(val); state.wheres.push(`"${col}" != $${state.vals.length}`); return b },
+      is(col: string, val: null | boolean) { state.wheres.push(val === null ? `"${col}" IS NULL` : `"${col}" IS ${val ? 'TRUE' : 'FALSE'}`); return b },
+      in(col: string, vals: unknown[]) {
+        if (!vals.length) { state.wheres.push('FALSE'); return b }
+        const ph = vals.map(v => { state.vals.push(v); return `$${state.vals.length}` })
+        state.wheres.push(`"${col}" IN (${ph.join(',')})`)
+        return b
+      },
+      gte(col: string, val: unknown) { state.vals.push(val); state.wheres.push(`"${col}" >= $${state.vals.length}`); return b },
+      lte(col: string, val: unknown) { state.vals.push(val); state.wheres.push(`"${col}" <= $${state.vals.length}`); return b },
+      order(col: string, opts: { ascending?: boolean } = {}) { state.orders.push(`"${col}" ${opts.ascending === false ? 'DESC' : 'ASC'}`); return b },
+      limit(n: number) { state.limitN = n; return b },
+      single() { state.isSingle = true; return b },
+      maybeSingle() { state.isMaybe = true; return b },
+      insert(d: any) { state.insertData = d; return b },
+      update(d: any) { state.updateData = d; return b },
+      upsert(d: any, opts: { onConflict?: string } = {}) { state.upsertData = Array.isArray(d) ? d : [d]; state.upsertConflict = opts.onConflict ?? 'id'; return b },
+      delete() { state.isDelete = true; return b },
+      async then(resolve: any, reject: any) {
+        try {
+          const wh = state.wheres.length ? `WHERE ${state.wheres.join(' AND ')}` : ''
+          const od = state.orders.length ? `ORDER BY ${state.orders.join(', ')}` : ''
+          if (state.insertData) {
+            const row = state.insertData
+            const cols = Object.keys(row)
+            const ph = cols.map((_, i) => `$${i + 1}`)
+            const r = await pool.query(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(',')}) VALUES (${ph.join(',')}) RETURNING *`, cols.map(c => row[c]))
+            return resolve({ data: state.isSingle || state.isMaybe ? r.rows[0] ?? null : r.rows, error: null })
+          }
+          if (state.upsertData) {
+            const rows = state.upsertData
+            const results = []
+            for (const row of rows) {
+              const cols = Object.keys(row)
+              const ph = cols.map((_, i) => `$${i + 1}`)
+              const cc = state.upsertConflict.split(',').map((s: string) => s.trim())
+              const uc = cols.filter((c: string) => !cc.includes(c))
+              const us = uc.length ? `DO UPDATE SET ${uc.map((c: string) => `"${c}" = EXCLUDED."${c}"`).join(',')}` : 'DO NOTHING'
+              const r = await pool.query(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(',')}) VALUES (${ph.join(',')}) ON CONFLICT (${cc.map((c: string) => `"${c}"`).join(',')}) ${us} RETURNING *`, cols.map(c => row[c]))
+              results.push(r.rows[0])
+            }
+            return resolve({ data: state.isSingle || state.isMaybe ? results[0] ?? null : results, error: null })
+          }
+          if (state.updateData) {
+            const cols = Object.keys(state.updateData)
+            const set = cols.map((c, i) => `"${c}" = $${i + 1}`).join(',')
+            const adj = state.wheres.map(w => w.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n) + cols.length}`))
+            const adjWh = adj.length ? `WHERE ${adj.join(' AND ')}` : ''
+            const r = await pool.query(`UPDATE "${table}" SET ${set} ${adjWh} RETURNING *`, [...cols.map(c => (state.updateData as any)[c]), ...state.vals])
+            return resolve({ data: r.rows, error: null })
+          }
+          if (state.isDelete) {
+            const r = await pool.query(`DELETE FROM "${table}" ${wh} RETURNING *`, state.vals)
+            return resolve({ data: r.rows, error: null })
+          }
+          const r = await pool.query(`SELECT ${state.cols} FROM "${table}" ${wh} ${od} LIMIT ${state.limitN}`, state.vals)
+          if (state.isSingle) return resolve({ data: r.rows[0] ?? null, error: r.rows.length === 0 ? new Error('Not found') : null })
+          if (state.isMaybe) return resolve({ data: r.rows[0] ?? null, error: null })
+          return resolve({ data: r.rows, error: null })
+        } catch (err) {
+          console.error(`[worker] DB error on ${table}:`, err)
+          return resolve({ data: null, error: err })
+        }
+      }
+    }
+    return b
+  }
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -385,7 +455,7 @@ async function scheduleNextPoll() {
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 async function main() {
-  log('Orc supervisor starting... [mode: polling-primary + realtime-bonus + adaptive-backoff]')
+  log('Orc supervisor starting... [mode: polling-primary + adaptive-backoff, GCP Cloud SQL]')
 
   // 1. Initial State Recovery — re-sync on boot in case of crash/restart
   const { data: runningTasks } = await supabase
@@ -407,70 +477,12 @@ async function main() {
     }
   }
 
-  // 2. Realtime Subscriptions (opportunistic bonus — instant delivery when available)
-  //    On Supabase free tier, postgres_changes requires tables to be in the supabase_realtime
-  //    publication. If not enabled, the subscription times out and the poll covers everything.
-  const channel = supabase.channel('worker_supervision')
-  let realtimeConnected = false
-
-  channel
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goal_tasks' }, async (payload) => {
-      const { task_id, goal_id, status } = payload.new
-      log(`[Realtime] goal_tasks UPDATE [${task_id}] -> ${status}`)
-
-      if (status === 'running') {
-        startWatchdog(task_id, goal_id)
-      } else if (['completed', 'failed', 'rejected', 'expired'].includes(status)) {
-        clearWatchdog(task_id)
-        await unblockDependentTasks(goal_id)
-        await tryCloseGoal(goal_id)
-      }
-    })
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'goal_tasks' }, async (payload) => {
-      const { task_id, goal_id, status } = payload.new
-      log(`[Realtime] goal_tasks INSERT [${task_id}] status=${status}`)
-      if (status === 'running') {
-        startWatchdog(task_id, goal_id)
-      } else if (status === 'pending') {
-        // Instant dispatch for no-dependency tasks — don't wait for next poll
-        const deps = (payload.new.depends_on as string[]) ?? []
-        if (deps.length === 0) {
-          log(`[Realtime] Instantly dispatching no-dep task: ${task_id}`)
-          await dispatchTask(task_id, goal_id)
-        }
-      }
-      // Wake the poll loop immediately when new work arrives
-      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
-      await pollSupervisor()
-      await scheduleNextPoll()
-    })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'goals' }, async (payload) => {
-      if (payload.new.status === 'executing' && payload.old.status !== 'executing') {
-        log(`[Realtime] Goal ${payload.new.id} switched to executing — running supervision...`)
-        await unblockDependentTasks(payload.new.id)
-        await tryCloseGoal(payload.new.id)
-        // Wake the poll loop immediately
-        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
-        await scheduleNextPoll()
-      }
-    })
-    .subscribe((status) => {
-      log(`Realtime subscription status: ${status}`)
-      if (status === 'SUBSCRIBED') {
-        realtimeConnected = true
-        log('✓ Realtime bonus active — instant event delivery enabled alongside polling')
-      } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-        realtimeConnected = false
-        log(`⚠ Realtime unavailable (${status}) — polling loop is sole supervisor (this is fine)`)
-      }
-    })
-
-  // 3. Start the adaptive polling loop — runs immediately, then backs off when idle
+  // 2. Start the adaptive polling loop — runs immediately, then backs off when idle
   log(`Starting adaptive polling supervisor (active: ${POLL_INTERVAL_ACTIVE / 1000}s, idle: ${POLL_INTERVAL_IDLE / 1000}s)...`)
-  await pollSupervisor() // Run immediately on boot
+  await pollSupervisor()
   await scheduleNextPoll()
 
-  log(`Supervisor ready. [Realtime: ${realtimeConnected ? 'bonus-active' : 'connecting...'}]`)
+  log('Supervisor ready. [mode: polling-only, Cloud SQL PostgreSQL]')
 }
 
 process.on('unhandledRejection', (reason, promise) => {

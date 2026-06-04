@@ -1,5 +1,13 @@
+// middleware.ts — Firebase JWT auth for Next.js App Router
+// Uses jose to verify Firebase ID tokens in edge runtime (no firebase-admin needed).
+
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
+
+const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? ''
+const JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+)
 
 const ONBOARDING_ROUTES = [
   '/onboarding/identity',
@@ -22,92 +30,62 @@ function getRouteRank(pathname: string) {
   return ONBOARDING_ROUTES.findIndex((route) => pathname.startsWith(route))
 }
 
+async function verifyToken(token: string): Promise<Record<string, unknown> | null> {
+  if (!FIREBASE_PROJECT_ID) return null
+  try {
+    const { payload } = await jwtVerify(token, JWKS, {
+      audience: FIREBASE_PROJECT_ID,
+      issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
+    })
+    return payload as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-
-  const isProd = process.env.NEXT_PUBLIC_APP_URL?.includes('crosthq.com')
-  const prodDomain = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : undefined
-  const cookieOptions = isProd ? { domain: prodDomain, path: '/', sameSite: 'lax' as const, secure: true } : {}
-
-  // Use the public anon key for middleware (browser context)
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet: any[]) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, { ...options, ...cookieOptions })
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
+  const token = request.cookies.get('firebase-token')?.value
 
-  // Protected: Dashboard
+  let user: Record<string, unknown> | null = null
+  if (token) user = await verifyToken(token)
+
+  const response = NextResponse.next()
+
+  // Protected: Dashboard requires valid auth
   if (pathname.startsWith('/dashboard')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+    if (!user) return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Block unverified email/password users from onboarding or dashboard
-  if (user && user.app_metadata?.provider === 'email' && !user.email_confirmed_at) {
-    // Allow them to remain on /login, /signup, /verify-email and auth callback pages
-    const isAllowedPage = pathname === '/login' || 
-                         pathname === '/signup' || 
-                         pathname === '/verify-email' ||
-                         pathname.startsWith('/auth')
-    
-    if (!isAllowedPage) {
-      const verifyUrl = new URL('/verify-email', request.url)
-      if (user.email) verifyUrl.searchParams.set('email', user.email)
-      return NextResponse.redirect(verifyUrl)
+  // Block unverified email users
+  if (user && user.email_verified === false) {
+    const allowed = pathname === '/login' || pathname === '/signup' ||
+                    pathname === '/verify-email' || pathname.startsWith('/auth')
+    if (!allowed) {
+      const url = new URL('/verify-email', request.url)
+      if (user.email) url.searchParams.set('email', user.email as string)
+      return NextResponse.redirect(url)
     }
-    
-    // If they are on an allowed page, stay there and skip subsequent redirect logic
     return response
   }
 
-  // Redirect away from Login/Onboarding if complete
+  // Redirect authenticated users away from login/signup/onboarding when done
   if (pathname === '/login' || pathname.startsWith('/onboarding') || pathname === '/signup') {
     if (user) {
-       const step = user.user_metadata?.onboarding_step
-       const onboardingComplete = step === 'complete'
-       if (onboardingComplete) {
-         return NextResponse.redirect(new URL('/dashboard', request.url))
-       }
+      const step = (user.onboarding_step as string) ?? null
+      const target = getOnboardingTarget(step)
 
-       const target = getOnboardingTarget(step)
+      if (pathname === '/login' || pathname === '/signup') {
+        return NextResponse.redirect(new URL(target, request.url))
+      }
 
-       if (pathname === '/login' || pathname === '/signup') {
-         return NextResponse.redirect(new URL(target, request.url))
-       }
-
-       if (pathname.startsWith('/onboarding')) {
-         const requestedRank = getRouteRank(pathname)
-         const maxAllowedRank = getRouteRank(target)
-
-         if (requestedRank > maxAllowedRank) {
-           return NextResponse.redirect(new URL(target, request.url))
-         }
-       }
+      if (pathname.startsWith('/onboarding')) {
+        const requestedRank = getRouteRank(pathname)
+        const maxAllowedRank = getRouteRank(target)
+        if (requestedRank > maxAllowedRank) {
+          return NextResponse.redirect(new URL(target, request.url))
+        }
+      }
     }
   }
 
