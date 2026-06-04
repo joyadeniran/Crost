@@ -3,9 +3,40 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.00  
+**Current Version:** 13.01  
 **Last Updated:** June 4, 2026  
-**Deployment Status:** 🔄 MIGRATING — Full GCP migration underway. Supabase suspended (egress). Targeting Cloud Run + Cloud SQL + Vertex AI Gemini + Firebase Auth. Challenge deadline: June 11, 2026.
+**Deployment Status:** 🔄 DEPLOYING — GCP migration complete + ADK Track 1 implementation done. Challenge deadline: June 11, 2026.
+
+---
+
+## Session v13.01 — Google ADK Track 1 Implementation
+**Date**: June 4, 2026  **Status**: ✅ Shipped  
+**Impact**: Full Track 1 (Build Net-New Agents) implementation using Google ADK v1.2.0. OrcAgent + DepartmentAgents built as ADK LlmAgents. MCP server, live demo page, Cloud SQL migration, and challenge submission docs.
+
+### What Was Built
+1. **`frontend/lib/adk/tools.ts`** — 7 ADK FunctionTools: search_knowledge_base, read_company_memo, write_to_memo, create_artifact, request_human_approval, update_goal_status, log_task_event
+2. **`frontend/lib/adk/agents.ts`** — OrcAgent (Chief of Staff LlmAgent) + DepartmentAgents loaded dynamically from DB. Fallback built-in departments: marketing, engineering, sales, research, operations. OrcAgent uses `subAgents` for ADK agent transfer.
+3. **`frontend/lib/adk/runner.ts`** — ADK Runner factory with InMemorySessionService + GcsArtifactService. `runGoal()` yields typed events (text, tool_call, tool_result, agent_switch, final, error).
+4. **`frontend/app/api/adk/route.ts`** — POST endpoint: creates goal in DB, runs ADK runner, streams SSE events back to founder. GET endpoint returns ADK capabilities.
+5. **`frontend/app/api/mcp/route.ts`** — MCP server exposing Crost's 5 tools via Model Context Protocol (crost_run_goal, crost_get_goal_status, crost_search_knowledge, crost_list_departments, crost_get_memos).
+6. **`frontend/app/demo/page.tsx`** — Live public demo page with streaming agent activity, quick-start examples, and architecture overview.
+7. **`cloudsql_migration.sql`** — Complete 1,080-line Cloud SQL migration. No auth.users refs. All user IDs as TEXT (Firebase UID). Includes pgvector for KB embeddings. All 20+ tables.
+8. **`ARCHITECTURE.md`** — Mermaid architecture diagram for challenge submission.
+9. **`CHALLENGE_SUBMISSION.md`** — Challenge submission document with testing instructions.
+
+### Files Changed
+- `frontend/lib/adk/tools.ts` (NEW)
+- `frontend/lib/adk/agents.ts` (NEW)
+- `frontend/lib/adk/runner.ts` (NEW)
+- `frontend/lib/adk/index.ts` (NEW)
+- `frontend/app/api/adk/route.ts` (NEW)
+- `frontend/app/api/mcp/route.ts` (NEW)
+- `frontend/app/demo/page.tsx` (NEW)
+- `cloudsql_migration.sql` (NEW — 1,080 lines)
+- `ARCHITECTURE.md` (NEW)
+- `CHALLENGE_SUBMISSION.md` (NEW)
+- `frontend/next.config.js` (UPDATED — @google/adk in serverExternalPackages)
+- `frontend/package.json` (UPDATED — @google/adk v1.2.0)
 
 ---
 

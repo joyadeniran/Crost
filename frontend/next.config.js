@@ -24,7 +24,7 @@ const nextConfig = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.crosthq.com',
   },
   // Packages that should not be bundled (native Node.js modules for server-side only)
-  serverExternalPackages: ['pg', 'firebase-admin', '@google-cloud/storage'],
+  serverExternalPackages: ['pg', 'firebase-admin', '@google-cloud/storage', '@google/adk'],
 }
 
 module.exports = nextConfig
