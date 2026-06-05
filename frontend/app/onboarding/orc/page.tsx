@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { refreshTokenAfterStep } from '@/lib/refresh-token'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
 import { formatErrorMessage } from '@/lib/utils'
@@ -56,6 +57,7 @@ export default function MeetOrcPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ step: 'team' }),
       })
+      await refreshTokenAfterStep()
       router.push('/onboarding/team')
     } catch (err) {
       console.error('Failed to move to team selection:', err)

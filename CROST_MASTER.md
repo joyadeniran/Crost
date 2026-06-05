@@ -3,7 +3,7 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.06  
+**Current Version:** 13.07  
 **Last Updated:** June 5, 2026  
 **Deployment Status:** ✅ FULLY LIVE — Auth flow fixed. Google OAuth redirects to /dashboard.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  

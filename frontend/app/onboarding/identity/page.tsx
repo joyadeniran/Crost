@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { refreshTokenAfterStep } from '@/lib/refresh-token'
 import { ReflectionBlock } from '@/components/onboarding/ReflectionBlock'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 
@@ -93,6 +94,7 @@ function IdentityContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ step: 'control' })
     }).catch(err => console.error('Failed to update onboarding step:', err))
+    await refreshTokenAfterStep()
     router.push('/onboarding/control')
   }
 

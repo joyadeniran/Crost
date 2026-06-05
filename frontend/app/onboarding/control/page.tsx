@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { refreshTokenAfterStep } from '@/lib/refresh-token'
 import { ControlStyleCard } from '@/components/onboarding/ControlStyleCard'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
@@ -47,6 +48,7 @@ export default function ControlPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ step: 'orc' })
     }).catch((err) => console.error('Failed to update onboarding step:', err))
+    await refreshTokenAfterStep()
     router.push('/onboarding/orc')
   }
 
