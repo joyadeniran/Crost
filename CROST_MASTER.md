@@ -3,11 +3,27 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.04  
+**Current Version:** 13.05  
 **Last Updated:** June 5, 2026  
 **Deployment Status:** ✅ FULLY LIVE — Auth flow fixed. Google OAuth redirects to /dashboard.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.05 — OAuth URL + Authorized Domains Fix
+**Date**: June 5, 2026  **Status**: ✅ Shipped  
+**Impact**: Google OAuth now completes cleanly. Users stay on the correct domain. Both Cloud Run URLs authorized in Firebase.
+
+### Root Cause
+`NEXT_PUBLIC_APP_URL` was baked into the build as `crost-frontend-241769233272-uc.a.run.app` (project number URL). Firebase's OAuth redirect used this URL, sending users to a stale/different service revision that returned 404.
+
+### What Was Fixed
+1. **`app/login/page.tsx`** — `handleSocialLogin` now uses `window.location.origin` for the OAuth redirect instead of `NEXT_PUBLIC_APP_URL`. This is always correct regardless of build-time URL drift.
+2. **`next.config.js`** — Hardcoded `NEXT_PUBLIC_APP_URL` fallback to `https://crost-frontend-3ge3tx36sa-uc.a.run.app` so even if the env var is missing, the correct URL is used.
+3. **Firebase Authorized Domains** — Added both URLs via API (no manual console step needed):
+   - `crost-frontend-3ge3tx36sa-uc.a.run.app` ✓
+   - `crost-frontend-241769233272-uc.a.run.app` ✓
 
 ---
 

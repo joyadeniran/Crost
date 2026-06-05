@@ -46,7 +46,8 @@ const nextConfig = {
     },
   },
   env: {
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.crosthq.com',
+    // Canonical Cloud Run URL — hardcoded to prevent build-time URL drift
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'https://crost-frontend-3ge3tx36sa-uc.a.run.app',
   },
 }
 
