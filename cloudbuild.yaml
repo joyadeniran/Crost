@@ -10,7 +10,8 @@ steps:
         echo "NEXT_PUBLIC_FIREBASE_PROJECT_ID=$(gcloud secrets versions access latest --secret=NEXT_PUBLIC_FIREBASE_PROJECT_ID --project=$PROJECT_ID)" >> /workspace/frontend/.env.production
         echo "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$(gcloud secrets versions access latest --secret=NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET --project=$PROJECT_ID)" >> /workspace/frontend/.env.production
         echo "NEXT_PUBLIC_FIREBASE_APP_ID=$(gcloud secrets versions access latest --secret=NEXT_PUBLIC_FIREBASE_APP_ID --project=$PROJECT_ID)" >> /workspace/frontend/.env.production
-        echo "NEXT_PUBLIC_APP_URL=https://crost-frontend-$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')-uc.a.run.app" >> /workspace/frontend/.env.production
+        svc_url=$$(gcloud run services describe crost-frontend --region=us-central1 --project=$PROJECT_ID --format='value(status.url)' 2>/dev/null || echo "https://crost-frontend-3ge3tx36sa-uc.a.run.app")
+        echo "NEXT_PUBLIC_APP_URL=$$svc_url" >> /workspace/frontend/.env.production
 
   # Build frontend Docker image
   - name: 'gcr.io/cloud-builders/docker'

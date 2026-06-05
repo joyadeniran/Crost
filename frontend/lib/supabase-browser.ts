@@ -98,8 +98,8 @@ const supabaseCompatAuth = {
         const googleProvider = new GoogleAuthProvider()
         const cred = await signInWithPopup(auth, googleProvider)
         await refreshTokenCookie()
-        const redirectTo = options?.redirectTo ?? `${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard`
-        if (typeof window !== 'undefined') window.location.href = redirectTo
+        // Always go to /dashboard after OAuth — ignore the Supabase-era /auth/callback
+        if (typeof window !== 'undefined') window.location.href = `${window.location.origin}/dashboard`
         return { data: { user: cred.user }, error: null }
       }
       return { data: null, error: { message: `Provider ${provider} not supported` } }

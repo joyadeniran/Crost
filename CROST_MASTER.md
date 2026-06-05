@@ -3,11 +3,27 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.03  
+**Current Version:** 13.04  
 **Last Updated:** June 5, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Firebase Auth + Gemini + Vertex AI all wired. All 16 secrets populated.  
+**Deployment Status:** ✅ FULLY LIVE — Auth flow fixed. Google OAuth redirects to /dashboard.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.04 — Auth Flow Fix
+**Date**: June 5, 2026  **Status**: ✅ Shipped  
+**Impact**: Fixed Google OAuth redirect loop — users now land on /dashboard after sign-in.
+
+### What Was Fixed
+1. **`app/auth/callback/route.ts`** — Replaced dead Supabase SSR callback with a simple redirect to `?next=` param (defaults to `/dashboard`). Firebase auth is popup-based; no server callback needed.
+2. **`lib/supabase-browser.ts`** — `signInWithOAuth` now redirects to `/dashboard` directly after popup completion, ignoring the old Supabase `/auth/callback` URL.
+3. **`cloudbuild.yaml`** — Fixed `NEXT_PUBLIC_APP_URL` computation: now reads actual Cloud Run service URL via `gcloud run services describe` instead of wrongly using project number. Used `$$` to escape shell vars from Cloud Build substitution engine.
+
+### Root Causes
+- Old code sent users to `NEXT_PUBLIC_APP_URL/auth/callback` after OAuth
+- `NEXT_PUBLIC_APP_URL` was incorrectly computed as `crost-frontend-241769233272-uc.a.run.app` (project number) instead of `crost-frontend-3ge3tx36sa-uc.a.run.app` (actual hash)
+- `/auth/callback` was a dead Supabase SSR route returning 404
 
 ---
 
