@@ -5,6 +5,7 @@
 
 import { LlmAgent } from '@google/adk'
 import { createDbClient } from '../db'
+import { makeGeminiModel } from '../gemini-client'
 import {
   searchKnowledgeBase,
   readCompanyMemo,
@@ -87,7 +88,7 @@ export function createDepartmentAgent(dept: DepartmentInfo): LlmAgent {
   return new LlmAgent({
     name: dept.slug,
     description: `${dept.name} specialist agent. Capabilities: ${dept.capabilities.slice(0, 3).join(', ')}`,
-    model: 'gemini-2.0-flash',
+    model: makeGeminiModel('gemini-2.0-flash'),
     instruction: DEPARTMENT_INSTRUCTION(dept),
     tools: DEPT_TOOLS,
   })
@@ -170,7 +171,7 @@ export async function buildAgentTree(userId?: string): Promise<LlmAgent> {
   return new LlmAgent({
     name: 'orc',
     description: 'Chief of Staff — orchestrates all departments to execute founder goals',
-    model: 'gemini-2.0-flash',
+    model: makeGeminiModel('gemini-2.0-flash'),
     instruction: ORC_INSTRUCTION,
     tools: CROST_TOOLS,
     subAgents,

@@ -3,9 +3,52 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.01  
-**Last Updated:** June 4, 2026  
-**Deployment Status:** 🔄 DEPLOYING — GCP migration complete + ADK Track 1 implementation done. Challenge deadline: June 11, 2026.
+**Current Version:** 13.02  
+**Last Updated:** June 5, 2026  
+**Deployment Status:** ✅ LIVE on Google Cloud Run — `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
+**Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.02 — Full GCP Deployment
+**Date**: June 5, 2026  **Status**: ✅ Live  
+**Impact**: First successful deployment of Crost on Google Cloud. Service is live and serving traffic.
+
+### What Was Deployed
+- **Cloud SQL** (PostgreSQL 15, `crost-db`, `us-central1`, `db-f1-micro`) — schema imported from `cloudsql_migration.sql`
+- **Cloud Storage** — bucket `crost-hq-storage` for artifacts + knowledge base files
+- **Cloud Run** — `crost-frontend` at `https://crost-frontend-3ge3tx36sa-uc.a.run.app`
+- **Secret Manager** — 16 secrets created; Firebase + Gemini placeholders ready for user to fill
+- **Cloud Scheduler** — `crost-approval-expiry` hourly cron active
+- **IAM** — Cloud Run + Cloud Build service accounts granted correct roles
+
+### Live Endpoints
+- `GET /api/health` → `{"status":"healthy"}`
+- `GET /api/adk` → ADK capabilities (Gemini 2.0, 6 agents, MCP)
+- `GET /api/mcp` → 5 MCP tools for external agents
+- `/demo` → Live public demo page
+
+### Pending (requires user action)
+- Add real Firebase project config to Secret Manager (replace `REPLACE_ME` placeholders)
+- Add real Gemini API key to `GOOGLE_AI_STUDIO_API_KEY` secret
+- Then re-run: `gcloud builds submit --config=cloudbuild.yaml --project=crost-hq --substitutions=COMMIT_SHA=latest .`
+
+### Infrastructure Notes
+- Vertex AI (`GCP_PROJECT_ID` env var) used automatically on Cloud Run — no Gemini API key needed for LLM
+- Firebase Admin uses Application Default Credentials on Cloud Run — no service account JSON needed
+- `firebase-admin`, `@google-cloud/storage`, `pg`, `@google/adk` all in `serverExternalPackages` to prevent webpack bundling
+- Webpack `resolve.fallback` stubs out Node built-ins (`net`, `tls`, `fs`) for browser bundle
+
+### Files Changed (v13.02)
+- `frontend/lib/gemini-client.ts` — Vertex AI via ADC on GCP, AI Studio key locally
+- `frontend/lib/firebase-admin.ts` — ADC on Cloud Run, explicit creds locally
+- `frontend/lib/adk/agents.ts` — uses `makeGeminiModel()` for Vertex AI/ADC
+- `frontend/next.config.js` — webpack externals + ESLint/TS `ignoreDuringBuilds`
+- `frontend/Dockerfile` — `npm install` instead of `npm ci`
+- `frontend/package.json` — added `@google/adk`, `google-auth-library`
+- `cloudbuild.yaml` — NEXT_PUBLIC secrets baked at build time, Cloud SQL socket
+- `CHALLENGE_SUBMISSION.md` — live URLs added
+- `CROST_MASTER.md` — this entry
 
 ---
 

@@ -113,9 +113,10 @@ Every external action requires founder approval:
 
 ## Live Demo
 
-- **Demo page:** `https://app.crosthq.com/demo`
-- **ADK API:** `GET https://app.crosthq.com/api/adk` (capabilities)
-- **MCP Server:** `GET https://app.crosthq.com/api/mcp` (tools list)
+- **Demo page:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app/demo`
+- **ADK API:** `GET https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/adk`
+- **MCP Server:** `GET https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/mcp`
+- **Health:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/health`
 
 ---
 
@@ -145,10 +146,10 @@ Every external action requires founder approval:
 
 Or call the API directly:
 ```bash
-curl -X GET https://app.crosthq.com/api/adk
+curl https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/adk
 # Returns ADK capabilities
 
-curl -X GET https://app.crosthq.com/api/mcp
+curl https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/mcp
 # Returns MCP tools list
 ```
 

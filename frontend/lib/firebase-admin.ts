@@ -1,19 +1,26 @@
 // lib/firebase-admin.ts
-// Firebase Admin SDK — server-side auth for Cloud Run.
-// Replaces Supabase Auth for all server-side user operations.
+// Firebase Admin SDK — server-side auth.
+// On Cloud Run: uses Application Default Credentials (no JSON key needed).
+// Locally: uses FIREBASE_PRIVATE_KEY + FIREBASE_CLIENT_EMAIL.
 // Server-side ONLY.
 
 import admin from 'firebase-admin'
 
-if (!admin.apps.length) {
+function initAdmin() {
+  if (admin.apps.length) return
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey,
-    } as admin.ServiceAccount),
-  })
+  const hasExplicitCreds = process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && privateKey
+  if (hasExplicitCreds) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey,
+      } as admin.ServiceAccount),
+    })
+  } else {
+    admin.initializeApp() // Cloud Run: uses Application Default Credentials
+  }
 }
 
 // Maps Firebase decoded token to Supabase user shape for backwards compatibility.
@@ -36,33 +43,33 @@ function mapToSupabaseUser(decoded: admin.auth.DecodedIdToken) {
 }
 
 export async function getFirebaseUser(token: string) {
+  initAdmin()
   const decoded = await admin.auth().verifyIdToken(token, true)
   return mapToSupabaseUser(decoded)
 }
 
 export async function setUserClaims(uid: string, claims: Record<string, unknown>) {
+  initAdmin()
   const existing = (await admin.auth().getUser(uid)).customClaims ?? {}
   await admin.auth().setCustomUserClaims(uid, { ...existing, ...claims })
 }
 
 export async function createFirebaseUser(email: string, password: string) {
+  initAdmin()
   return admin.auth().createUser({ email, password, emailVerified: false })
 }
 
 export async function getUserByEmail(email: string) {
-  try {
-    return await admin.auth().getUserByEmail(email)
-  } catch {
-    return null
-  }
+  initAdmin()
+  try { return await admin.auth().getUserByEmail(email) } catch { return null }
 }
 
 export async function sendVerificationEmail(uid: string, redirectUrl: string) {
-  const link = await admin.auth().generateEmailVerificationLink(
+  initAdmin()
+  return admin.auth().generateEmailVerificationLink(
     (await admin.auth().getUser(uid)).email!,
     { url: redirectUrl }
   )
-  return link
 }
 
 export { admin }
