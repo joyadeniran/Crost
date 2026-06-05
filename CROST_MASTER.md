@@ -3,10 +3,32 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.02  
+**Current Version:** 13.03  
 **Last Updated:** June 5, 2026  
-**Deployment Status:** ✅ LIVE on Google Cloud Run — `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
+**Deployment Status:** ✅ FULLY LIVE — Firebase Auth + Gemini + Vertex AI all wired. All 16 secrets populated.  
+**URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.03 — Firebase + Gemini Secrets Live
+**Date**: June 5, 2026  **Status**: ✅ Complete  
+**Impact**: All secrets populated. Firebase Auth enabled (Email/Password + Google). Gemini API key stored. Final redeploy successful — all 5 endpoints returning 200.
+
+### Secrets Now Live (Secret Manager, project crost-hq)
+- `NEXT_PUBLIC_FIREBASE_API_KEY` — Firebase web client key
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` — crost-hq.firebaseapp.com
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID` — crost-hq
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` — crost-hq.firebasestorage.app
+- `NEXT_PUBLIC_FIREBASE_APP_ID` — 1:241769233272:web:f61051caca04b0aaed668d
+- `FIREBASE_PROJECT_ID` — crost-hq
+- `FIREBASE_CLIENT_EMAIL` — firebase-adminsdk-fbsvc@crost-hq.iam.gserviceaccount.com
+- `FIREBASE_PRIVATE_KEY` — USE_ADC (Cloud Run uses Application Default Credentials)
+- `GOOGLE_AI_STUDIO_API_KEY` — stored (local dev fallback; Vertex AI used on Cloud Run)
+
+### IAM Grants Added
+- Cloud Run SA (`241769233272-compute`) → `roles/firebase.admin`
+- Cloud Run SA → `roles/firebaseauth.admin`
 
 ---
 
