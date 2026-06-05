@@ -9,7 +9,9 @@ import admin from 'firebase-admin'
 function initAdmin() {
   if (admin.apps.length) return
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-  const hasExplicitCreds = process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && privateKey
+  // Only use explicit credentials if we have a real PEM private key (not a placeholder)
+  const isRealKey = privateKey && privateKey.includes('-----BEGIN') && privateKey !== 'USE_ADC'
+  const hasExplicitCreds = isRealKey && process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL
   if (hasExplicitCreds) {
     admin.initializeApp({
       credential: admin.credential.cert({
@@ -19,7 +21,8 @@ function initAdmin() {
       } as admin.ServiceAccount),
     })
   } else {
-    admin.initializeApp() // Cloud Run: uses Application Default Credentials
+    // Cloud Run: Application Default Credentials via service account IAM
+    admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT })
   }
 }
 

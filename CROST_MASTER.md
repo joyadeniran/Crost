@@ -3,11 +3,23 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.05  
+**Current Version:** 13.06  
 **Last Updated:** June 5, 2026  
 **Deployment Status:** ✅ FULLY LIVE — Auth flow fixed. Google OAuth redirects to /dashboard.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.06 — Firebase Admin ADC Fix (401 on API routes)
+**Date**: June 5, 2026  **Status**: ✅ Shipped  
+**Impact**: API routes no longer return 401. Firebase Admin now correctly uses Application Default Credentials on Cloud Run.
+
+### Root Cause
+`FIREBASE_PRIVATE_KEY` secret was set to the placeholder `"USE_ADC"`. The `initAdmin()` check `privateKey && ...` evaluated this truthy string as valid credentials. Firebase Admin then tried to parse `"USE_ADC"` as a PEM private key and failed silently, causing every `getFirebaseUser()` call to throw — which the auth shim caught and returned `user: null` → 401.
+
+### Fix
+`initAdmin()` now checks `privateKey.includes('-----BEGIN')` before using explicit credentials. Falls back to `admin.initializeApp({ projectId })` which uses Cloud Run's ADC service account automatically.
 
 ---
 
