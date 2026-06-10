@@ -35,10 +35,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "taskId and goalId are required" }, { status: 400 });
     }
 
-    if (!process.env.COMPOSIO_API_KEY) {
-      return NextResponse.json({ error: "COMPOSIO_API_KEY is not set" }, { status: 500 });
-    }
-
     // Auth gate: accept either a valid user session OR the internal service secret.
     // The internal secret path is used by server-side workers (runWorkerTask).
     // External callers without a session or the secret are rejected.

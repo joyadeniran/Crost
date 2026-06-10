@@ -2,28 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-// Render's healthCheckPath only needs a 200 to confirm the process is alive.
-// We intentionally do NOT query Supabase here — Render pings this every ~5s,
-// which was generating 17,280 DB queries/day and exhausting free-tier egress.
-//
-// For a real dependency check, call GET /api/health?deep=1 from monitoring tools
-// (not from Render's health check config).
+async function checkGemini(): Promise<{ status: 'ok' | 'down'; detail?: string }> {
+  const apiKey = process.env.GOOGLE_AI_STUDIO_API_KEY ?? process.env.GEMINI_API_KEY
+  const projectId = process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT
 
-async function checkLiteLLM(): Promise<{ status: 'ok' | 'down'; detail?: string }> {
-  const url = process.env.LITELLM_URL || process.env.LITELLM_BASE_URL
-  if (!url) return { status: 'down', detail: 'LITELLM_BASE_URL not configured' }
+  if (!apiKey && !projectId) {
+    return { status: 'down', detail: 'GOOGLE_AI_STUDIO_API_KEY or GCP_PROJECT_ID not configured' }
+  }
 
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch(`${url}/health/liveliness`, { signal: controller.signal })
-    clearTimeout(timeoutId)
-    if (!res.ok) return { status: 'down', detail: `LiteLLM returned ${res.status}` }
-    const contentType = res.headers.get('content-type') || ''
-    if (contentType.includes('text/html')) return { status: 'down', detail: 'LiteLLM returned HTML (service suspended?)' }
+    if (projectId) {
+      // On Cloud Run: Vertex AI — just confirm project env is set (actual call would require auth)
+      return { status: 'ok' }
+    }
+    // Local dev: ping Google AI Studio models list
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { signal: AbortSignal.timeout(5_000) }
+    )
+    if (!res.ok) return { status: 'down', detail: `Gemini API returned ${res.status}` }
     return { status: 'ok' }
   } catch (err: any) {
-    return { status: 'down', detail: err.message || 'LiteLLM unreachable' }
+    return { status: 'down', detail: err.message || 'Gemini unreachable' }
   }
 }
 
@@ -31,23 +31,20 @@ export async function GET(req: NextRequest) {
   const deep = req.nextUrl.searchParams.get('deep') === '1'
 
   if (!deep) {
-    // Shallow check — process liveness only. No DB, no outbound calls.
-    // This is what Render's healthCheckPath hits every ~5s.
     return NextResponse.json({ status: 'healthy', timestamp: new Date().toISOString() })
   }
 
-  // Deep check — only run when explicitly requested (e.g. from monitoring dashboards).
-  const litellmResult = await checkLiteLLM()
-  const hasDown = litellmResult.status === 'down'
+  const geminiResult = await checkGemini()
+  const hasDown = geminiResult.status === 'down'
 
   return NextResponse.json({
     status: hasDown ? 'unhealthy' : 'healthy',
     timestamp: new Date().toISOString(),
     services: {
-      litellm: litellmResult.status,
+      gemini: geminiResult.status,
     },
     details: {
-      litellm: litellmResult.detail,
+      gemini: geminiResult.detail,
     },
   }, { status: hasDown ? 503 : 200 })
 }

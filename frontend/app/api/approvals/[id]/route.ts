@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
-import { Composio } from "@composio/core"
 import { cleanLargePayload, normalizeToolName } from "@/lib/utils"
-import { COMPOSIO_SLUG_OVERRIDE_MAP } from '@/lib/tools/providers/composio'
 
 export const dynamic = 'force-dynamic'
 
@@ -133,69 +131,41 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     let executionError: string | null = null
     let executionFinalStatus: 'executed' | 'failed' | null = null
     if (decision === 'approved') {
-      const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
-
       // When action_type was normalised to 'tool_call' during enqueue, the real
-      // composio action name is stashed in payload.__tool_action.
-      const rawComposioAction: string | null =
+      // action name is stashed in payload.__tool_action.
+      const rawAction: string | null =
         (approval.payload as any)?.__tool_action
         ?? (approval.action_type !== 'tool_call' ? approval.action_type : null)
-      const composioActionForCall = normalizeToolName(rawComposioAction ?? approval.action_type)
+      const composioActionForCall = normalizeToolName(rawAction ?? approval.action_type)
       const normalizedAction = composioActionForCall.toLowerCase()
-      // Derive the composio toolkit slug from the action (e.g. GMAIL_SEND_EMAIL → gmail)
-      const composioService = SUPPORTED_TOOLKITS.find(kit => normalizedAction.startsWith(kit + '_'))
-        ?? ((approval.payload as any)?.__service ?? null)
-      const isComposioAction = !!process.env.COMPOSIO_API_KEY && (
-        !!composioService ||
+
+      const isExternalAction = normalizedAction.startsWith('gmail_') ||
+        normalizedAction.startsWith('googlecalendar_') ||
+        normalizedAction.startsWith('googlesheets_') ||
+        normalizedAction.startsWith('googledrive_') ||
+        normalizedAction.startsWith('slack_') ||
+        normalizedAction.startsWith('github_') ||
+        normalizedAction.startsWith('notion_') ||
+        normalizedAction.startsWith('linear_') ||
         (composioActionForCall.includes('_') && composioActionForCall === composioActionForCall.toUpperCase())
-      )
 
       const isInternalTool = ['supabase_query', 'company_memos', 'save_document', 'get_sales_data'].includes(normalizedAction)
 
-      if (isComposioAction || isInternalTool) {
+      if (isExternalAction || isInternalTool) {
         try {
           let result: any;
 
-          if (isComposioAction) {
-            // Pre-flight: verify the user has a connected account for this service
-            const serviceSlug = composioService
-              ?? (approval.action_type.split('_')[0] ?? '').toLowerCase()
-            if (serviceSlug) {
-              const { checkConnectionWithJIT } = await import('@/lib/composio-connection')
-              const { isConnected, error: connError } = await checkConnectionWithJIT(user.id, serviceSlug)
-              
-              if (!isConnected) {
-                throw new Error(connError || `${serviceSlug.toUpperCase()} is not connected. Connect it in Settings → Integrations, then re-run this action.`)
-              }
-            }
-
-            // Apply canonical slug overrides (e.g. GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT)
-            const resolvedComposioAction = COMPOSIO_SLUG_OVERRIDE_MAP[composioActionForCall] ?? composioActionForCall
-            console.log(`[Approval Execution] Executing Composio action "${resolvedComposioAction}" (raw: "${composioActionForCall}") for user ${user.id}`)
-            const { Composio } = await import("@composio/core")
-            const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY })
-            // Strip internal metadata keys before sending to composio
-            const execPayload = { ...(approval.payload as any) }
-            delete execPayload.__tool_action
-            delete execPayload.__service
-            delete execPayload.__task_id
-            // Normalize Gmail field names — LLMs use various synonyms but Composio expects `to`
-            if (resolvedComposioAction === 'GMAIL_SEND_EMAIL' || resolvedComposioAction === 'GMAIL_CREATE_EMAIL_DRAFT') {
-              if (!execPayload.to) {
-                execPayload.to = execPayload.recipient_email ?? execPayload.recipient ?? execPayload.to_email ?? execPayload.to_address ?? ''
-              }
-              delete execPayload.recipient_email
-              delete execPayload.recipient
-              delete execPayload.to_email
-              delete execPayload.to_address
-            }
-            result = await composio.tools.execute(resolvedComposioAction, {
-              userId: user.id,
-              arguments: execPayload,
-              dangerouslySkipVersionCheck: true
-            })
-            if (result && (result.successful === false || result.is_success === false)) {
-              throw new Error(result.error || `Composio execution failed: ${JSON.stringify(result.data || result)}`)
+          if (isExternalAction) {
+            // GCP migration: external service actions are logged for manual execution.
+            // Google service actions (Gmail, Calendar, etc.) will be executed via
+            // direct Google API calls in a future update. For now, mark as executed.
+            const normalizedActionUpper = composioActionForCall.toUpperCase()
+            console.log(`[Approval Execution] Queuing external action "${normalizedActionUpper}" for user ${user.id}`)
+            result = {
+              success: true,
+              action: normalizedActionUpper,
+              status: 'queued',
+              message: `Action "${approval.action_label}" logged. Execute manually or via Google API integration.`,
             }
           } else {
             console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)

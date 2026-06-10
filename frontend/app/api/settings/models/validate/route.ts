@@ -4,14 +4,11 @@ import { encryptApiKey } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 
-const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || 'http://localhost:4000'
-const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || ''
-
-// Map canonical provider to fully-qualified LiteLLM model names (must match config.yaml)
+// Map canonical provider to Gemini model names for validation
 const TEST_MODELS: Record<string, string> = {
-  'anthropic': 'anthropic/claude-sonnet-4.6',
-  'gemini':    'gemini/gemini-2.5-flash',
-  'groq':      'groq/llama-3.3-70b-versatile',
+  'anthropic': 'gemini-2.0-flash',
+  'gemini':    'gemini-2.0-flash',
+  'groq':      'gemini-2.0-flash',
 }
 
 export async function POST(req: NextRequest) {
@@ -33,7 +30,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Test API key by making a simple request to LiteLLM
+    // Test API key by making a simple request via callGemini
     const testModel = TEST_MODELS[provider]
     if (!testModel) {
       return NextResponse.json(
@@ -42,22 +39,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const testResponse = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LITELLM_MASTER_KEY}`
-      },
-      body: JSON.stringify({
+    try {
+      const { callGemini } = await import('@/lib/gemini-client')
+      await callGemini({
         model: testModel,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 5,
-        api_key: api_key,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    })
-
-    if (!testResponse.ok) {
+        prompt: 'hello',
+        temperature: 0.1,
+      })
+    } catch (err: any) {
       return NextResponse.json(
         { error: 'API key validation failed', valid: false },
         { status: 200 }

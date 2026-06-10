@@ -299,34 +299,20 @@ export async function orcDecisionGate(
       extraRiskNotes.length > 0 ? `PRE-ASSESSED RISK NOTES:\n${extraRiskNotes.map(n => `- ${n}`).join('\n')}` : '',
     ].filter(Boolean).join('\n\n')
 
-    const fastModel = process.env.CLOUD_MODEL_CLASSIFIER ?? 'groq/llama-3.1-8b-instant'
-    const litellmUrl = process.env.LITELLM_BASE_URL ?? 'http://localhost:4000'
-    const masterKey  = process.env.LITELLM_MASTER_KEY
-
-    const res = await fetch(`${litellmUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(masterKey && { Authorization: `Bearer ${masterKey}` }),
-      },
-      body: JSON.stringify({
-        model: fastModel,
-        messages: [
-          { role: 'system', content: DECISION_GATE_SYSTEM_NOTE },
-          { role: 'user',   content: classifierPrompt },
-        ],
-        temperature: 0.1, // low temp → consistent classification
-      }),
-      signal: AbortSignal.timeout(15_000),
-    })
-
-    if (!res.ok) {
-      console.warn(`[orcDecisionGate] Classifier HTTP ${res.status} — using fallback`)
+    const { callGemini } = await import('./gemini-client')
+    let raw = ''
+    try {
+      const { content } = await callGemini({
+        model: process.env.CLOUD_MODEL_CLASSIFIER ?? 'gemini-2.0-flash',
+        prompt: classifierPrompt,
+        systemNote: DECISION_GATE_SYSTEM_NOTE,
+        temperature: 0.1,
+      })
+      raw = content
+    } catch (err: any) {
+      console.warn('[orcDecisionGate] Classifier error — using fallback:', err.message)
       return DEFAULT_DECISION
     }
-
-    const data = await res.json()
-    const raw: string = data.choices?.[0]?.message?.content ?? ''
 
     const first = raw.indexOf('{')
     const last  = raw.lastIndexOf('}')
