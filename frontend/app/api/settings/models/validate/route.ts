@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: 5,
         api_key: api_key,
-      })
+      }),
+      signal: AbortSignal.timeout(15_000),
     })
 
     if (!testResponse.ok) {

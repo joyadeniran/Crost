@@ -45,6 +45,15 @@ function parseGoogleEvent(raw: any): {
 } | null {
   const start = raw.start?.dateTime ?? raw.start?.date
   if (!start || !raw.id) return null
+  // Guard against malformed date strings from Google — new Date('bad').toISOString() throws RangeError
+  let dateIso: string
+  try {
+    const d = new Date(start)
+    if (isNaN(d.getTime())) return null
+    dateIso = d.toISOString()
+  } catch {
+    return null
+  }
   const title = raw.summary ?? '(No title)'
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const attendees: string[] = (raw.attendees ?? [])
@@ -59,7 +68,7 @@ function parseGoogleEvent(raw: any): {
 
   return {
     title,
-    date: new Date(start).toISOString(),
+    date: dateIso,
     duration_minutes,
     attendees,
     type: inferEventType(raw),
