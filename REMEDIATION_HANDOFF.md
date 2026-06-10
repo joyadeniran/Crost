@@ -2,7 +2,7 @@
 
 > **Purpose:** Single file an incoming agent (any model, any session) reads to skip all rediscovery work.
 > Pair this with `CODEBASE_AUDIT_REPORT.md` for full evidence. This file is the **executable summary**.
-> **Last verified:** May 15, 2026 against `main` HEAD `71f7de9` (post-audit merge).
+> **Last verified:** June 10, 2026 against `claude/hackathon-branch-w5mdsc` HEAD `2a8e5e9` (post-remediation).
 
 ---
 
@@ -107,10 +107,10 @@ if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
 | # | File | Lines | Fix |
 |---|------|-------|-----|
 | ✅ 8 | `frontend/app/api/goals/[id]/dialogue/route.ts` | **53, 56, 81** (three update sites) | Add `.eq('created_by', user.id)` to every `.update().eq('id', goalId)` call |
-| 9 | `frontend/lib/tools/execute-tool-call.ts` | KB result handling (~lines 113-127) | Always humanize KB search results to text before returning; never leak raw `{matches:[...]}` JSON to UI |
+| ✅ 9 | `frontend/lib/tools/execute-tool-call.ts` | KB result handling (~lines 113-127) | Always humanize KB search results to text before returning; never leak raw `{matches:[...]}` JSON to UI. Also fixed: KB fetch calls now include `x-crost-internal-secret` header (was silently 401ing from worker context). |
 | ✅ 10 | All routes using `x-crost-internal-secret` | search: `grep -rn "x-crost-internal-secret" frontend/` | Replace `SUPABASE_SERVICE_ROLE_KEY` with new env var `WORKER_INTERNAL_SECRET`; rotate; update `.env.example`. Files affected: `worker/execute/route.ts`, `goals/[id]/dispatch/route.ts`, `approvals/[id]/route.ts`, `knowledge/search`, `knowledge/read`, `goals/[id]/report`, `goals/[id]/tasks/[taskId]` |
-| 11 | `frontend/app/api/config/secret-presence/route.ts` | covered by #6 | — |
-| 12 | `frontend/app/api/knowledge/search/route.ts` | 69-71 | `.or()` ILIKE pattern with user input — Supabase SDK escapes but verify; consider RPC-based search |
+| ✅ 11 | `frontend/app/api/config/secret-presence/route.ts` | covered by #6 | Fixed as part of #6 (auth + user-scoped query). |
+| ✅ 12 | `frontend/app/api/knowledge/search/route.ts` | 69-71 | `.or()` ILIKE pattern with user input — Supabase SDK escapes params; confirmed safe. Dual-path fallback to `match_kb_chunks` RPC for semantic search already in place. |
 
 ### P2 — Medium Severity (post-MVP, ~360 min)
 
@@ -121,7 +121,7 @@ if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
 | ✅ 15 | `frontend/lib/artifact-transformers/index.ts` + callers | Surface transformer failures to event_log + memo; expose `transformFailed` flag to caller memo |
 | ✅ 16 | All API routes | `ApiResponse<T>` type extended with `_metadata`; `apiOk`/`apiError` helpers added to `lib/api-response.ts`. Existing endpoints NOT shape-changed (would break UI without full frontend context). |
 | ✅ 17 | All POST routes | Added `idempotency_log` migration plus `Idempotency-Key` handling for duplicate-prone POST creation/execution routes |
-| ✅ 18 | `frontend/middleware.ts` | 10MB body size cap added for all API POST/PUT/PATCH routes; matcher extended to `/api/:path*` |
+| ✅ 18 | `frontend/middleware.ts` | 50MB body size cap added for all API POST/PUT/PATCH routes; matcher extended to `/api/:path*`; API routes bypass Supabase redirect and return 413 for oversized payloads |
 
 ### Out of Scope for This Audit (worth a follow-up pass)
 
@@ -223,11 +223,12 @@ DO:
 - Update REMEDIATION_HANDOFF.md Section 2 to mark the issue ✅ when done.
 
 ENVIRONMENT FACTS YOU CAN ASSUME (don't verify):
-- main is at HEAD 71f7de9 (post-audit merge). Other branches are stale.
+- Hackathon branch `claude/hackathon-branch-w5mdsc` is at HEAD 2a8e5e9 (post-remediation). main is older.
 - Auth pattern: createSupabaseServerComponentClient() → auth.getUser() → ownership check on resource
 - Service-role pattern: createServerSupabaseClient() → bypasses RLS, use only after auth gate
-- Internal-call pattern: x-crost-internal-secret header (currently uses SUPABASE_SERVICE_ROLE_KEY — see Issue #10)
+- Internal-call pattern: x-crost-internal-secret header now uses WORKER_INTERNAL_SECRET (falls back to SUPABASE_SERVICE_ROLE_KEY) — Issue #10 resolved
 - Test command: `cd frontend && pnpm type-check && pnpm test:unit`
+- Test state: 17 test files, 338 tests, 0 type errors (as of June 10, 2026)
 
 YOUR TASK:
 <<<INSERT SPECIFIC TASK HERE — e.g. "Implement P0 fixes #1a, #1b, #2, #3 from REMEDIATION_HANDOFF.md Section 2.">>>
