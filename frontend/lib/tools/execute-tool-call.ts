@@ -91,16 +91,20 @@ export async function executeToolCall(options: ExecuteOptions) {
     const isRead = action.toLowerCase() === 'knowledge_base_read' || service.toLowerCase() === 'knowledge_base_read';
     const apiPath = isRead ? '/api/knowledge/read' : '/api/knowledge/search';
     
+    const internalSecret = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
     const searchResult = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${apiPath}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
+        headers: {
+          'Content-Type': 'application/json',
+          'x-crost-internal-secret': internalSecret,
+        },
+        body: JSON.stringify({
+          userId,
           // For search:
-          query: params.query || params.text || params.q || '', 
-          category: params.category, 
+          query: params.query || params.text || params.q || '',
+          category: params.category,
           limit: params.limit || 5,
           // For read:
           file_id: params.file_id || params.id || (isRead ? params.text : null)

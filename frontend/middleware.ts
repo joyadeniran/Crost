@@ -23,6 +23,21 @@ function getRouteRank(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // For API routes: enforce a 50MB body cap and bypass redirect logic
+  // (individual API routes handle their own auth via auth.getUser())
+  if (pathname.startsWith('/api')) {
+    const method = request.method.toUpperCase()
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      const contentLength = request.headers.get('content-length')
+      if (contentLength && parseInt(contentLength, 10) > 50 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+      }
+    }
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -58,7 +73,6 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
 
   // Protected: Dashboard
   if (pathname.startsWith('/dashboard')) {
@@ -115,5 +129,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login', '/signup'],
+  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login', '/signup', '/api/:path*'],
 }

@@ -213,10 +213,6 @@ describe('runComposioTool — COMPOSIO_SLUG_OVERRIDES (BUG-5)', () => {
 
 describe('executeToolCall — graceful returns for blocked requests', () => {
   it('returns permission_denied object when dept is not authorized for service', async () => {
-    vi.mock('@/lib/composio-connection', () => ({
-      checkConnectionWithJIT: vi.fn().mockResolvedValue({ isConnected: true, error: null }),
-    }))
-
     const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
 
     const result = await executeToolCall({
