@@ -261,10 +261,10 @@ export async function buildFinalPrompt(
     const founderName = identityMap.get('founder_name') ?? ''
     const companyName = identityMap.get('company_name') ?? ''
 
-    founderIdentity = identityMap.get('founder_identity') || (founderName ? `Founder: ${founderName}` : '')
-    companyIdentity = identityMap.get('company_identity') || (companyName ? `Company: ${companyName}` : '')
-    assistantIdentity = identityMap.get('assistant_identity') || DEFAULT_ASSISTANT_IDENTITY
-    legacyIdentity = identityMap.get('local_identity') || ''
+    founderIdentity = (identityMap.get('founder_identity') as string) || (founderName ? `Founder: ${founderName}` : '')
+    companyIdentity = (identityMap.get('company_identity') as string) || (companyName ? `Company: ${companyName}` : '')
+    assistantIdentity = (identityMap.get('assistant_identity') as string) || DEFAULT_ASSISTANT_IDENTITY
+    legacyIdentity = (identityMap.get('local_identity') as string) || ''
   }
 
   let memoBrief = departmentSlug ? await getMemoBrief(departmentSlug) : ''
@@ -567,7 +567,7 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
 
     if (tier1Memos && tier1Memos.length > 0) {
       const formatted = tier1Memos
-        .map(m => `[${(m as any).is_foundational ? 'FOUNDATIONAL' : 'CURRENT CONTEXT'}] ${m.title} (from: ${m.from_department})\n${m.body}`)
+        .map((m: any) => `[${m.is_foundational ? 'FOUNDATIONAL' : 'CURRENT CONTEXT'}] ${m.title} (from: ${m.from_department})\n${m.body}`)
         .join('\n\n')
       sections.push(`### CORE BUSINESS CONTEXT\n${formatted}`)
     }

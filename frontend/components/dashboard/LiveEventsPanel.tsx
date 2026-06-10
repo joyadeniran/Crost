@@ -62,7 +62,7 @@ export function LiveEventsPanel({ initial, isHidden }: Props) {
             table: 'event_log',
             filter: `created_by=eq.${session.user.id}`
           },
-          (payload) => {
+          (payload: any) => {
             const entry = payload.new as EventLogEntry
             setNewId(entry.id)
             setEvents(prev => [entry, ...prev.slice(0, 19)])

@@ -4,6 +4,7 @@
 // Server-side ONLY.
 
 import { FunctionTool } from '@google/adk'
+import { Schema, Type } from '@google/genai'
 import { createDbClient } from '../db'
 import { gcsStorage } from '../gcs'
 
@@ -13,15 +14,16 @@ export const searchKnowledgeBase = new FunctionTool({
   name: 'search_knowledge_base',
   description: 'Search the company knowledge base for relevant information, documents, and context. Use this before starting any task to gather relevant background.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      query: { type: 'string', description: 'The search query' },
-      userId: { type: 'string', description: 'The user ID for scoping results' },
-      limit: { type: 'number', description: 'Max results (default 5)' },
+      query: { type: Type.STRING, description: 'The search query' },
+      userId: { type: Type.STRING, description: 'The user ID for scoping results' },
+      limit: { type: Type.NUMBER, description: 'Max results (default 5)' },
     },
     required: ['query', 'userId'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { query, userId, limit = 5 } = params
     try {
       const db = createDbClient()
@@ -53,15 +55,16 @@ export const readCompanyMemo = new FunctionTool({
   name: 'read_company_memo',
   description: 'Read recent company memos to understand current company state, active strategies, and context.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      userId: { type: 'string', description: 'The user ID' },
-      limit: { type: 'number', description: 'Number of memos to retrieve (default 10)' },
-      tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+      userId: { type: Type.STRING, description: 'The user ID' },
+      limit: { type: Type.NUMBER, description: 'Number of memos to retrieve (default 10)' },
+      tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Filter by tags' },
     },
     required: ['userId'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { userId, limit = 10 } = params
     const db = createDbClient()
     const query = db
@@ -80,19 +83,20 @@ export const writeToMemo = new FunctionTool({
   name: 'write_to_memo',
   description: 'Write a memo to the company knowledge log. Use this to document decisions, insights, and completed work.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      userId: { type: 'string', description: 'The user ID' },
-      goalId: { type: 'string', description: 'The goal this memo relates to' },
-      departmentSlug: { type: 'string', description: 'The department writing the memo' },
-      title: { type: 'string', description: 'Memo title' },
-      body: { type: 'string', description: 'Memo content (markdown supported)' },
-      priority: { type: 'string', description: 'Priority level (low, normal, high)' },
-      tags: { type: 'array', items: { type: 'string' }, description: 'Tags for the memo' },
+      userId: { type: Type.STRING, description: 'The user ID' },
+      goalId: { type: Type.STRING, description: 'The goal this memo relates to' },
+      departmentSlug: { type: Type.STRING, description: 'The department writing the memo' },
+      title: { type: Type.STRING, description: 'Memo title' },
+      body: { type: Type.STRING, description: 'Memo content (markdown supported)' },
+      priority: { type: Type.STRING, description: 'Priority level (low, normal, high)' },
+      tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Tags for the memo' },
     },
     required: ['userId', 'departmentSlug', 'title', 'body'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { userId, goalId, departmentSlug, title, body, priority = 'normal', tags = [] } = params
     const db = createDbClient()
     const { data, error } = await db
@@ -120,19 +124,20 @@ export const createArtifact = new FunctionTool({
   name: 'create_artifact',
   description: 'Save a work product (document, spreadsheet, report, analysis) as a company artifact. The content will be stored and linked to the goal.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      userId: { type: 'string', description: 'The user ID' },
-      goalId: { type: 'string', description: 'The goal this artifact is for' },
-      departmentSlug: { type: 'string', description: 'The department creating the artifact' },
-      title: { type: 'string', description: 'Artifact title' },
-      content: { type: 'string', description: 'The artifact content (markdown, JSON, CSV, or plain text)' },
-      artifactType: { type: 'string', description: 'Artifact type: document, spreadsheet, data, or report' },
-      taskLabel: { type: 'string', description: 'The task label for filename generation' },
+      userId: { type: Type.STRING, description: 'The user ID' },
+      goalId: { type: Type.STRING, description: 'The goal this artifact is for' },
+      departmentSlug: { type: Type.STRING, description: 'The department creating the artifact' },
+      title: { type: Type.STRING, description: 'Artifact title' },
+      content: { type: Type.STRING, description: 'The artifact content (markdown, JSON, CSV, or plain text)' },
+      artifactType: { type: Type.STRING, description: 'Artifact type: document, spreadsheet, data, or report' },
+      taskLabel: { type: Type.STRING, description: 'The task label for filename generation' },
     },
     required: ['userId', 'departmentSlug', 'title', 'content'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { userId, goalId, departmentSlug, title, content, artifactType = 'document', taskLabel } = params
     try {
       const db = createDbClient()
@@ -182,21 +187,22 @@ export const requestApproval = new FunctionTool({
   name: 'request_human_approval',
   description: 'Request founder approval before taking any external action (sending emails, posting messages, creating records, pushing to GitHub, etc.). REQUIRED before any action that affects systems outside Crost.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      userId: { type: 'string', description: 'The user ID' },
-      goalId: { type: 'string', description: 'The goal ID' },
-      departmentName: { type: 'string', description: 'The department requesting approval' },
-      departmentSlug: { type: 'string', description: 'The department slug' },
-      actionLabel: { type: 'string', description: 'Short description of what action will be taken' },
-      reasoning: { type: 'string', description: 'Why this action is needed' },
-      actionType: { type: 'string', description: 'Action type: email, calendar, github, slack, database, api_call, or other' },
-      payload: { type: 'object', description: 'The parameters that will be used for the action' },
-      riskLevel: { type: 'string', description: 'Risk level: low, medium, or high' },
+      userId: { type: Type.STRING, description: 'The user ID' },
+      goalId: { type: Type.STRING, description: 'The goal ID' },
+      departmentName: { type: Type.STRING, description: 'The department requesting approval' },
+      departmentSlug: { type: Type.STRING, description: 'The department slug' },
+      actionLabel: { type: Type.STRING, description: 'Short description of what action will be taken' },
+      reasoning: { type: Type.STRING, description: 'Why this action is needed' },
+      actionType: { type: Type.STRING, description: 'Action type: email, calendar, github, slack, database, api_call, or other' },
+      payload: { type: Type.OBJECT, description: 'The parameters that will be used for the action' },
+      riskLevel: { type: Type.STRING, description: 'Risk level: low, medium, or high' },
     },
     required: ['userId', 'departmentName', 'departmentSlug', 'actionLabel', 'reasoning'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const {
       userId, goalId, departmentName, departmentSlug,
       actionLabel, reasoning, actionType = 'other', payload = {}, riskLevel = 'medium'
@@ -234,15 +240,16 @@ export const updateGoalStatus = new FunctionTool({
   name: 'update_goal_status',
   description: 'Update the status of the current goal. Use "completed" when all tasks are done, "failed" if the goal cannot be achieved.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      goalId: { type: 'string', description: 'The goal ID to update' },
-      status: { type: 'string', description: 'Status: executing, completed, failed, or waiting_approval' },
-      summary: { type: 'string', description: 'Brief summary of what was accomplished' },
+      goalId: { type: Type.STRING, description: 'The goal ID to update' },
+      status: { type: Type.STRING, description: 'Status: executing, completed, failed, or waiting_approval' },
+      summary: { type: Type.STRING, description: 'Brief summary of what was accomplished' },
     },
     required: ['goalId', 'status'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { goalId, status, summary } = params
     const db = createDbClient()
     const updateData: any = { status, updated_at: new Date().toISOString() }
@@ -261,18 +268,19 @@ export const logTaskEvent = new FunctionTool({
   name: 'log_task_event',
   description: 'Log an event to the goal event stream for transparency and debugging.',
   parameters: {
-    type: 'object' as const,
+    type: Type.OBJECT,
     properties: {
-      goalId: { type: 'string', description: 'The goal ID' },
-      departmentSlug: { type: 'string', description: 'The department slug' },
-      eventType: { type: 'string', description: 'The type of event (e.g., "task_started", "tool_called", "decision_made")' },
-      description: { type: 'string', description: 'Human-readable description of what happened' },
-      userId: { type: 'string', description: 'The user ID' },
-      metadata: { type: 'object', description: 'Additional metadata' },
+      goalId: { type: Type.STRING, description: 'The goal ID' },
+      departmentSlug: { type: Type.STRING, description: 'The department slug' },
+      eventType: { type: Type.STRING, description: 'The type of event (e.g., "task_started", "tool_called", "decision_made")' },
+      description: { type: Type.STRING, description: 'Human-readable description of what happened' },
+      userId: { type: Type.STRING, description: 'The user ID' },
+      metadata: { type: Type.OBJECT, description: 'Additional metadata' },
     },
     required: ['eventType', 'description'],
-  },
-  execute: async (params: Record<string, any>) => {
+  } as Schema,
+  execute: async (input: unknown) => {
+    const params = input as Record<string, any>
     const { goalId, departmentSlug, eventType, description, userId, metadata = {} } = params
     const db = createDbClient()
     await db.from('event_log').insert({

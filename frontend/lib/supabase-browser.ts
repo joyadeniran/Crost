@@ -129,14 +129,14 @@ const supabaseCompatAuth = {
   },
 
   async getUser() {
-    return { data: { user: auth.currentUser }, error: null }
+    return { data: { user: mapFirebaseUser(auth.currentUser) }, error: null }
   },
 
   async getSession() {
     const user = auth.currentUser
     if (!user) return { data: { session: null }, error: null }
     const token = await user.getIdToken()
-    return { data: { session: { access_token: token, user } }, error: null }
+    return { data: { session: { access_token: token, user: mapFirebaseUser(user) } }, error: null }
   },
 
   async signInWithOAuth({ provider, options }: { provider: string; options?: { redirectTo?: string } }) {

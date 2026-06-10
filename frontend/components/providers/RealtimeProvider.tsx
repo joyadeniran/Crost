@@ -52,7 +52,7 @@ export function RealtimeProvider({
             table: 'departments',
             filter: `user_id=eq.${session.user.id}`,
           },
-          (payload) => {
+          (payload: any) => {
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               upsertDepartment(payload.new as Department)
             } else if (payload.eventType === 'DELETE') {

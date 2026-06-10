@@ -35,7 +35,7 @@ export async function GET(_req: NextRequest) {
       .eq('key_type', 'system')
       .gte('created_at', todayMidnightUTC.toISOString())
 
-    const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.total_tokens ?? 0), 0)
+    const tokensUsed = (usage ?? []).reduce((sum: number, row: any) => sum + (row.total_tokens ?? 0), 0)
 
     // Check if user has any valid BYOK keys (any provider)
     const { data: keys } = await supabase

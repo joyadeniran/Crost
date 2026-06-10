@@ -70,7 +70,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
             table: 'event_log',
             filter: `created_by=eq.${session.user.id}`,
           },
-          (payload) => {
+          (payload: any) => {
             setEvents(prev => [payload.new as EventLogEntry, ...prev])
           }
         )

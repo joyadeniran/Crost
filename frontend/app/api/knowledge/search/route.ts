@@ -130,7 +130,7 @@ async function handleSearch(
             .select('id, title, category, extracted_summary')
             .in('id', fileIds);
 
-          const fileMap = new Map((parentFiles ?? []).map(f => [f.id, f]));
+          const fileMap = new Map<string, any>((parentFiles ?? []).map((f: any) => [f.id, f]));
 
           const matches = vectorMatches.map((chunk: any) => {
             const parent = fileMap.get(chunk.knowledge_file_id);
@@ -178,8 +178,8 @@ async function handleSearch(
             .limit(limit);
           
           if (latestFiles && latestFiles.length > 0) {
-            return NextResponse.json({ 
-              matches: latestFiles.map(f => ({
+            return NextResponse.json({
+              matches: latestFiles.map((f: any) => ({
                 title: f.title,
                 summary: f.extracted_summary || 'Available document',
                 chunk: '[Discovery Result] Listed from Knowledge Base.',
@@ -193,15 +193,15 @@ async function handleSearch(
       }
 
       // Hydrate with parent file info
-      const fileIds = [...new Set(chunks.map((c: any) => c.knowledge_file_id as string))];
+      const fileIds = [...new Set(chunks.map((c: any) => c.knowledge_file_id as string))] as string[];
       const { data: parentFiles } = await supabase
         .from('knowledge_base_files')
         .select('id, title, category, extracted_summary')
         .in('id', fileIds);
 
-      const fileMap = new Map((parentFiles ?? []).map(f => [f.id, f]));
+      const fileMap = new Map<string, any>((parentFiles ?? []).map((f: any) => [f.id, f]));
 
-      const matches = chunks.map(chunk => {
+      const matches = chunks.map((chunk: any) => {
         const parent = fileMap.get(chunk.knowledge_file_id);
         return {
           title: parent?.title || 'Unknown',
@@ -226,7 +226,7 @@ async function handleSearch(
     }
 
     // Format results for Orc injection — summaries only (no full text to avoid token bloat)
-    const matches = files.map(f => ({
+    const matches = files.map((f: any) => ({
       title: f.title,
       summary: f.extracted_summary || 'No summary available.',
       chunk: null, // No chunk at this level of search
@@ -236,7 +236,7 @@ async function handleSearch(
     }));
 
     // Increment reference_count
-    const fileIds = files.map(f => f.id);
+    const fileIds = files.map((f: any) => f.id);
     for (const id of fileIds) {
       try {
         await supabase.rpc('increment_kb_reference', { file_id: id });
