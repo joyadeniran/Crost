@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('query') || '';
     const category = searchParams.get('category') || '';
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = Math.max(1, parseInt(searchParams.get('limit') || '10', 10) || 10);
 
     let dbQuery = supabase
       .from('knowledge_base_files')

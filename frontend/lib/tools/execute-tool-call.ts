@@ -111,6 +111,10 @@ export async function executeToolCall(options: ExecuteOptions) {
         })
       }
     );
+    if (!searchResult.ok) {
+      const errText = await searchResult.text().catch(() => 'unknown error')
+      return { result: `Knowledge Base request failed (${searchResult.status}): ${errText.slice(0, 200)}` }
+    }
     const json = await searchResult.json();
 
     // Humanize search results for the UI

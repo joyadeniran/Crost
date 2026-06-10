@@ -114,6 +114,7 @@ async function handleSearch(
       // Phase 3: Try semantic search first
       try {
         const queryEmbeddings = await callEmbeddings(query, userId);
+        if (!queryEmbeddings[0]) throw new Error('No embedding generated');
         const { data: vectorMatches, error: matchErr } = await supabase.rpc('match_kb_chunks', {
           query_embedding: queryEmbeddings[0],
           match_threshold: 0.5,
@@ -238,9 +239,10 @@ async function handleSearch(
     const fileIds = files.map(f => f.id);
     for (const id of fileIds) {
       try {
+        await supabase.rpc('increment_kb_reference', { file_id: id });
         await supabase
           .from('knowledge_base_files')
-          .update({ reference_count: (supabase as any).rpc('increment_kb_reference', { file_id: id }), last_referenced_at: new Date().toISOString() })
+          .update({ last_referenced_at: new Date().toISOString() })
           .eq('id', id);
       } catch { /* best-effort */ }
     }

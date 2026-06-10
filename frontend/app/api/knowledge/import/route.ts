@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (insertErr || !fileRow) {
-      throw new Error(`Failed to create KB file record: ${insertErr.message}`);
+      throw new Error(`Failed to create KB file record: ${insertErr?.message ?? 'no data returned'}`);
     }
 
     const fileId = fileRow.id;

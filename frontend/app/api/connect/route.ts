@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { provider } = body; // e.g., 'gmail'
+    if (!provider || typeof provider !== 'string') {
+      return NextResponse.json({ error: 'provider is required' }, { status: 400 });
+    }
     const supabase = createServerSupabaseClient();
 
     const idempotency = await beginIdempotentRequest(req, supabase, user.id, body);

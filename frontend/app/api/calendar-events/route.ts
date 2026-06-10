@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const upcoming = searchParams.get('upcoming') === 'true'
-    const days = parseInt(searchParams.get('days') ?? '30', 10)
+    const days = parseInt(searchParams.get('days') ?? '30', 10) || 30
 
     const supabase = createServerSupabaseClient()
     let query = supabase

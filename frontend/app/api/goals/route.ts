@@ -23,14 +23,14 @@ export async function GET(req: NextRequest) {
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
-    const limit = Number(searchParams.get('limit') ?? '20')
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10) || 20), 100)
 
     let query = supabase
       .from('goals')
       .select('*')
       .eq('created_by', user.id)
       .order('created_at', { ascending: false })
-      .limit(Math.min(limit, 100))
+      .limit(limit)
 
     if (status) query = query.eq('status', status)
 

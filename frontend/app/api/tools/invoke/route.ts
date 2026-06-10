@@ -19,10 +19,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json()
-  let { service, action, params = {}, goal_id, task_id } = body
+  let service: string | undefined
+  let action: string | undefined
+  let goal_id: string | null = null
 
   try {
+    const body = await req.json()
+    let { params = {}, task_id } = body
+    ;({ service, action, goal_id = null } = body)
+
     if (!service || !action) {
       return NextResponse.json(
         { error: 'service and action are required' },

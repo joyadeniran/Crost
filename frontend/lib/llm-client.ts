@@ -899,6 +899,7 @@ export async function callEmbeddings(
       ...(LITELLM_MASTER_KEY && { 'Authorization': `Bearer ${LITELLM_MASTER_KEY}` })
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   })
 
   if (!res.ok) {
@@ -907,6 +908,7 @@ export async function callEmbeddings(
   }
 
   const data = await res.json()
+  if (!Array.isArray(data.data)) throw new Error('Unexpected embeddings response shape')
   return data.data.map((item: any) => item.embedding)
 }
 
