@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { refreshTokenAfterStep } from '@/lib/refresh-token'
 import { supabaseClient } from '@/lib/supabase-browser'
 import { ProgressLine } from '@/components/onboarding/ProgressLine'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
@@ -72,10 +73,10 @@ export default function ActivatePage() {
 
   const finalizeAndRedirect = async () => {
     try {
-      // Force session refresh so the middleware sees the updated 'complete' metadata
-      await supabaseClient.auth.refreshSession()
+      // Force Firebase token refresh so middleware sees updated onboarding_step claim
+      await refreshTokenAfterStep()
     } catch (err) {
-      console.error('Session refresh failed (non-fatal):', err)
+      console.error('Token refresh failed (non-fatal):', err)
     }
     // Clear onboarding store — sensitive business data (name, description, stage) must not
     // persist in localStorage once the founder has landed on the dashboard.

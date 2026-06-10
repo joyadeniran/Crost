@@ -66,12 +66,11 @@ export default function LoginPage() {
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-      
+      // Always use window.location.origin — never NEXT_PUBLIC_APP_URL which can be stale
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${baseUrl}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
       if (error) throw error

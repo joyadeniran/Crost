@@ -2,7 +2,8 @@
 // Per CROST_SPEC Section 5: Company Memo is single source of truth for company state
 // This module provides typed helpers for reading/writing structured memo data
 
-import { SupabaseClient } from '@supabase/supabase-js'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClient = any
 
 /**
  * Structured Company Memo per CROST_SPEC Section 5

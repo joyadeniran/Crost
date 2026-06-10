@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/lib/onboarding-store'
+import { refreshTokenAfterStep } from '@/lib/refresh-token'
 import { DepartmentCard } from '@/components/onboarding/DepartmentCard'
 import { ProfileSummary } from '@/components/onboarding/ProfileSummary'
 import { toast } from '@/components/ui/toaster'
@@ -106,6 +107,7 @@ export default function TeamPage() {
 
       if (!res.ok) throw new Error('Failed to save onboarding data')
 
+      await refreshTokenAfterStep()
       router.push('/onboarding/activate')
     } catch (err: any) {
       toast(formatErrorMessage(err), 'error')
@@ -138,6 +140,7 @@ export default function TeamPage() {
       })
 
       if (!res.ok) throw new Error('Unable to save your setup')
+      await refreshTokenAfterStep()
       window.location.href = '/dashboard'
     } catch (err: any) {
       toast(formatErrorMessage(err), 'error')
