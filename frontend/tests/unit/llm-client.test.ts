@@ -40,6 +40,39 @@ vi.mock('@composio/core', () => ({
   })),
 }))
 
+// LLM transport mock.
+// The GCP migration routes callLLM → callLiteLLM → callGemini (Gemini SDK)
+// instead of the old LiteLLM HTTP call. These tests drive LLM behaviour through
+// the global `fetch` mock, so adapt callGemini onto that same fetch contract:
+// success/error responses keep the LiteLLM `choices[]` shape per-test.
+vi.mock('@/lib/gemini-client', () => ({
+  callGemini: async (params: { model: string; prompt: string; systemNote?: string }) => {
+    const res = await fetch('https://mock-llm.test/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: params.model,
+        messages: [
+          { role: 'system', content: params.systemNote ?? '' },
+          { role: 'user', content: params.prompt },
+        ],
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`LLM error ${res.status}: ${text}`)
+    }
+    const data = await res.json()
+    return {
+      content: data.choices?.[0]?.message?.content ?? '',
+      tokensUsed: data.usage?.total_tokens ?? 0,
+    }
+  },
+  normalizeModel: (m: string) => m,
+  makeGeminiModel: vi.fn(),
+  getGeminiEmbedding: vi.fn().mockResolvedValue([]),
+  GEMINI_FALLBACK_CHAIN: ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-flash'],
+}))
+
 // ── Mock Supabase client factory ───────────────────────────────────────────
 
 function mockSupabaseClient(overrides: Record<string, unknown> = {}) {
@@ -279,7 +312,7 @@ describe('callLLM — resilient fallback chain', () => {
     expect(result).toBe('chain[0] response')
     // Second call should use the first model in RESILIENT_FALLBACK_CHAIN
     const secondCallBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body)
-    expect(secondCallBody.model).toBe('groq/llama-3.3-70b-versatile')
+    expect(secondCallBody.model).toBe('gemini/gemini-2.0-flash')
   })
 })
 

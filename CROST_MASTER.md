@@ -3,11 +3,32 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.07  
-**Last Updated:** June 5, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Auth flow fixed. Google OAuth redirects to /dashboard.  
+**Current Version:** 13.08  
+**Last Updated:** June 10, 2026  
+**Deployment Status:** ✅ FULLY LIVE — Unit suite green (339/339). Submission hardening pass.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.08 — Submission Readiness: Unit Suite Green After GCP Migration
+**Date**: June 10, 2026  **Status**: ✅ Shipped  
+**Impact**: Full unit suite passes (339/339, was 301/37-fail). Type-check clean (0 errors). Submission-readiness review complete.
+
+### Context
+Submission-readiness review for the Track 1 deadline (June 11). Local checkout was 12 commits behind `origin/feature/gcp-challenge`; fast-forwarded to the submission-ready code (`891b542`). All live endpoints verified healthy (`/api/health`, `/api/adk`, `/api/mcp`, `/demo` → 200; `app.crosthq.com` live).
+
+### Root Cause (37 failing unit tests)
+The GCP migration rerouted the LLM transport from the old LiteLLM `fetch` call to the Gemini SDK (`callLLM → callLiteLLM → callGemini` in `lib/gemini-client.ts`), but the unit tests still mocked `fetch`. Every LLM call threw `GOOGLE_AI_STUDIO_API_KEY not set`. Two onboarding-store tests broke on Node 22's experimental native `localStorage` shadowing jsdom's. One `runComposioTool` test asserted Composio SDK execution that the migration intentionally replaced with the ADK approval flow.
+
+### Fix
+- **LLM transport**: Added a `@/lib/gemini-client` mock in `llm-client.test.ts`, `orc-decision-gate.test.ts`, `edge-cases.test.ts` that adapts `callGemini` onto the existing global `fetch` mock, so per-test fetch stubs keep driving fallback/timeout/classifier behaviour unchanged. Updated the fallback-chain[0] assertion to `gemini/gemini-2.0-flash`.
+- **localStorage**: Added a prototype-based `Storage`/`localStorage` mock in `tests/unit/setup.ts`.
+- **Composio**: Rewrote the obsolete BUG-5 test to assert the new approval-flow contract (`requires_approval`, Composio SDK no longer invoked) and the retained `COMPOSIO_SLUG_OVERRIDE_MAP`.
+
+### Known follow-ups (flagged, not changed)
+- `composio/AuthKey_4QU8M52JXT.p8` private key is committed in history (since `60f373f`). Repo kept **private**; judges to be added as collaborators. Key should be **rotated/revoked**.
+- GitHub default branch is `main` (pre-migration); challenge code lives on `feature/gcp-challenge`.
 
 ---
 

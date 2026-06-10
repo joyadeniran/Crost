@@ -3,8 +3,8 @@
  *
  * Covers:
  *  - BUG-3: approval_requested event emitted to event_log when HITL triggers
- *  - BUG-5: COMPOSIO_SLUG_OVERRIDES maps GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT
- *  - Composio provider: override map is applied before execute() call
+ *  - BUG-5: runComposioTool queues external actions for approval (post-migration)
+ *           and retains GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT override map
  *  - executeToolCall: missing_connection returns graceful object (no throw)
  *  - executeToolCall: permission_denied returns graceful object for unknown dept
  */
@@ -169,24 +169,33 @@ describe('executeToolCall — approval_requested event (BUG-3)', () => {
   })
 })
 
-// ── Tests: BUG-5 — Composio slug override map ─────────────────────────────
+// ── Tests: BUG-5 — Gmail slug override map ────────────────────────────────
+// GCP migration: external tool execution moved off the Composio SDK and onto the
+// ADK approval flow (Google APIs are called post-approval). runComposioTool is now
+// a backward-compatible stub that returns a `requires_approval` result instead of
+// executing, and the legacy slug map is retained for the approval route.
 
-describe('runComposioTool — COMPOSIO_SLUG_OVERRIDES (BUG-5)', () => {
-  it('maps GMAIL_CREATE_DRAFT to GMAIL_CREATE_EMAIL_DRAFT before execute()', async () => {
+describe('runComposioTool — slug override + approval-flow contract (BUG-5)', () => {
+  it('returns a requires-approval result without executing the Composio SDK', async () => {
     const { runComposioTool } = await import('@/lib/tools/providers/composio')
 
-    await runComposioTool({
+    const result = await runComposioTool({
       userId: 'user-1',
       service: 'gmail',
       action: 'create_draft',
       params: { subject: 'Test', body: 'Body' },
     })
 
-    // The execute call must have used the overridden slug, not the raw one
-    expect(composioExecuteMock).toHaveBeenCalledWith(
-      'GMAIL_CREATE_EMAIL_DRAFT',
-      expect.any(Object)
-    )
+    // External actions are queued for founder approval, not run directly anymore
+    expect(result.success).toBe(false)
+    expect((result.data as any)?.requires_approval).toBe(true)
+    // The legacy Composio SDK must no longer be invoked
+    expect(composioExecuteMock).not.toHaveBeenCalled()
+  })
+
+  it('retains the GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT override map for the approval route', async () => {
+    const { COMPOSIO_SLUG_OVERRIDE_MAP } = await import('@/lib/tools/providers/composio')
+    expect(COMPOSIO_SLUG_OVERRIDE_MAP.GMAIL_CREATE_DRAFT).toBe('GMAIL_CREATE_EMAIL_DRAFT')
   })
 
   it('passes GMAIL_SEND_EMAIL through the override for "gmail" + "send"', async () => {

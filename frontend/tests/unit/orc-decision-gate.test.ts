@@ -25,6 +25,39 @@ vi.mock('@/lib/supabase', () => ({
   })),
 }))
 
+// LLM transport mock.
+// orcDecisionGate now classifies via callGemini (Gemini SDK) instead of a direct
+// LiteLLM fetch. Adapt callGemini onto the global `fetch` mock so the existing
+// per-test fetch stubs (choices[] shape) keep driving classifier behaviour, and
+// the classifier prompt is exposed as the `user` message for body assertions.
+vi.mock('@/lib/gemini-client', () => ({
+  callGemini: async (params: { model: string; prompt: string; systemNote?: string }) => {
+    const res = await fetch('https://mock-llm.test/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: params.model,
+        messages: [
+          { role: 'system', content: params.systemNote ?? '' },
+          { role: 'user', content: params.prompt },
+        ],
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`LLM error ${res.status}: ${text}`)
+    }
+    const data = await res.json()
+    return {
+      content: data.choices?.[0]?.message?.content ?? '',
+      tokensUsed: data.usage?.total_tokens ?? 0,
+    }
+  },
+  normalizeModel: (m: string) => m,
+  makeGeminiModel: vi.fn(),
+  getGeminiEmbedding: vi.fn().mockResolvedValue([]),
+  GEMINI_FALLBACK_CHAIN: ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-flash'],
+}))
+
 // ─── formatOrcContextForPrompt ────────────────────────────────────────────────
 
 describe('formatOrcContextForPrompt', () => {
