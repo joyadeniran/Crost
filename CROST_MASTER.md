@@ -3,11 +3,31 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.08  
+**Current Version:** 13.09  
 **Last Updated:** June 10, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Unit suite green (339/339). Submission hardening pass.  
+**Deployment Status:** ✅ FULLY LIVE — Cloud SQL connection fixed; departments seeded.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.09 — E2E Blocker: Empty Department Templates (3 stacked bugs)
+**Date**: June 10, 2026  **Status**: ✅ Shipped  
+**Impact**: `/api/departments?scope=templates` returned `Failed to fetch departments` (500), so onboarding showed no departments. Root cause was three stacked bugs, all now fixed.
+
+### Root Causes
+1. **SSL on unix socket** (`lib/db.ts`): production forced `ssl: { rejectUnauthorized: false }`, but Cloud SQL connects over the unix socket (`DATABASE_URL=...@localhost/crost?host=/cloudsql/INSTANCE`), which fails with `The server does not support SSL connections`. This broke **all** DB reads, not just departments.
+2. **Missing `is_orchestrator` column**: `cloudsql_migration.sql` never ported `supabase/migrations/20240101000008_is_orchestrator.sql`, but the departments route filters `is_orchestrator = false`.
+3. **No department seed**: `cloudsql_migration.sql` has zero `INSERT INTO departments`; `supabase/seed.sql` was never applied to Cloud SQL (table had 0 rows).
+
+### Fix
+- `lib/db.ts`: only enable SSL for real TCP connections — detect unix socket (`host=/cloudsql/`) and disable SSL there.
+- Cloud SQL: `ALTER TABLE departments ADD COLUMN IF NOT EXISTS is_orchestrator BOOLEAN NOT NULL DEFAULT FALSE` + single-orchestrator partial unique index.
+- Cloud SQL: seeded canonical departments (orchestrator + sales, marketing, ops, finance) as templates (`created_by IS NULL`), models normalized to `gemini/gemini-2.0-flash` (runtime `normalizeModel` funnels any model to Gemini anyway).
+- Applied via Cloud SQL Auth Proxy + `pg` (psql not installed locally).
+
+### Note
+Model values stored on departments are cosmetic post-migration: `callGemini.normalizeModel()` routes any non-Gemini model name to `gemini-2.0-flash`.
 
 ---
 

@@ -9,9 +9,20 @@ let _pool: Pool | null = null
 
 export function getPool(): Pool {
   if (!_pool) {
+    const connectionString = process.env.DATABASE_URL ?? ''
+    // Cloud SQL connects over a unix socket (host=/cloudsql/INSTANCE), which does
+    // not support SSL — enabling it fails with "server does not support SSL
+    // connections". Only use SSL for real TCP connections in production.
+    const isUnixSocket =
+      connectionString.includes('host=/cloudsql/') ||
+      connectionString.includes('host=%2Fcloudsql%2F') ||
+      /@\/[^/]/.test(connectionString)
     _pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+      connectionString,
+      ssl:
+        process.env.NODE_ENV === 'production' && !isUnixSocket
+          ? { rejectUnauthorized: false }
+          : undefined,
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
