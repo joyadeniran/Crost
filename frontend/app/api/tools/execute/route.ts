@@ -78,18 +78,9 @@ export async function POST(req: NextRequest) {
         return { status: 'success', memos: data }
       },
       render_mcp: async (p, ctx) => {
-        const apiKey = process.env.RENDER_API_KEY
-        if (!apiKey) throw new Error('RENDER_API_KEY not configured')
-        
-        // Example: Trigger deploy for a service
-        const res = await fetch(`https://api.render.com/v1/services/${p.serviceId}/deploys`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clearCache: 'do_not_clear' })
-        })
-        
-        if (!res.ok) throw new Error(`Render API failed: ${await res.text()}`)
-        return { status: 'success', data: await res.json() }
+        // render_mcp is deprecated — Cloud Run auto-deploys via Cloud Build CI/CD
+        console.log('[tools/execute] render_mcp is deprecated — Cloud Run auto-deploys via Cloud Build')
+        return { status: 'success', message: 'Cloud Run deploys automatically via Cloud Build CI/CD.' }
       },
       get_sales_data: async (p) => ({ status: 'success', revenue: '$14,250.00' }),
       save_document: async (p, ctx) => {

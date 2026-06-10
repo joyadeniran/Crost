@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { decryptApiKey } from '@/lib/crypto'
 
 export interface KeyResolution {
-  /** null = use only the LITELLM_MASTER_KEY Authorization header (system route) */
+  /** null = use the system API key (Google AI Studio or Vertex AI service account) */
   apiKey: string | null
   keyType: 'user' | 'system'
 }

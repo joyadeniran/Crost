@@ -5,13 +5,12 @@
 //
 // Flow:
 //   1. Find all users with an active googlecalendar connection (connections table)
-//   2. For each user, call googlecalendar_list_events via Composio (next 30 days)
+//   2. For each user, fetch events from Google Calendar API (next 30 days)
 //   3. Upsert into company_calendar_events (conflict on external_id+user_id → update)
 //   4. Return per-user stats
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { runComposioTool } from '@/lib/tools/providers/composio'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -98,7 +97,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 })
   }
 
-  const userIds = [...new Set((connectionRows ?? []).map((r: { created_by: string }) => r.created_by))]
+  const rawUserIds = (connectionRows ?? []).map((r: { created_by: string }) => r.created_by)
+  const userIds: string[] = Array.from(new Set(rawUserIds))
 
   if (userIds.length === 0) {
     return NextResponse.json({ success: true, usersProcessed: 0, timestamp: new Date().toISOString() })
@@ -117,25 +117,48 @@ export async function POST(req: NextRequest) {
 
   for (const userId of userIds) {
     try {
-      const toolResult = await runComposioTool({
-        userId,
-        service: 'GOOGLECALENDAR',
-        action: 'LIST_EVENTS',
-        params: { timeMin, timeMax, maxResults: 50, singleEvents: true, orderBy: 'startTime' },
-      })
+      // Fetch Google Calendar events via Google Calendar API.
+      // The user's stored Google OAuth access token is retrieved from the connections table.
+      const { data: connRow } = await supabase
+        .from('connections')
+        .select('access_token')
+        .eq('created_by', userId)
+        .eq('service_name', 'googlecalendar')
+        .maybeSingle()
 
-      if (!toolResult.success) {
-        results.push({ userId, synced: 0, skipped: 0, error: 'Composio call failed' })
+      const googleAccessToken = (connRow as any)?.access_token
+      if (!googleAccessToken) {
+        // No stored access token — skip this user (token may be stored client-side only)
+        console.log(`[cron/calendar-sync] No access_token for user ${userId}, skipping`)
+        results.push({ userId, synced: 0, skipped: 0, error: 'no_access_token' })
         continue
       }
 
-      const rawData = toolResult.data
-      const rawEvents: any[] = Array.isArray(rawData?.items)
-        ? rawData.items
-        : Array.isArray(rawData?.events)
-          ? rawData.events
-          : Array.isArray(rawData)
-            ? rawData
+      const calendarUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
+      calendarUrl.searchParams.set('timeMin', timeMin)
+      calendarUrl.searchParams.set('timeMax', timeMax)
+      calendarUrl.searchParams.set('maxResults', '50')
+      calendarUrl.searchParams.set('singleEvents', 'true')
+      calendarUrl.searchParams.set('orderBy', 'startTime')
+
+      const calRes = await fetch(calendarUrl.toString(), {
+        headers: { Authorization: `Bearer ${googleAccessToken}` },
+        signal: AbortSignal.timeout(15_000),
+      })
+
+      if (!calRes.ok) {
+        console.error(`[cron/calendar-sync] Google Calendar API ${calRes.status} for user ${userId}`)
+        results.push({ userId, synced: 0, skipped: 0, error: `google_api_${calRes.status}` })
+        continue
+      }
+
+      const calData = await calRes.json()
+      const rawEvents: any[] = Array.isArray(calData?.items)
+        ? calData.items
+        : Array.isArray(calData?.events)
+          ? calData.events
+          : Array.isArray(calData)
+            ? calData
             : []
       let synced = 0
       let skipped = 0

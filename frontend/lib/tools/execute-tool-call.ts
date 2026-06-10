@@ -55,8 +55,8 @@ function humanizeToolResult(result: ToolResult): string {
   if (!result.success) return result.summary || "Execution failed.";
   
   const data = result.data as any;
-  const service = result.service.toLowerCase();
-  const action = result.action.toLowerCase();
+  const service = (result.service ?? '').toLowerCase();
+  const action = (result.action ?? '').toLowerCase();
 
   // Gmail Deep Links
   if (service === 'gmail') {
