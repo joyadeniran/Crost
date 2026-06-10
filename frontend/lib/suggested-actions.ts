@@ -126,5 +126,5 @@ export async function generateAndInsertSuggestedActions({
     return []
   }
 
-  return (data || []).map(a => a.id)
+  return (data || []).map((a: any) => a.id)
 }

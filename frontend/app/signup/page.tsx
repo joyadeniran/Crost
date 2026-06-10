@@ -42,7 +42,7 @@ export default function SignUpPage() {
       })
       if (error) {
         // Fallback for native error handling if RPC is missing or disabled
-        if (error.code === 'user_already_exists' || error.message?.toLowerCase().includes('already registered')) {
+        if ((error as any).code === 'user_already_exists' || error.message?.toLowerCase().includes('already registered')) {
           toast('An account already exists with this email. Redirecting to sign in…', 'info')
           window.location.href = `/login?email=${encodeURIComponent(email)}`
           return
@@ -69,10 +69,10 @@ export default function SignUpPage() {
       })
       if (error) throw error
       // G1: record consent on verified signup
-      if (data.user?.id) {
+      if ((data.user as any)?.uid ?? data.user?.id) {
         const source = searchParams?.get('source') || 'direct'
         await supabaseClient.from('user_consents').insert({
-          user_id: data.user.id,
+          user_id: (data.user as any).uid ?? (data.user as any).id,
           consent_type: 'terms_and_privacy',
           source,
           consented_at: new Date().toISOString(),

@@ -257,7 +257,7 @@ export async function buildFinalPrompt(
       .eq('created_by', userId)
       .order('key')
 
-    const identityMap = new Map((identityRows ?? []).map((row) => [row.key, cleanConfigValue(row.value)]))
+    const identityMap = new Map((identityRows ?? []).map((row: any) => [row.key, cleanConfigValue(row.value)]))
     const founderName = identityMap.get('founder_name') ?? ''
     const companyName = identityMap.get('company_name') ?? ''
 
@@ -323,7 +323,7 @@ export async function buildFinalPrompt(
 
   // Filter tools to only those the department is authorized to use
   const { data: allTools } = await toolsQuery.or('is_action.eq.true,requires_config.eq.false,id.eq.supabase_query')
-  const permittedTools = (allTools ?? []).filter(t => {
+  const permittedTools = (allTools ?? []).filter((t: any) => {
     const service = t.id.split('_')[0].toLowerCase()
     return allowedServices.includes(service) || t.id === 'supabase_query'
   })
@@ -333,8 +333,8 @@ export async function buildFinalPrompt(
     `- COMPANY_MEMOS: Fetch recent company communications. Args: { "limit": number }`,
     allowedServices.includes('internal') ? `- KNOWLEDGE_BASE_SEARCH: Search the founder's uploaded knowledge base (documents, reports, handbooks, pitch decks, etc.). Use this whenever the founder references an uploaded file, asks about company documents, or when grounding the response in founder-provided context would help. Args: { "service": "internal", "action": "knowledge_base_search", "query": "<search terms>", "category": "<optional: company_profile|pitch_deck|financial_report|handbook|meeting_notes|research|legal|marketing|sales|product|operations>", "limit": 5 }` : '',
     allowedServices.includes('internal') ? `- KNOWLEDGE_BASE_READ: Fetch the full extracted text content of a specific knowledge base file. Use this after finding a relevant file via search to read its full content. Args: { "service": "internal", "action": "knowledge_base_read", "file_id": "<uuid from search results>" }` : '',
-    permittedTools.some(t => t.id === 'supabase_query') ? `- SUPABASE_QUERY: Execute read-only SQL queries against the database schema. Args: { "query": "SELECT ..." }` : '',
-    ...permittedTools.filter(t => t.id !== 'supabase_query').map(t => `- ${t.id.toUpperCase()}: ${t.description}`)
+    permittedTools.some((t: any) => t.id === 'supabase_query') ? `- SUPABASE_QUERY: Execute read-only SQL queries against the database schema. Args: { "query": "SELECT ..." }` : '',
+    ...permittedTools.filter((t: any) => t.id !== 'supabase_query').map((t: any) => `- ${t.id.toUpperCase()}: ${t.description}`)
   ].filter(Boolean).join('\n')
 
   const identityHandling = departmentSlug === 'orchestrator'
@@ -574,14 +574,14 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
 
     if (criticalMemos && criticalMemos.length > 0) {
       const tier2 = criticalMemos
-        .map(m => `[URGENT] ${m.title} (from: ${m.from_department})\n${m.body}`)
+        .map((m: any) => `[URGENT] ${m.title} (from: ${m.from_department})\n${m.body}`)
         .join('\n\n')
       sections.push(`### CRITICAL MEMOS\n${tier2}`)
     }
 
     if (highMemos && highMemos.length > 0) {
       const tier3 = highMemos
-        .map(m => `[HIGH] ${m.title} (from: ${m.from_department})\n${m.body.slice(0, 500)}`)
+        .map((m: any) => `[HIGH] ${m.title} (from: ${m.from_department})\n${m.body.slice(0, 500)}`)
         .join('\n\n')
       sections.push(`### HIGH-PRIORITY MEMOS\n${tier3}`)
     }
@@ -619,7 +619,7 @@ async function getMemoBrief(departmentSlug: string): Promise<string> {
     if (!memos || memos.length === 0) return ''
 
     return memos
-      .map(m => `[${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n${m.priority === 'urgent' ? m.body : m.body.slice(0, 500)}`)
+      .map((m: any) => `[${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n${m.priority === 'urgent' ? m.body : m.body.slice(0, 500)}`)
       .join('\n\n')
   } catch {
     return ''
@@ -642,7 +642,7 @@ async function getMemos(goalId: string, lastN: number = 10): Promise<string> {
     if (!memos || memos.length === 0) return ''
 
     return memos
-      .map(m => `[GOAL MEMO][${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n${m.body.slice(0, 800)}`)
+      .map((m: any) => `[GOAL MEMO][${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n${m.body.slice(0, 800)}`)
       .join('\n\n')
   } catch {
     return ''
@@ -854,7 +854,7 @@ export async function checkTokenBudget(userId: string): Promise<
       .eq('key_type', 'system')
       .gte('created_at', todayMidnight.toISOString())
 
-    const tokensUsed = (usage ?? []).reduce((sum, row) => sum + (row.total_tokens ?? 0), 0)
+    const tokensUsed = (usage ?? []).reduce((sum: number, row: any) => sum + (row.total_tokens ?? 0), 0)
 
     if (tokensUsed >= limit) {
       // Reset time: next midnight local
@@ -1070,7 +1070,7 @@ export async function runOrchestratorTask(
     .limit(5)
 
   const formattedRecentTasks = (recentTasks || [])
-    .map(t => `- [${t.status.toUpperCase()}] ${t.label} (task_id: ${t.task_id}, goal_id: ${t.goal_id}, Dept: ${t.dept_slug})`)
+    .map((t: any) => `- [${t.status.toUpperCase()}] ${t.label} (task_id: ${t.task_id}, goal_id: ${t.goal_id}, Dept: ${t.dept_slug})`)
     .join('\n')
 
   // Brains 1 + 3: parallel fetch of memo context, structured Orc context, capability
@@ -1125,7 +1125,7 @@ export async function runOrchestratorTask(
     modeHint,
     capabilityGapsText ? `Capability Intelligence:\n${capabilityGapsText}` : '',
     kbContextText      ? `Knowledge Base Context:\n${kbContextText}` : '',
-    `Available Departments: ${activeDeptsList.map(d => d.slug).join(', ')}`,
+    `Available Departments: ${activeDeptsList.map((d: any) => d.slug).join(', ')}`,
     formattedRecentTasks ? `Recent Workspace Tasks:\n${formattedRecentTasks}` : '',
     `Conversation History:\n${conversationContext}`,
     orcContextSummary ? `Structured Company Context:\n${orcContextSummary}` : '',
@@ -1161,7 +1161,7 @@ export async function runOrchestratorTask(
   // ─── Hallucination Protection ──────────────────────────────────────────────
   // Validate that all proposed departments actually exist in the DB.
   if (result.is_valid_goal && result.plan?.tasks) {
-    const activeSlugs = activeDeptsList.map(d => d.slug.toLowerCase())
+    const activeSlugs = activeDeptsList.map((d: any) => d.slug.toLowerCase())
     const invalidTasks = result.plan.tasks.filter((t: any) => !activeSlugs.includes(t.dept.toLowerCase()))
     
     if (invalidTasks.length > 0) {
@@ -1412,7 +1412,7 @@ export async function runWorkerTask(
       created_by: userId
     })
     if (aqInsertErr) {
-      console.error('[runWorkerTask] approval_queue insert failed:', aqInsertErr.message, aqInsertErr.details)
+      console.error('[runWorkerTask] approval_queue insert failed:', aqInsertErr.message, (aqInsertErr as any).details)
       throw new Error(`Failed to create approval request: ${aqInsertErr.message}`)
     }
     await supabase.from('departments').update({ status: 'awaiting_approval' }).eq('id', deptRow.id)
@@ -1575,7 +1575,7 @@ export async function runWorkerTask(
   if (goalId) {
     const { data: allTasks } = await supabase.from('goal_tasks').select('status').eq('goal_id', goalId)
     const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired'])
-    const allTerminal = (allTasks || []).every(t => terminalStatuses.has(t.status))
+    const allTerminal = (allTasks || []).every((t: any) => terminalStatuses.has(t.status))
     if (allTerminal) {
       await runOrcReport(goalId)
       await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
@@ -1691,7 +1691,7 @@ export async function runOrcReport(goalId: string): Promise<void> {
   const { data: memos } = await supabase.from('company_memos').select('*').eq('goal_id', goalId)
   if (!memos || memos.length === 0) return
 
-  const context = memos.map(m => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
+  const context = memos.map((m: any) => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
   const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief. Use ## markdown headers (not **bold** pseudo-headers). Lead with the outcome, then key findings, then what's next. No preamble, no "I am pleased to present". Be direct and specific.`
 
   try {

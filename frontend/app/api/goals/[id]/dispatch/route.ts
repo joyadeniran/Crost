@@ -94,14 +94,14 @@ export async function POST(req: NextRequest, { params }: Params) {
         supabase.from('company_memos').select('task_id').eq('goal_id', goal.id)
       ])
       
-      const planned = (allTasks || []).filter(t => t.status === 'planned' || t.status === 'pending')
-      const memoIds = new Set((allMemos || []).map(m => m.task_id))
+      const planned = (allTasks || []).filter((t: any) => t.status === 'planned' || t.status === 'pending')
+      const memoIds = new Set((allMemos || []).map((m: any) => m.task_id))
       const RESOLVED_STATUSES = new Set(['completed', 'skipped', 'rejected'])
       
       let count = 0
       for (const t of planned) {
         const blockers = (t.depends_on || []).filter((depId: string) => {
-          const depTask = (allTasks || []).find(at => at.task_id === depId)
+          const depTask = (allTasks || []).find((at: any) => at.task_id === depId)
           // A dependency is satisfied if the task is completed (with memo) OR skipped/rejected
           return !depTask || (!RESOLVED_STATUSES.has(depTask.status)) || (depTask.status === 'completed' && !memoIds.has(depId))
         })
@@ -162,15 +162,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       ])
 
       const depList = depTasks ?? []
-      const memoIds = new Set((depMemos ?? []).map(m => m.task_id))
+      const memoIds = new Set((depMemos ?? []).map((m: any) => m.task_id))
       const RESOLVED_STATUSES = new Set(['completed', 'skipped', 'rejected'])
       
       const finishedIds = depList
-        .filter(d => {
+        .filter((d: any) => {
           if (d.status === 'completed') return memoIds.has(d.task_id)
           return RESOLVED_STATUSES.has(d.status)
         })
-        .map(d => d.task_id)
+        .map((d: any) => d.task_id)
 
       const missingOrPending = task.depends_on.filter(id => !finishedIds.includes(id))
 

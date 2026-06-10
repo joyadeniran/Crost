@@ -116,8 +116,8 @@ export default async function DashboardPage() {
 
   // Self-healing: Ensure all existing active/draft departments have a valid cloud bridge ID
   const rawDepartments = (deptResult.data ?? [])
-  const needsHealing = rawDepartments.filter(d => 
-    d.orc_persona_id === 'SYNC_FAILED' || 
+  const needsHealing = rawDepartments.filter((d: any) =>
+    d.orc_persona_id === 'SYNC_FAILED' ||
     d.orc_persona_id === 'DIRECT_LLM' ||
     (d.orc_persona_id && d.orc_persona_id.startsWith('direct_llm:') && d.orc_persona_id !== `direct_llm:${d.slug}`)
   )
@@ -183,8 +183,8 @@ export default async function DashboardPage() {
   const departments = (deptResult.data ?? []) as Department[]
   const suggestedActions = suggestedActionsResult.data ?? []
   const pendingCount = approvalResult.data?.length ?? 0
-  const companyName = identityResult.data?.find((row) => row.key === 'company_name')?.value
-  const companyIdentity = identityResult.data?.find((row) => row.key === 'company_identity')?.value
+  const companyName = identityResult.data?.find((row: any) => row.key === 'company_name')?.value
+  const companyIdentity = identityResult.data?.find((row: any) => row.key === 'company_identity')?.value
   const identityLabel = companyName
     ? String(companyName).replace(/"/g, '')
     : companyIdentity

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // Log each expiration
     if (expired && expired.length > 0) {
       await supabase.from('event_log').insert(
-        expired.map((item) => ({
+        expired.map((item: any) => ({
           event_type: 'approval_expired',
           description: `Approval request "${item.action_label}" from ${item.department_name} expired after 24h`,
           metadata: { approval_id: item.id },
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       expired: expired?.length ?? 0,
-      expiredIds: expired?.map((i) => i.id) ?? [],
+      expiredIds: expired?.map((i: any) => i.id) ?? [],
     })
   } catch (err) {
     console.error('[POST /api/approvals/expire]', err)

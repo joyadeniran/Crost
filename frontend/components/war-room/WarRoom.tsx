@@ -2200,7 +2200,7 @@ export function WarRoom() {
       .in('event_type', ['error', 'task_failed', 'orc_stall_detected'])
       .order('created_at', { ascending: false })
       .limit(3)
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (data && data.length > 0) setGoalErrorEvents(data)
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -29,11 +29,11 @@ export default async function SettingsPage() {
   const tools = toolsRes.data ?? []
 
   // Prefer system_config value (set via identity editor), fall back to company_profile from onboarding
-  const founderName  = configs.find(c => c.key === 'founder_name')?.value ?? profileRes.data?.founder_name
-  const companyName  = configs.find(c => c.key === 'company_name')?.value ?? profileRes.data?.company_name
-  const founderIdentity = configs.find(c => c.key === 'founder_identity')?.value
-  const companyIdentity = configs.find(c => c.key === 'company_identity')?.value
-  const assistantIdentity = configs.find(c => c.key === 'assistant_identity')?.value
+  const founderName  = configs.find((c: any) => c.key === 'founder_name')?.value ?? profileRes.data?.founder_name
+  const companyName  = configs.find((c: any) => c.key === 'company_name')?.value ?? profileRes.data?.company_name
+  const founderIdentity = configs.find((c: any) => c.key === 'founder_identity')?.value
+  const companyIdentity = configs.find((c: any) => c.key === 'company_identity')?.value
+  const assistantIdentity = configs.find((c: any) => c.key === 'assistant_identity')?.value
 
   const founderStr = founderName ? String(founderName).replace(/"/g, '') : ''
   const companyStr = companyName ? String(companyName).replace(/"/g, '') : ''

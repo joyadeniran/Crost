@@ -16,7 +16,7 @@ export function getPool(): Pool {
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     })
-    _pool.on('error', (err) => console.error('[db] Pool error:', err))
+    _pool.on('error', (err: any) => console.error('[db] Pool error:', err))
   }
   return _pool
 }

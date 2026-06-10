@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     if (error) throw error
 
     // Map existence (value !== null and !== '')
-    const presence = (data ?? []).reduce((acc: Record<string, boolean>, item) => {
+    const presence = (data ?? []).reduce((acc: Record<string, boolean>, item: any) => {
       acc[item.key] = !!(item.value && String(item.value).length > 4) // some buffer
       return acc
     }, {})

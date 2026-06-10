@@ -87,7 +87,7 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
       const res = await fetch('/api/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, provider: tool.id })
+        body: JSON.stringify({ userId: (user as any).uid ?? (user as any).id, provider: tool.id })
       })
 
       const data = await res.json()

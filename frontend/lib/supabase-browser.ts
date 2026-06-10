@@ -16,12 +16,60 @@ import {
   refreshTokenCookie,
 } from './firebase-browser'
 
+function mapFirebaseUser(user: any) {
+  if (!user) return null
+  return new Proxy(user, {
+    get(target: any, prop: string | symbol) {
+      if (prop === 'id') return target.uid
+      return typeof target[prop] === 'function' ? target[prop].bind(target) : target[prop]
+    }
+  })
+}
+
+function makeQueryBuilder(): any {
+  const qb: any = {
+    select(_cols?: string, _opts?: any) { return qb },
+    eq(_col: string, _val: any) { return qb },
+    neq(_col: string, _val: any) { return qb },
+    lt(_col: string, _val: any) { return qb },
+    lte(_col: string, _val: any) { return qb },
+    gt(_col: string, _val: any) { return qb },
+    gte(_col: string, _val: any) { return qb },
+    in(_col: string, _vals: any[]) { return qb },
+    is(_col: string, _val: any) { return qb },
+    not(_col: string, _op: string, _val: any) { return qb },
+    or(_filter: string) { return qb },
+    ilike(_col: string, _pattern: string) { return qb },
+    like(_col: string, _pattern: string) { return qb },
+    order(_col: string, _opts?: any) { return qb },
+    limit(_n: number) { return qb },
+    single() { return Promise.resolve({ data: null, error: null }) },
+    maybeSingle() { return Promise.resolve({ data: null, error: null }) },
+    insert(_data: any) { return Promise.resolve({ data: null, error: null }) },
+    update(_data: any) { return qb },
+    upsert(_data: any, _opts?: any) { return Promise.resolve({ data: null, error: null }) },
+    delete() { return qb },
+    then(resolve: any, reject: any) {
+      return Promise.resolve({ data: [] as any[], error: null }).then(resolve, reject)
+    },
+  }
+  return qb
+}
+
+function makeChannel(_name: string): any {
+  const ch: any = {
+    on(_event: string, _filter: any, _callback?: any) { return ch },
+    subscribe(_callback?: any) { return ch },
+  }
+  return ch
+}
+
 const supabaseCompatAuth = {
   async signInWithPassword({ email, password }: { email: string; password: string }) {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password)
       await refreshTokenCookie()
-      return { data: { user: cred.user, session: {} }, error: null }
+      return { data: { user: mapFirebaseUser(cred.user), session: {} }, error: null }
     } catch (err: any) {
       return { data: { user: null, session: null }, error: { message: err.message } }
     }
@@ -49,7 +97,7 @@ const supabaseCompatAuth = {
         const cred = await signInWithEmailLink(auth, emailToUse, window.location.href)
         await refreshTokenCookie()
         window.localStorage.removeItem('emailForSignIn')
-        return { data: { user: cred.user }, error: null }
+        return { data: { user: mapFirebaseUser(cred.user) }, error: null }
       } catch (err: any) {
         return { data: null, error: { message: err.message } }
       }
@@ -62,7 +110,7 @@ const supabaseCompatAuth = {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       const redirectUrl = options?.emailRedirectUrl ?? `${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard`
       await sendEmailVerification(cred.user, { url: redirectUrl })
-      return { data: { user: cred.user, session: null }, error: null }
+      return { data: { user: mapFirebaseUser(cred.user), session: null }, error: null }
     } catch (err: any) {
       return { data: null, error: { message: err.message } }
     }
@@ -100,7 +148,7 @@ const supabaseCompatAuth = {
         await refreshTokenCookie()
         // Always go to /dashboard after OAuth — ignore the Supabase-era /auth/callback
         if (typeof window !== 'undefined') window.location.href = `${window.location.origin}/dashboard`
-        return { data: { user: cred.user }, error: null }
+        return { data: { user: mapFirebaseUser(cred.user) }, error: null }
       }
       return { data: null, error: { message: `Provider ${provider} not supported` } }
     } catch (err: any) {
@@ -127,10 +175,27 @@ const supabaseCompatAuth = {
 }
 
 export const supabaseClient = {
-  auth: supabaseCompatAuth,
-  // DB methods are server-side only; stubs prevent import errors in client components
-  from: () => ({ select: () => ({ data: null, error: null }) }),
+  auth: {
+    ...supabaseCompatAuth,
+    async getUser() {
+      return { data: { user: mapFirebaseUser(auth.currentUser) }, error: null }
+    },
+    onAuthStateChange(callback: (event: string, session: any) => void) {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          await refreshTokenCookie()
+          callback('SIGNED_IN', { user: mapFirebaseUser(user) })
+        } else {
+          callback('SIGNED_OUT', null)
+        }
+      })
+      return { data: { subscription: { unsubscribe } } }
+    },
+  },
+  from: (_table: string) => makeQueryBuilder(),
   rpc: async (_fn: string, _params?: Record<string, unknown>) => ({ data: null, error: null }),
+  channel: (name: string) => makeChannel(name),
+  removeChannel: (_channel: any) => {},
 }
 
 export function getSupabaseClient() {

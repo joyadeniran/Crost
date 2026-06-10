@@ -53,13 +53,14 @@ export async function POST(req: NextRequest) {
 
   for (const userId of userIds) {
     try {
+      const userIdStr = String(userId)
       const [insights, adjustmentsMade] = await Promise.all([
-        computeLearningInsights(userId, lookbackDays),
-        adjustRecencyScores(userId, lookbackDays),
+        computeLearningInsights(userIdStr, lookbackDays),
+        adjustRecencyScores(userIdStr, lookbackDays),
       ])
 
       results.push({
-        userId,
+        userId: userIdStr,
         insights: {
           totalDecisions: insights.totalDecisions,
           resolvedDecisions: insights.resolvedDecisions,
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
       })
     } catch (err: any) {
       console.error(`[cron/orc-learning] Failed for user ${userId}:`, err)
-      results.push({ userId, insights: { totalDecisions: 0, resolvedDecisions: 0, overallSuccessRate: 0 }, adjustmentsMade: 0, error: err?.message ?? 'unknown' })
+      results.push({ userId: String(userId), insights: { totalDecisions: 0, resolvedDecisions: 0, overallSuccessRate: 0 }, adjustmentsMade: 0, error: err?.message ?? 'unknown' })
     }
   }
 

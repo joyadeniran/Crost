@@ -52,8 +52,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     (a: any) => !a.body?.startsWith('[TOOL EXECUTION FAILED') && !a.title?.startsWith('[TOOL EXECUTION FAILED')
   ).length
   const events = (eventsResult.data ?? []) as EventLogEntry[]
-  const companyName = configResult.data?.find((row) => row.key === 'company_name')?.value
-  const companyIdentity = configResult.data?.find((row) => row.key === 'company_identity')?.value
+  const companyName = configResult.data?.find((row: any) => row.key === 'company_name')?.value
+  const companyIdentity = configResult.data?.find((row: any) => row.key === 'company_identity')?.value
   const identity = companyName
     ? String(companyName).replace(/"/g, '')
     : companyIdentity

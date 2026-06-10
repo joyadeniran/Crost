@@ -87,7 +87,7 @@ export async function computeLearningInsights(
     if (error || !rows || rows.length === 0) return empty
 
     const total = rows.length
-    const resolved = rows.filter(r => r.outcome != null)
+    const resolved = rows.filter((r: any) => r.outcome != null)
 
     const byMode: Record<string, ModeStats> = {}
     const byTier: Record<number, ModeStats> = {}
@@ -113,7 +113,7 @@ export async function computeLearningInsights(
     for (const s of Object.values(byTier)) s.successRate = s.total > 0 ? s.successful / s.total : 0
 
     const overallSuccess = resolved.length > 0
-      ? resolved.filter(r => r.outcome === 'successful').length / resolved.length
+      ? resolved.filter((r: any) => r.outcome === 'successful').length / resolved.length
       : 0
 
     return {
@@ -178,7 +178,7 @@ export async function adjustRecencyScores(userId: string, lookbackDays = 7): Pro
         // Preferences/strategy that contributed to a clean success → small boost
         for (const assumption of assumptionList) {
           const matched = contextRows.filter(
-            c => (c.context_type === 'preference' || c.context_type === 'strategy')
+            (c: any) => (c.context_type === 'preference' || c.context_type === 'strategy')
               && c.summary && assumption.includes(c.summary.slice(0, 40)),
           )
           for (const ctx of matched) deltas[ctx.id] = (deltas[ctx.id] ?? 0) + 3
@@ -189,7 +189,7 @@ export async function adjustRecencyScores(userId: string, lookbackDays = 7): Pro
         // Tier 1 fail with no flagged risk — the applied preferences were misleading
         for (const assumption of assumptionList) {
           const matched = contextRows.filter(
-            c => c.context_type === 'preference'
+            (c: any) => c.context_type === 'preference'
               && c.summary && assumption.includes(c.summary.slice(0, 40)),
           )
           for (const ctx of matched) deltas[ctx.id] = (deltas[ctx.id] ?? 0) - 5
@@ -198,7 +198,7 @@ export async function adjustRecencyScores(userId: string, lookbackDays = 7): Pro
 
       if (log.outcome === 'failed' && tier >= 2 && riskNotes.length > 0) {
         // Constraints that correctly flagged the risk → small boost
-        const matched = contextRows.filter(c => c.context_type === 'constraint')
+        const matched = contextRows.filter((c: any) => c.context_type === 'constraint')
         for (const ctx of matched) {
           const wasRelevant = riskNotes.some(n =>
             ctx.summary && n.toLowerCase().includes(ctx.summary.toLowerCase().slice(0, 30)),

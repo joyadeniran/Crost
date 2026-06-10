@@ -40,8 +40,8 @@ export default async function ArtifactsPage() {
     !a.title?.startsWith('[TOOL EXECUTION FAILED')
   ) as Artifact[]
 
-  const goalMap = new Map((goalsData ?? []).map((g: any) => [g.id, g.title]))
-  const deptColorMap = new Map((deptsData ?? []).map((d: any) => [d.slug, d.color]))
+  const goalMap = new Map<string, string>((goalsData ?? []).map((g: any) => [g.id, g.title]))
+  const deptColorMap = new Map<string, string>((deptsData ?? []).map((d: any) => [d.slug, d.color]))
 
   return (
     <div>

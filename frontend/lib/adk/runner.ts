@@ -11,7 +11,7 @@ import {
   getFunctionResponses,
 } from '@google/adk'
 import type { Content } from '@google/genai'
-import { buildAgentTree, resetRunner as _resetTree } from './agents'
+import { buildAgentTree } from './agents'
 
 let _runner: Runner | null = null
 
@@ -77,7 +77,7 @@ export async function* runGoal(params: {
 
     for await (const event of runner.runAsync({
       userId,
-      sessionId: session.sessionId,
+      sessionId: session.id,
       newMessage: userMessage,
     })) {
       // Who sent this event?

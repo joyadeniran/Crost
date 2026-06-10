@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const { error: copyErr } = await supabase.storage
       .from('artifacts')
-      .copy(sourcePath, destPath, { destinationBucket: 'knowledge-base' });
+      .copy(sourcePath, destPath, 'knowledge-base' as any);
 
     if (copyErr) {
       await supabase.from('knowledge_base_files').update({ upload_status: 'failed' }).eq('id', fileId);
@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
     // Since we're in the same environment, we can just grab it.
     const { data: fileBlob } = await supabase.storage.from('knowledge-base').download(destPath);
     if (fileBlob) {
-      const buffer = Buffer.from(await fileBlob.arrayBuffer());
+      const ab = fileBlob.stream ? await new Response(fileBlob.stream()).arrayBuffer() : await (fileBlob as any).arrayBuffer();
+      const buffer = Buffer.from(ab);
       processFileAsync(buffer, artifact.artifact_type || 'application/octet-stream', fileName, fileId, user.id, supabase);
     }
 

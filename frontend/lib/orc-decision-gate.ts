@@ -213,7 +213,7 @@ export async function enrichWithKnowledgeBase(
 
     if (!files || files.length === 0) return []
 
-    return files.map(f => ({
+    return files.map((f: any) => ({
       title: f.title,
       summary: f.extracted_summary || '',
       category: f.category || '',

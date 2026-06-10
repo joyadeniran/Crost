@@ -4,7 +4,6 @@
 // Server-side ONLY.
 
 import { FunctionTool } from '@google/adk'
-import { z } from 'zod'
 import { createDbClient } from '../db'
 import { gcsStorage } from '../gcs'
 
@@ -13,12 +12,17 @@ import { gcsStorage } from '../gcs'
 export const searchKnowledgeBase = new FunctionTool({
   name: 'search_knowledge_base',
   description: 'Search the company knowledge base for relevant information, documents, and context. Use this before starting any task to gather relevant background.',
-  parameters: z.object({
-    query: z.string().describe('The search query'),
-    userId: z.string().describe('The user ID for scoping results'),
-    limit: z.number().optional().describe('Max results (default 5)'),
-  }),
-  execute: async ({ query, userId, limit = 5 }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      query: { type: 'string', description: 'The search query' },
+      userId: { type: 'string', description: 'The user ID for scoping results' },
+      limit: { type: 'number', description: 'Max results (default 5)' },
+    },
+    required: ['query', 'userId'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { query, userId, limit = 5 } = params
     try {
       const db = createDbClient()
       const { data: files } = await db
@@ -48,14 +52,19 @@ export const searchKnowledgeBase = new FunctionTool({
 export const readCompanyMemo = new FunctionTool({
   name: 'read_company_memo',
   description: 'Read recent company memos to understand current company state, active strategies, and context.',
-  parameters: z.object({
-    userId: z.string().describe('The user ID'),
-    limit: z.number().optional().describe('Number of memos to retrieve (default 10)'),
-    tags: z.array(z.string()).optional().describe('Filter by tags'),
-  }),
-  execute: async ({ userId, limit = 10, tags }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      userId: { type: 'string', description: 'The user ID' },
+      limit: { type: 'number', description: 'Number of memos to retrieve (default 10)' },
+      tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+    },
+    required: ['userId'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { userId, limit = 10 } = params
     const db = createDbClient()
-    let query = db
+    const query = db
       .from('company_memos')
       .select('id, title, body, priority, from_department, tags, created_at')
       .eq('created_by', userId)
@@ -70,16 +79,21 @@ export const readCompanyMemo = new FunctionTool({
 export const writeToMemo = new FunctionTool({
   name: 'write_to_memo',
   description: 'Write a memo to the company knowledge log. Use this to document decisions, insights, and completed work.',
-  parameters: z.object({
-    userId: z.string().describe('The user ID'),
-    goalId: z.string().optional().describe('The goal this memo relates to'),
-    departmentSlug: z.string().describe('The department writing the memo'),
-    title: z.string().describe('Memo title'),
-    body: z.string().describe('Memo content (markdown supported)'),
-    priority: z.enum(['low', 'normal', 'high']).optional().describe('Priority level'),
-    tags: z.array(z.string()).optional().describe('Tags for the memo'),
-  }),
-  execute: async ({ userId, goalId, departmentSlug, title, body, priority = 'normal', tags = [] }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      userId: { type: 'string', description: 'The user ID' },
+      goalId: { type: 'string', description: 'The goal this memo relates to' },
+      departmentSlug: { type: 'string', description: 'The department writing the memo' },
+      title: { type: 'string', description: 'Memo title' },
+      body: { type: 'string', description: 'Memo content (markdown supported)' },
+      priority: { type: 'string', description: 'Priority level (low, normal, high)' },
+      tags: { type: 'array', items: { type: 'string' }, description: 'Tags for the memo' },
+    },
+    required: ['userId', 'departmentSlug', 'title', 'body'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { userId, goalId, departmentSlug, title, body, priority = 'normal', tags = [] } = params
     const db = createDbClient()
     const { data, error } = await db
       .from('company_memos')
@@ -105,16 +119,21 @@ export const writeToMemo = new FunctionTool({
 export const createArtifact = new FunctionTool({
   name: 'create_artifact',
   description: 'Save a work product (document, spreadsheet, report, analysis) as a company artifact. The content will be stored and linked to the goal.',
-  parameters: z.object({
-    userId: z.string().describe('The user ID'),
-    goalId: z.string().optional().describe('The goal this artifact is for'),
-    departmentSlug: z.string().describe('The department creating the artifact'),
-    title: z.string().describe('Artifact title'),
-    content: z.string().describe('The artifact content (markdown, JSON, CSV, or plain text)'),
-    artifactType: z.enum(['document', 'spreadsheet', 'data', 'report']).optional(),
-    taskLabel: z.string().optional().describe('The task label for filename generation'),
-  }),
-  execute: async ({ userId, goalId, departmentSlug, title, content, artifactType = 'document', taskLabel }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      userId: { type: 'string', description: 'The user ID' },
+      goalId: { type: 'string', description: 'The goal this artifact is for' },
+      departmentSlug: { type: 'string', description: 'The department creating the artifact' },
+      title: { type: 'string', description: 'Artifact title' },
+      content: { type: 'string', description: 'The artifact content (markdown, JSON, CSV, or plain text)' },
+      artifactType: { type: 'string', description: 'Artifact type: document, spreadsheet, data, or report' },
+      taskLabel: { type: 'string', description: 'The task label for filename generation' },
+    },
+    required: ['userId', 'departmentSlug', 'title', 'content'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { userId, goalId, departmentSlug, title, content, artifactType = 'document', taskLabel } = params
     try {
       const db = createDbClient()
 
@@ -162,21 +181,26 @@ export const createArtifact = new FunctionTool({
 export const requestApproval = new FunctionTool({
   name: 'request_human_approval',
   description: 'Request founder approval before taking any external action (sending emails, posting messages, creating records, pushing to GitHub, etc.). REQUIRED before any action that affects systems outside Crost.',
-  parameters: z.object({
-    userId: z.string().describe('The user ID'),
-    goalId: z.string().optional().describe('The goal ID'),
-    departmentName: z.string().describe('The department requesting approval'),
-    departmentSlug: z.string().describe('The department slug'),
-    actionLabel: z.string().describe('Short description of what action will be taken'),
-    reasoning: z.string().describe('Why this action is needed'),
-    actionType: z.enum(['email', 'calendar', 'github', 'slack', 'database', 'api_call', 'other']).optional(),
-    payload: z.record(z.unknown()).optional().describe('The parameters that will be used for the action'),
-    riskLevel: z.enum(['low', 'medium', 'high']).optional(),
-  }),
-  execute: async ({
-    userId, goalId, departmentName, departmentSlug,
-    actionLabel, reasoning, actionType = 'other', payload = {}, riskLevel = 'medium'
-  }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      userId: { type: 'string', description: 'The user ID' },
+      goalId: { type: 'string', description: 'The goal ID' },
+      departmentName: { type: 'string', description: 'The department requesting approval' },
+      departmentSlug: { type: 'string', description: 'The department slug' },
+      actionLabel: { type: 'string', description: 'Short description of what action will be taken' },
+      reasoning: { type: 'string', description: 'Why this action is needed' },
+      actionType: { type: 'string', description: 'Action type: email, calendar, github, slack, database, api_call, or other' },
+      payload: { type: 'object', description: 'The parameters that will be used for the action' },
+      riskLevel: { type: 'string', description: 'Risk level: low, medium, or high' },
+    },
+    required: ['userId', 'departmentName', 'departmentSlug', 'actionLabel', 'reasoning'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const {
+      userId, goalId, departmentName, departmentSlug,
+      actionLabel, reasoning, actionType = 'other', payload = {}, riskLevel = 'medium'
+    } = params
     const db = createDbClient()
     const { data, error } = await db
       .from('approval_queue')
@@ -209,12 +233,17 @@ export const requestApproval = new FunctionTool({
 export const updateGoalStatus = new FunctionTool({
   name: 'update_goal_status',
   description: 'Update the status of the current goal. Use "completed" when all tasks are done, "failed" if the goal cannot be achieved.',
-  parameters: z.object({
-    goalId: z.string().describe('The goal ID to update'),
-    status: z.enum(['executing', 'completed', 'failed', 'waiting_approval']),
-    summary: z.string().optional().describe('Brief summary of what was accomplished'),
-  }),
-  execute: async ({ goalId, status, summary }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      goalId: { type: 'string', description: 'The goal ID to update' },
+      status: { type: 'string', description: 'Status: executing, completed, failed, or waiting_approval' },
+      summary: { type: 'string', description: 'Brief summary of what was accomplished' },
+    },
+    required: ['goalId', 'status'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { goalId, status, summary } = params
     const db = createDbClient()
     const updateData: any = { status, updated_at: new Date().toISOString() }
     if (summary) updateData.result = summary
@@ -231,15 +260,20 @@ export const updateGoalStatus = new FunctionTool({
 export const logTaskEvent = new FunctionTool({
   name: 'log_task_event',
   description: 'Log an event to the goal event stream for transparency and debugging.',
-  parameters: z.object({
-    goalId: z.string().optional(),
-    departmentSlug: z.string().optional(),
-    eventType: z.string().describe('The type of event (e.g., "task_started", "tool_called", "decision_made")'),
-    description: z.string().describe('Human-readable description of what happened'),
-    userId: z.string().optional(),
-    metadata: z.record(z.unknown()).optional(),
-  }),
-  execute: async ({ goalId, departmentSlug, eventType, description, userId, metadata = {} }) => {
+  parameters: {
+    type: 'object' as const,
+    properties: {
+      goalId: { type: 'string', description: 'The goal ID' },
+      departmentSlug: { type: 'string', description: 'The department slug' },
+      eventType: { type: 'string', description: 'The type of event (e.g., "task_started", "tool_called", "decision_made")' },
+      description: { type: 'string', description: 'Human-readable description of what happened' },
+      userId: { type: 'string', description: 'The user ID' },
+      metadata: { type: 'object', description: 'Additional metadata' },
+    },
+    required: ['eventType', 'description'],
+  },
+  execute: async (params: Record<string, any>) => {
+    const { goalId, departmentSlug, eventType, description, userId, metadata = {} } = params
     const db = createDbClient()
     await db.from('event_log').insert({
       goal_id: goalId ?? null,

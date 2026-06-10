@@ -263,7 +263,7 @@ export async function executeToolCall(options: ExecuteOptions) {
     }).select('id').single();
 
     if (aqErr || !approvalRow?.id) {
-      console.error("[HITL] Failed to insert approval_queue row:", aqErr?.message, aqErr?.details);
+      console.error("[HITL] Failed to insert approval_queue row:", aqErr?.message, (aqErr as any)?.details);
       // Roll back the execution skeleton so we don't leave an orphaned 'blocked'
       // tool_executions row that the UI can never resolve.
       await supabase.from('tool_executions')

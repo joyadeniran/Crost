@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
         .select()
         .single()
       if (cloneError) {
-        const isUnique = cloneError.message?.includes('unique') || cloneError.code === '23505'
+        const isUnique = cloneError.message?.includes('unique') || (cloneError as any).code === '23505'
         const message = isUnique
           ? 'Department templates cannot be copied until the latest departments migration (v10.2) is applied in Supabase. Conflict on orc_persona_id or slug.'
           : cloneError.message
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
         .from('available_tools')
         .select('id')
         .eq('is_configured', true)
-      const availableIds = availableTools?.map((t) => t.id) ?? []
+      const availableIds = availableTools?.map((t: any) => t.id) ?? []
       const invalid = parsed.tools.filter((t) => !availableIds.includes(t))
       if (invalid.length > 0) {
         return NextResponse.json(
