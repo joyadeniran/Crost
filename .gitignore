@@ -47,3 +47,6 @@ coverage/
 # Misc
 *.tsbuildinfo
 next-env.d.ts
+
+# Apple / service auth keys — never commit
+*.p8
