@@ -159,11 +159,12 @@ Never claim the founder's personal identity as your own.`
       .maybeSingle()
 
     if (!existingConstitution) {
+      // Global config rows use the '__global__' sentinel (created_by is NOT NULL).
       const { data: globalConstitution } = await supabase
         .from('system_config')
         .select('value, is_founder_editable')
         .eq('key', 'agent_constitution')
-        .is('created_by', null)
+        .eq('created_by', '__global__')
         .maybeSingle()
 
       if (globalConstitution?.value) {
@@ -179,6 +180,7 @@ Never claim the founder's personal identity as your own.`
     // 4. Activate selected departments (attributed to user)
     // For new users, departments only exist as global templates (created_by = NULL from seed).
     // Clone the templates to this user's account so RLS and multi-tenant isolation work correctly.
+    let activatedCount = 0
     if (selectedDepartments && selectedDepartments.length > 0) {
       for (const slug of selectedDepartments) {
         // Check if user already has this department
@@ -199,6 +201,8 @@ Never claim the founder's personal identity as your own.`
           const { error: updateErr } = await supabase.from('departments').update({ activation_stage: 'active' }).eq('id', existing.id)
           if (updateErr) {
             console.error(`Error updating department ${slug}:`, updateErr)
+          } else {
+            activatedCount++
           }
         } else {
           // Clone from global template
@@ -236,6 +240,8 @@ Never claim the founder's personal identity as your own.`
             })
             if (insertErr) {
               console.error(`Error cloning department ${slug}:`, insertErr)
+            } else {
+              activatedCount++
             }
           } else {
             console.warn(`Template not found for department: ${slug}`)
@@ -281,19 +287,29 @@ Never claim the founder's personal identity as your own.`
           })
         }
       }
+
+      // If the founder picked departments but none could be activated, the save
+      // genuinely failed — surface it instead of reporting a hollow success.
+      if (activatedCount === 0) {
+        return NextResponse.json(
+          { error: 'Could not activate any of the selected departments. Please try again.' },
+          { status: 500 }
+        )
+      }
     }
 
-    // 5. Update User metadata (robust secondary storage)
-    await supabase.auth.admin.updateUserById(user.id, {
-      user_metadata: { 
-        display_name: identity.founderName,
-        onboarding_step: 'activated',
-        founder_identity: founderIdentity,
-        company_identity: companyIdentity,
-        assistant_identity: assistantIdentity,
-        local_identity: identity
-      }
-    })
+    // 5. Update Firebase custom claims — ONLY the small routing flag.
+    // Firebase caps custom claims at 1000 bytes; the full identity object used to
+    // be stored here and reliably overflowed, throwing and failing the whole save.
+    // The authoritative copies live in company_profile + system_config + memos, so
+    // this is best-effort secondary storage and must never abort onboarding.
+    try {
+      await supabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { onboarding_step: 'activated' }
+      })
+    } catch (claimsErr) {
+      console.error('[Onboarding] setting onboarding_step claim failed (non-fatal):', claimsErr)
+    }
 
     // 6. Record User Consent
     await supabase.from('user_consents').insert({

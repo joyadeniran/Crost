@@ -3,11 +3,31 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.09  
-**Last Updated:** June 10, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Cloud SQL connection fixed; departments seeded.  
+**Current Version:** 13.10  
+**Last Updated:** June 11, 2026  
+**Deployment Status:** ✅ FULLY LIVE — Onboarding save fixed (shim jsonb/PK, schema parity, claims).  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.10 — E2E Blocker: "Failed to save onboarding data" (root causes + cascade)
+**Date**: June 11, 2026  **Status**: ✅ Shipped  
+**Impact**: Onboarding `/api/onboarding/complete` returned 500. Root cause was a Firebase claims overflow (the only unguarded throw); underneath it, four more bugs would have silently dropped data. All fixed + covered by tests (344/344 green).
+
+### Root Causes
+1. **Firebase custom-claims overflow (the 500)**: `complete` + `complete-final` wrote the entire `identity` object into Firebase custom claims via `setUserClaims`. Firebase caps claims at 1000 bytes → `setCustomUserClaims` throws → unguarded → 500.
+2. **Shim doesn't JSON-encode jsonb (silent)**: the Cloud SQL shim (`lib/db.ts`) sent raw JS arrays/strings to `jsonb` columns (`system_config.value`, `departments.capabilities/restrictions/tools`, `company_profile.local_identity`) → `invalid input syntax for type json`. PostgREST used to auto-encode.
+3. **Shim upsert onConflict default (silent)**: defaulted to `id`; `system_config` PK is `(key, created_by)` → every config upsert failed.
+4. **Schema parity gaps (silent)**: Cloud SQL was missing `company_memos.is_foundational`, the `onyx_persona_id → orc_persona_id` rename, and the multi-tenant department uniqueness (still had global `UNIQUE(slug)/(name)` + persona-id unique → per-user clones impossible).
+5. **Global-config sentinel mismatch (silent)**: route looked up the global constitution with `created_by IS NULL`, but global rows use the `'__global__'` sentinel (created_by NOT NULL).
+
+### Fix
+- `lib/db.ts`: cache table metadata (jsonb cols + PK) and (a) JSON-encode values for jsonb columns, (b) default upsert `onConflict` to the real PK. New `tests/unit/db.test.ts` (5 tests).
+- `app/api/config/route.ts`: pass raw `value` (shim encodes) instead of partial pre-stringify.
+- `onboarding/complete` + `complete-final`: trim Firebase claims to just `onboarding_step` and make the write non-fatal; fix the constitution lookup to `'__global__'`; surface a real error if zero departments activate.
+- Cloud SQL DDL (Auth Proxy): `is_foundational` column+index; rename persona col; drop global uniques + persona-id unique; add per-user/global partial unique indexes (slug, name, orchestrator).
+- Verified the entire onboarding write path end-to-end against live Cloud SQL (rolled-back txn): profile, foundational memos, config, dept clone (marketing + orchestrator), consents.
 
 ---
 

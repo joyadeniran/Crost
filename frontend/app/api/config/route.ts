@@ -55,12 +55,12 @@ export async function PATCH(req: NextRequest) {
     // 2. Upsert (Create or Update) the config for this specific user
     const { data, error } = await supabase
       .from('system_config')
-      .upsert({ 
-        key, 
-        value: typeof value === 'string' ? value : JSON.stringify(value), 
+      .upsert({
+        key,
+        value, // raw value — the db layer JSON-encodes jsonb columns
         created_by: user.id,
         is_founder_editable: true,
-        updated_at: new Date().toISOString() 
+        updated_at: new Date().toISOString()
       }, { onConflict: 'key, created_by' })
       .select()
       .single()

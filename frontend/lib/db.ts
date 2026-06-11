@@ -35,6 +35,54 @@ export function getPool(): Pool {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type QResult<T = any> = { data: T | null; error: Error | null; count?: number | null }
 
+// ── Table metadata cache ──────────────────────────────────────────────────
+// The Supabase/PostgREST client we replaced auto-encodes JS values into JSON for
+// jsonb columns and auto-detects the primary key for upserts. node-pg does not:
+// a JS array sent to a jsonb column fails with "invalid input syntax for type
+// json", and a bare upsert has no idea what the conflict target is. We introspect
+// each table once (cached) to replicate that behaviour.
+type TableMeta = { pk: string[]; jsonb: Set<string> }
+const _metaCache = new Map<string, TableMeta>()
+
+async function getTableMeta(table: string): Promise<TableMeta> {
+  const cached = _metaCache.get(table)
+  if (cached) return cached
+  const pool = getPool()
+  const [jsonbRes, pkRes] = await Promise.all([
+    pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = $1 AND data_type IN ('jsonb', 'json')`,
+      [table]
+    ),
+    pool.query(
+      `SELECT kcu.column_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         ON kcu.constraint_name = tc.constraint_name AND kcu.table_name = tc.table_name
+       WHERE tc.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+       ORDER BY kcu.ordinal_position`,
+      [table]
+    ),
+  ])
+  const meta: TableMeta = {
+    pk: pkRes.rows.map((r) => r.column_name),
+    jsonb: new Set(jsonbRes.rows.map((r) => r.column_name)),
+  }
+  _metaCache.set(table, meta)
+  return meta
+}
+
+// JSON-encode values bound for jsonb/json columns so JS arrays/objects/strings
+// land as valid JSON (matching PostgREST). null/undefined stay SQL NULL.
+function encodeRow(row: Record<string, unknown>, meta: TableMeta): Record<string, unknown> {
+  if (meta.jsonb.size === 0) return row
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = meta.jsonb.has(k) && v !== null && v !== undefined ? JSON.stringify(v) : v
+  }
+  return out
+}
+
 class QueryBuilder<T = Record<string, unknown>> {
   private _table: string
   private _cols = '*'
@@ -47,7 +95,7 @@ class QueryBuilder<T = Record<string, unknown>> {
   private _insertRows: Partial<T>[] | null = null
   private _updateData: Partial<T> | null = null
   private _upsertRows: Partial<T>[] | null = null
-  private _upsertConflict = 'id'
+  private _upsertConflict: string | null = null
   private _isDelete = false
 
   constructor(table: string) {
@@ -225,7 +273,8 @@ class QueryBuilder<T = Record<string, unknown>> {
 
   upsert(data: Partial<T> | Partial<T>[], opts: { onConflict?: string } = {}) {
     this._upsertRows = Array.isArray(data) ? data : [data]
-    this._upsertConflict = opts.onConflict ?? 'id'
+    // null = "not specified" → resolved to the table's primary key at run time.
+    this._upsertConflict = opts.onConflict ?? null
     return this
   }
 
@@ -251,12 +300,14 @@ class QueryBuilder<T = Record<string, unknown>> {
     try {
       // INSERT
       if (this._insertRows) {
+        const meta = await getTableMeta(this._table)
         const results: unknown[] = []
-        for (const row of this._insertRows) {
-          const cols = Object.keys(row as object)
+        for (const rawRow of this._insertRows) {
+          const row = encodeRow(rawRow as Record<string, unknown>, meta)
+          const cols = Object.keys(row)
           if (cols.length === 0) continue
           const placeholders = cols.map((_, i) => `$${i + 1}`)
-          const vals = cols.map(c => (row as any)[c])
+          const vals = cols.map(c => row[c])
           const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`
           const r = await pool.query(sql, vals)
           results.push(r.rows[0])
@@ -267,18 +318,25 @@ class QueryBuilder<T = Record<string, unknown>> {
 
       // UPSERT
       if (this._upsertRows) {
+        const meta = await getTableMeta(this._table)
+        // Default the conflict target to the table's primary key (PostgREST parity).
+        const conflictTarget = this._upsertConflict ?? meta.pk.join(',')
         const results: unknown[] = []
-        for (const row of this._upsertRows) {
-          const cols = Object.keys(row as object)
+        for (const rawRow of this._upsertRows) {
+          const row = encodeRow(rawRow as Record<string, unknown>, meta)
+          const cols = Object.keys(row)
           if (cols.length === 0) continue
           const placeholders = cols.map((_, i) => `$${i + 1}`)
-          const vals = cols.map(c => (row as any)[c])
-          const conflictCols = this._upsertConflict.split(',').map(s => s.trim())
+          const vals = cols.map(c => row[c])
+          const conflictCols = conflictTarget.split(',').map(s => s.trim()).filter(Boolean)
           const updateCols = cols.filter(c => !conflictCols.includes(c))
           const updateSet = updateCols.length
             ? `DO UPDATE SET ${updateCols.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')}`
             : 'DO NOTHING'
-          const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) ${updateSet} RETURNING *`
+          const conflictClause = conflictCols.length
+            ? `ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) ${updateSet}`
+            : ''
+          const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) ${conflictClause} RETURNING *`
           const r = await pool.query(sql, vals)
           results.push(r.rows[0])
         }
@@ -288,9 +346,11 @@ class QueryBuilder<T = Record<string, unknown>> {
 
       // UPDATE
       if (this._updateData) {
-        const cols = Object.keys(this._updateData as object)
+        const meta = await getTableMeta(this._table)
+        const data = encodeRow(this._updateData as Record<string, unknown>, meta)
+        const cols = Object.keys(data)
         const setClause = cols.map((c, i) => `"${c}" = $${i + 1}`).join(', ')
-        const vals = cols.map(c => (this._updateData as any)[c])
+        const vals = cols.map(c => data[c])
         const { clause } = this.adjustedWhere(cols.length)
         const sql = `UPDATE "${this._table}" SET ${setClause} ${clause} RETURNING *`
         const r = await pool.query(sql, [...vals, ...this._vals])

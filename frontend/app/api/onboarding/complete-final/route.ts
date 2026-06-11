@@ -151,14 +151,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 1. Mark in user metadata — this is the per-user source of truth
-    await supabase.auth.admin.updateUserById(user.id, {
-      user_metadata: {
-        ...user.user_metadata,
-        onboarding_step: step,
-        local_identity: Object.keys(identity).length > 0 ? identity : user.user_metadata?.local_identity,
-      }
-    })
+    // 1. Mark the routing step in Firebase custom claims (small + best-effort).
+    // Firebase caps custom claims at 1000 bytes, so the identity object must NOT
+    // go here — it is persisted in system_config ('local_identity') and
+    // company_profile above. Never let a claims failure abort the save.
+    try {
+      await supabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { onboarding_step: step }
+      })
+    } catch (claimsErr) {
+      console.error('[Onboarding Final] setting onboarding_step claim failed (non-fatal):', claimsErr)
+    }
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
