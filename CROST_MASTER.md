@@ -3,11 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.14  
+**Current Version:** 13.15  
 **Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ LIVE — Offline Google OAuth (refresh tokens). Needs real client creds (see setup).  
+**Deployment Status:** ✅ LIVE — Google OAuth active (real Gmail sends). Repo PUBLIC, key scrubbed.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
+**Repo:** https://github.com/joyadeniran/Crost (public, default branch = submission code)  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.15 — Email body draft + Submission lock-down (public repo, key scrub)
+**Date**: June 11, 2026  **Status**: ✅ Shipped  
+**Impact**: First real agent-sent email landed (via the activated Google OAuth). Fixed empty-body bug; locked the submission: accurate docs, code public for judges, secret removed from history.
+
+### Changes
+- **Email body**: `parameter-resolver.ts` now DRAFTS free-text content (email body, Slack text) when the command gives an intent ("welcome email") instead of leaving it blank. Sent emails are no longer empty.
+- **OAuth activated**: founder created the Web OAuth client; real `GOOGLE_OAUTH_CLIENT_ID/SECRET` stored in Secret Manager; revision rolled. "Connect Google" → consent → durable connection → real Gmail send verified end-to-end.
+- **Submission doc**: `CHALLENGE_SUBMISSION.md` corrected to Gemini 2.5 Flash + a Native Google Tools section (real Gmail send, no Composio broker).
+- **Code access**: scrubbed `composio/AuthKey_4QU8M52JXT.p8` from ALL history (git-filter-repo, mirror clone, force-push all 18 branches), gitignored `*.p8`, fast-forwarded `main` to the GCP-challenge code, made the repo **public**. Verified the key 404s on GitHub.
+
+### 🔴 Founder action (mandatory, security)
+**Revoke/rotate the Apple AuthKey `AuthKey_4QU8M52JXT.p8`** in the Apple Developer console. Even after the history rewrite, GitHub may retain unreachable commits and the key was previously committed — treat it as compromised and rotate.
+
+### Status vs roadmap
+Step 1 (offline OAuth) ✅ done + activated. Remaining: Step 2 (Calendar/Sheets/Drive tools), Step 3 (Gmail push event-listening) — post-submission.
 
 ---
 
