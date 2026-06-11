@@ -112,3 +112,36 @@ describe('db shim — upsert onConflict default', () => {
     expect(sql).toMatch(/ON CONFLICT \("created_by"\)/)
   })
 })
+
+describe('db shim — .or() / .not() operator parsing', () => {
+  function lastSelect(table: string) {
+    const call = queryMock.mock.calls.find(
+      ([sql]) => typeof sql === 'string' && sql.startsWith('SELECT') && sql.includes(`"${table}"`)
+    )
+    return call as [string, unknown[]]
+  }
+
+  it('parameterizes comparison operators in .or() (no raw fragment / syntax error)', async () => {
+    primeMeta({ jsonb: [], pk: ['id'] })
+    const { createDbClient } = await import('@/lib/db')
+    const now = '2026-06-11T00:00:00.000Z'
+
+    await createDbClient().from('memos_or_t').select('id').or(`valid_until.is.null,valid_until.gt.${now}`)
+
+    const [sql, params] = lastSelect('memos_or_t')
+    expect(sql).toMatch(/"valid_until" IS NULL OR "valid_until" > \$\d+/)
+    expect(params).toContain(now) // value bound as a parameter
+    expect(sql).not.toContain('2026') // date is NOT inlined into the SQL text
+  })
+
+  it('maps .not(col, "cs", val) to a parameterized NOT (@>)', async () => {
+    primeMeta({ jsonb: [], pk: ['id'] })
+    const { createDbClient } = await import('@/lib/db')
+
+    await createDbClient().from('memos_not_t').select('id').not('read_by', 'cs', '{marketing}')
+
+    const [sql, params] = lastSelect('memos_not_t')
+    expect(sql).toMatch(/NOT \("read_by" @> \$\d+\)/)
+    expect(params).toContain('{marketing}')
+  })
+})

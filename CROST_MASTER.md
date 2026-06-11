@@ -3,12 +3,31 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.15  
-**Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ LIVE — Google OAuth active (real Gmail sends). Repo PUBLIC, key scrubbed.  
+**Current Version:** 13.16  
+**Last Updated:** June 12, 2026  
+**Deployment Status:** ✅ LIVE — Assistant-mode hang fixed; both-domains OAuth.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Repo:** https://github.com/joyadeniran/Crost (public, default branch = submission code)  
-**Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+**Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New).
+
+---
+
+## Session v13.16 — Assistant-mode hang + both-domains OAuth + Render-domain finding
+**Date**: June 12, 2026  **Status**: ✅ Shipped  
+
+### A) Both-domains Google OAuth
+`getOAuthConfig(origin?)` now derives the redirect URI from the request origin (allowlist: NEXT_PUBLIC_APP_URL + app.crosthq.com), so Connect works on both the run.app URL and the custom domain; callback returns the user to the same host. (Deployed rev 00016.)
+
+### B) ⚠️ Finding: app.crosthq.com still points to OLD Render
+`app.crosthq.com` is a CNAME to `crost-frontend.onrender.com` (header `x-render-origin-server: Render`) — a stale pre-migration deployment, NOT Cloud Run. To publish the GCP app there, repoint DNS to a Cloud Run domain mapping (needs Search Console domain verification of crosthq.com — currently unverified — + DNS change + remove the domain from Render). Documented for founder.
+
+### C) Assistant mode hung forever ("What can you do?")
+Root cause: the answer WAS generated, but the completion `UPDATE goals SET status='completed', outcome, orc_conversation` failed silently because **`goals.orc_conversation` didn't exist** → goal stuck in `planning` → UI polled `/api/goals/{id}` indefinitely. More Cloud SQL parity gaps surfaced alongside it. Fixes:
+- **DB**: added `goals.orc_conversation` (JSONB), `company_memos.is_current_context` (bool), `company_memos.valid_until` (timestamptz); **dropped `event_log_event_type_check`** (it rejected `goal_completed` and other emitted event types — event_type is an internal growing enum, free-text is safer). Unstuck the in-flight goal.
+- **Shim** (`lib/db.ts`): `.or()` now parameterizes `gt/gte/lt/lte/neq/like/is-bool` instead of emitting raw SQL fragments (an unquoted ISO date caused `syntax error at or near ".2026"` and was an injection risk); `.not()` supports `cs` (array `@>`) and comparisons. Added `tests/unit/db.test.ts` cases. Suite 367/367.
+
+### Note
+DB-only fixes (orc_conversation etc.) are live without redeploy — assistant mode works now. Shim `.or()/.not()` fixes deployed this session improve memo-context loading.
 
 ---
 

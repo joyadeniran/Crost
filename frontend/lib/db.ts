@@ -209,6 +209,20 @@ class QueryBuilder<T = Record<string, unknown>> {
         const items = listStr.split(',').map(s => s.trim())
         const phs = items.map(v => { this._vals.push(v); return `$${this._vals.length}` })
         clauses.push(`"${col}" IN (${phs.join(', ')})`)
+      } else if (op === 'neq') {
+        this._vals.push(val)
+        clauses.push(`"${col}" != $${this._vals.length}`)
+      } else if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
+        const sqlOp = op === 'gt' ? '>' : op === 'gte' ? '>=' : op === 'lt' ? '<' : '<='
+        this._vals.push(val)
+        clauses.push(`"${col}" ${sqlOp} $${this._vals.length}`)
+      } else if (op === 'like') {
+        this._vals.push(val)
+        clauses.push(`"${col}" LIKE $${this._vals.length}`)
+      } else if (op === 'is' && val === 'true') {
+        clauses.push(`"${col}" IS TRUE`)
+      } else if (op === 'is' && val === 'false') {
+        clauses.push(`"${col}" IS FALSE`)
       } else if (op === 'not') {
         // handle not.in.(...)
         const subRest = val
@@ -224,8 +238,11 @@ class QueryBuilder<T = Record<string, unknown>> {
           clauses.push(`NOT "${col}"`)
         }
       } else {
-        // Fallback: treat as raw SQL fragment
-        clauses.push(part)
+        // Unknown operator — parameterize the value as an equality rather than
+        // emitting a raw fragment (which is both a SQL-injection risk and a
+        // syntax error for values like ISO timestamps).
+        this._vals.push(val)
+        clauses.push(`"${col}" = $${this._vals.length}`)
       }
     }
     if (clauses.length) {
@@ -245,9 +262,19 @@ class QueryBuilder<T = Record<string, unknown>> {
     } else if (op === 'eq') {
       this._vals.push(val)
       this._wheres.push(`"${col}" != $${this._vals.length}`)
-    } else {
+    } else if (op === 'cs') {
+      // PostgREST "contains" on an array/jsonb column → @>
       this._vals.push(val)
-      this._wheres.push(`NOT "${col}" ${op.toUpperCase()} $${this._vals.length}`)
+      this._wheres.push(`NOT ("${col}" @> $${this._vals.length})`)
+    } else if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
+      const sqlOp = op === 'gt' ? '>' : op === 'gte' ? '>=' : op === 'lt' ? '<' : '<='
+      this._vals.push(val)
+      this._wheres.push(`NOT ("${col}" ${sqlOp} $${this._vals.length})`)
+    } else {
+      // Unknown operator: parameterize as inequality rather than emitting an
+      // invalid raw SQL keyword.
+      this._vals.push(val)
+      this._wheres.push(`"${col}" != $${this._vals.length}`)
     }
     return this
   }
