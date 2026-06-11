@@ -32,7 +32,11 @@ export const gcsStorage = {
           resumable: false,
           metadata: { cacheControl: 'no-cache' },
         })
-        return { data: { path: `${bucket}/${path}` }, error: null }
+        // Return the bucket-relative path (matches Supabase + download/remove/copy/
+        // getPublicUrl, which all re-prepend the logical bucket). Returning the
+        // already-prefixed path here made getPublicUrl double it
+        // (e.g. artifacts/artifacts/...).
+        return { data: { path }, error: null }
       } catch (err) {
         return { data: null, error: err as Error }
       }
@@ -41,6 +45,19 @@ export const gcsStorage = {
     getPublicUrl: (path: string) => ({
       data: { publicUrl: `https://storage.googleapis.com/${BUCKET}/${bucket}/${path}` },
     }),
+
+    // Stream object bytes via the service account (bucket is private).
+    // Accepts a bucket-relative path; tolerates a redundant leading logical-bucket
+    // prefix from legacy double-prefixed URLs.
+    getObject: async (path: string): Promise<{ data: Buffer | null; error: Error | null }> => {
+      try {
+        const rel = path.replace(new RegExp(`^(${bucket}/)+`), '')
+        const [content] = await getStorage().bucket(BUCKET).file(`${bucket}/${rel}`).download()
+        return { data: content, error: null }
+      } catch (err) {
+        return { data: null, error: err as Error }
+      }
+    },
 
     remove: async (paths: string[]) => {
       try {

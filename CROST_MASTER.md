@@ -3,11 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.11  
+**Current Version:** 13.12  
 **Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Vertex model + tool/goal schema parity fixed.  
+**Deployment Status:** ✅ FULLY LIVE — Artifact download fixed (private bucket + path).  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.12 — Artifact Download AccessDenied (private bucket + doubled path)
+**Date**: June 11, 2026  **Status**: ✅ Shipped  
+**Impact**: Downloading an artifact returned a GCS `AccessDenied` XML error. Now streams via an authenticated proxy. (Goal execution confirmed working — the test goal produced 9 artifacts.)
+
+### Root Causes
+1. **Private bucket, public URL**: `gcsStorage.getPublicUrl()` returns a `storage.googleapis.com` URL, and `ArtifactCard` fetched it directly — but `crost-hq-storage` objects are not public → anonymous `storage.objects.get` denied.
+2. **Doubled path prefix**: `gcsStorage.from(bucket).upload()` returned `{ path: '<bucket>/<path>' }` (already prefixed); callers then passed that to `getPublicUrl()`, which prepends the bucket again → `artifacts/artifacts/goals/...`. The real object is at the single-prefix key, so the stored `file_url` pointed at a non-existent object.
+
+### Fix
+- `lib/gcs.ts`: `upload()` now returns the bucket-relative `{ path }` (matches Supabase + `download`/`remove`/`copy`/`getPublicUrl`). Added `getObject()` that streams bytes via the service account and tolerates legacy doubled prefixes (`replace(/^(<bucket>/)+/)`).
+- New `GET /api/artifacts/[id]/download`: auth + ownership check, derives the object key from `file_url` (handles single & legacy double prefix), streams with `Content-Disposition: attachment`.
+- `ArtifactCard.tsx`: downloads through the proxy route instead of the public URL (incl. the error fallback).
+- Verified: `getObject()` pulled the real 8878-byte docx for the user's failing artifact via the SA. Suite 350/350, tsc clean.
+
+### Note
+Existing artifact rows keep their doubled `file_url` — the download route normalizes it, so no backfill needed. New uploads store single-prefix URLs.
 
 ---
 

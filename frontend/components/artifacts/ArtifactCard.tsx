@@ -357,7 +357,10 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
       let fileName = displayFilename
 
       if (artifact.file_url) {
-        const res = await fetch(artifact.file_url)
+        // The GCS bucket is private — stream through the authenticated proxy
+        // (which verifies ownership) rather than fetching the public URL directly.
+        const res = await fetch(`/api/artifacts/${artifact.id}/download`)
+        if (!res.ok) throw new Error(`Download failed (${res.status})`)
         const blob = await res.blob()
         downloadUrl = URL.createObjectURL(blob)
         fileName = artifact.file_url.split('/').pop()?.split('?')[0] ?? displayFilename
@@ -379,7 +382,10 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
       setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
     } catch (err) {
       console.error('[Download Failed]', err)
-      window.open(artifact.file_url || artifact.preview_url || '', '_blank')
+      const fallback = artifact.file_url
+        ? `/api/artifacts/${artifact.id}/download`
+        : (artifact.preview_url || '')
+      if (fallback) window.open(fallback, '_blank')
     } finally {
       setDownloading(false)
     }
