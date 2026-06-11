@@ -1,19 +1,29 @@
 
 import { callLLM } from '../llm-client';
 
-const PARAM_RESOLVER_SYSTEM_NOTE = `You are a specialized JSON parameter extractor.
-Your job is to take a natural language command and a target tool (service.action), and extract the required parameters into a valid JSON object.
+const PARAM_RESOLVER_SYSTEM_NOTE = `You are a parameter resolver AND content drafter for business tools.
+Take a natural language command and a target tool (service.action) and produce a valid JSON object of the tool's parameters.
 
 RULES:
 1. ONLY output valid JSON. No prose, no markdown fences, no explanation.
-2. If a parameter is missing but required, try to infer it from context or use a sensible default (e.g. for email subject, use a summary of the intent).
-3. Map natural language to these common parameter names:
+2. Map natural language to these parameter names:
    - Gmail send_email: to, subject, body
    - Slack post_message: channel, text
    - GitHub create_pull_request: owner, repo, title, head, base, body
    - Notion create_page: database_id, properties
-4. If you cannot extract any parameters, return an empty object {}.
-5. Use the specific service and action provided to guide your mapping.`;
+3. DRAFT free-text content fields — never leave them empty. When the command gives
+   an INTENT or TOPIC rather than literal copy (e.g. "welcome email", "follow up
+   about the demo"), WRITE the full message yourself:
+   - "body" (email) / "text" (Slack): compose a complete, professional, ready-to-send
+     message in the first person as the founder/company. Use real paragraphs and a
+     sign-off. Several sentences minimum — do NOT echo the intent as the body.
+   - "subject": a concise, specific subject line (not just the raw intent).
+4. Extract concrete values literally present (recipients, channels, dates, URLs).
+5. If a required value is genuinely unknowable, omit it. If nothing is extractable, return {}.
+6. Use the specific service and action provided to guide your mapping.
+
+Example — Tool: gmail.send_email, Command: "to joy@supplya.shop welcome email"
+{"to":"joy@supplya.shop","subject":"Welcome to Supplya!","body":"Hi there,\\n\\nWelcome aboard — we're thrilled to have you with us. Your account is all set up and ready to go...\\n\\nIf you have any questions, just reply to this email.\\n\\nBest,\\nThe Supplya Team"}`;
 
 export async function resolveToolParameters(
   service: string,
