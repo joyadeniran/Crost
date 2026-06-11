@@ -3,11 +3,28 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.13  
+**Current Version:** 13.14  
 **Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Native Google tools (real Gmail send, no Composio).  
+**Deployment Status:** ✅ LIVE — Offline Google OAuth (refresh tokens). Needs real client creds (see setup).  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.14 — Offline Google OAuth (durable refresh tokens) — Roadmap step 1
+**Date**: June 11, 2026  **Status**: ✅ Code shipped; ⏳ gated on real OAuth client creds (founder)  
+**Impact**: The Firebase popup yields only a ~1h access token (no refresh) — durable sending and background event-listening were impossible. Added a server-side OAuth authorization-code flow that returns a **refresh token**, with transparent access-token refresh. This unblocks both durable sending and the future Gmail-watch event loop.
+
+### What shipped (code, tested)
+- `lib/google/oauth.ts`: `getOAuthConfig`, `buildAuthUrl` (`access_type=offline&prompt=consent`), `exchangeCode`, `refreshAccessToken`. Scopes: gmail.send, gmail.readonly, calendar.events.
+- `GET /api/connect/google/start` (CSRF state cookie → Google consent) and `GET /api/connect/google/callback` (state check → code exchange → store tokens → redirect to Settings with `?google=...`).
+- `lib/google/auth.ts`: `getGoogleToken` now auto-refreshes an expired access token from the stored refresh token (won't clobber the refresh token on refresh grants).
+- `McpSettings`: "Connect" on Google tiles → offline flow; `?google=` result toasts.
+- `connections.refresh_token` used; `cloudbuild.yaml` mounts `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`. Secrets created as `REPLACE_ME` placeholders → code returns 503 "not configured" until set (honest, no bluff).
+- Tests: `tests/unit/google-oauth.test.ts` (9). Suite **363/363**, tsc clean.
+
+### ⛔ Founder setup to activate (see GOOGLE_OAUTH_SETUP.md)
+Create/reuse an OAuth **Web** client, register the callback URI, put the real client id/secret into the two Secret Manager secrets, add the scopes + yourself as test user on the consent screen, then redeploy. Until then the offline "Connect Google" returns "not configured" (the v13.13 popup token still works short-term).
 
 ---
 

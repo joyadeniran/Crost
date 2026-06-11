@@ -61,54 +61,34 @@ export function McpSettings({ initialTools }: { initialTools: Tool[] }) {
     return () => window.removeEventListener('focus', syncStatus)
   }, [])
 
+  // Surface the result of the Google OAuth redirect (?google=...)
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get('google')
+    if (!status) return
+    const messages: Record<string, [string, 'success' | 'error' | 'info']> = {
+      connected: ['Google connected — Crost can now send email and manage your calendar.', 'success'],
+      connected_no_refresh: ['Google connected, but no offline token was issued. Re-connect and choose "Allow" to enable durable access.', 'info'],
+      denied: ['Google connection was cancelled.', 'info'],
+      not_configured: ['Google OAuth is not configured yet (missing client credentials).', 'error'],
+      state_mismatch: ['Connection failed a security check. Please try again.', 'error'],
+      error: ['Could not complete the Google connection. Please try again.', 'error'],
+    }
+    const [msg, kind] = messages[status] ?? ['Google connection updated.', 'info']
+    toast(msg, kind, 'Google')
+    // Clean the query param so the toast doesn't repeat on refresh.
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
+
   const handleConnect = async (tool: Tool) => {
-    // We now support Composio for all major toolkits
-    const supportedProviders = [
-      'gmail', 'github', 'slack', 'notion', 'linear',
-      'googlecalendar', 'googlesheets', 'googledrive'
-    ]
-    if (!supportedProviders.includes(tool.id)) {
-      window.location.href = `/dashboard/settings/tools/${tool.id}`
+    // Native Google integrations connect via the offline OAuth flow (durable
+    // refresh token) — a single grant covers Gmail, Calendar, Sheets, Drive.
+    const googleServices = ['gmail', 'googlecalendar', 'googlesheets', 'googledrive', 'google']
+    if (googleServices.includes(tool.id)) {
+      window.location.href = '/api/connect/google/start'
       return
     }
-
-    setUpdating(tool.id)
-
-    try {
-      // 1. Get User Session (Enforced by Layout, but good to check)
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast('Please sign in to connect tools.', 'error', 'Authentication Required')
-        return
-      }
-
-      // 2. Call Composio Connect API
-      const res = await fetch('/api/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: (user as any).uid ?? (user as any).id, provider: tool.id })
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate connection link')
-      }
-
-      // 3. Redirect to Composio Managed Auth
-      if (data.url) {
-        window.location.href = data.url
-      } else {
-        throw new Error('No redirect URL provided by Composio')
-      }
-
-    } catch (err: any) {
-      console.error('Composio Connection Failed:', err)
-      toast(formatErrorMessage(err), 'error', 'Connection Error')
-    } finally {
-      setUpdating(null)
-    }
+    // Non-Google toolkits are not natively integrated yet.
+    toast(`${tool.label} isn't natively supported yet — Google tools only for now.`, 'info', 'Coming soon')
   }
 
   const handleDisconnect = async (tool: Tool) => {
