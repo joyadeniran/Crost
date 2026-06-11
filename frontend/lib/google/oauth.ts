@@ -24,17 +24,39 @@ export interface GoogleOAuthConfig {
   redirectUri: string
 }
 
-export function getOAuthConfig(): GoogleOAuthConfig | null {
+// Hosts that are registered as redirect URIs on the OAuth client. The redirect
+// URI is derived from the request origin so both domains work, but only these
+// are honoured — anything else falls back to the canonical app URL to avoid a
+// redirect_uri_mismatch.
+function allowedOrigins(): string[] {
+  return [
+    process.env.NEXT_PUBLIC_APP_URL,
+    'https://app.crosthq.com',
+  ]
+    .filter(Boolean)
+    .map((u) => (u as string).replace(/\/$/, ''))
+}
+
+/**
+ * @param origin Optional request origin (e.g. https://app.crosthq.com). When it
+ * matches a registered domain it is used for the redirect URI; otherwise the
+ * canonical NEXT_PUBLIC_APP_URL is used.
+ */
+export function getOAuthConfig(origin?: string): GoogleOAuthConfig | null {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID ?? ''
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? ''
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
-  if (!clientId || !clientSecret || clientId === PLACEHOLDER || clientSecret === PLACEHOLDER || !appUrl) {
+  if (!clientId || !clientSecret || clientId === PLACEHOLDER || clientSecret === PLACEHOLDER) {
     return null
   }
+  const allowed = allowedOrigins()
+  const canonical = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const normalizedOrigin = origin?.replace(/\/$/, '')
+  const base = normalizedOrigin && allowed.includes(normalizedOrigin) ? normalizedOrigin : canonical
+  if (!base) return null
   return {
     clientId,
     clientSecret,
-    redirectUri: `${appUrl.replace(/\/$/, '')}/api/connect/google/callback`,
+    redirectUri: `${base}/api/connect/google/callback`,
   }
 }
 

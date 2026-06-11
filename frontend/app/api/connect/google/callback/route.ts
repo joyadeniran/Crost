@@ -9,8 +9,15 @@ import { storeGoogleToken } from '@/lib/google/auth'
 
 export const dynamic = 'force-dynamic'
 
+function requestOrigin(req: NextRequest): string {
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
+  return host ? `${proto}://${host}` : ''
+}
+
 function settingsRedirect(req: NextRequest, status: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin
+  // Stay on whichever domain the user is using.
+  const base = requestOrigin(req) || process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin
   return NextResponse.redirect(`${base.replace(/\/$/, '')}/dashboard/settings?google=${status}`)
 }
 
@@ -31,7 +38,7 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) return settingsRedirect(req, 'unauthenticated')
 
-    const cfg = getOAuthConfig()
+    const cfg = getOAuthConfig(requestOrigin(req))
     if (!cfg) return settingsRedirect(req, 'not_configured')
 
     const tokens = await exchangeCode(cfg, code)

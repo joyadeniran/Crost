@@ -9,12 +9,18 @@ import { getOAuthConfig, buildAuthUrl } from '@/lib/google/oauth'
 
 export const dynamic = 'force-dynamic'
 
+function requestOrigin(req: NextRequest): string {
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
+  return host ? `${proto}://${host}` : ''
+}
+
 export async function GET(req: NextRequest) {
   const authClient = await createSupabaseServerComponentClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-  const cfg = getOAuthConfig()
+  const cfg = getOAuthConfig(requestOrigin(req))
   if (!cfg) {
     return NextResponse.json(
       { error: 'Google OAuth is not configured. Set GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET.' },

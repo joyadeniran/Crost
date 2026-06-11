@@ -26,6 +26,14 @@ describe('getOAuthConfig', () => {
     const cfg = getOAuthConfig()
     expect(cfg?.redirectUri).toBe('https://app.test/api/connect/google/callback')
   })
+  it('uses a registered request origin (both-domains support)', () => {
+    expect(getOAuthConfig('https://app.crosthq.com')?.redirectUri)
+      .toBe('https://app.crosthq.com/api/connect/google/callback')
+  })
+  it('falls back to the canonical URL for an unregistered origin', () => {
+    expect(getOAuthConfig('https://evil.example')?.redirectUri)
+      .toBe('https://app.test/api/connect/google/callback')
+  })
 })
 
 describe('buildAuthUrl', () => {
