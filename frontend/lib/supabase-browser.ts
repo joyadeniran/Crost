@@ -144,8 +144,31 @@ const supabaseCompatAuth = {
       const { GoogleAuthProvider, signInWithPopup } = await import('./firebase-browser')
       if (provider === 'google') {
         const googleProvider = new GoogleAuthProvider()
+        // Request Gmail send + Calendar scopes so Crost can execute approved tool
+        // actions natively via the user's Google account (no third-party broker).
+        googleProvider.addScope('https://www.googleapis.com/auth/gmail.send')
+        googleProvider.addScope('https://www.googleapis.com/auth/calendar.events')
         const cred = await signInWithPopup(auth, googleProvider)
         await refreshTokenCookie()
+
+        // Capture the Google OAuth access token and persist it server-side for the
+        // approval executor. Best-effort — sign-in still succeeds if this fails or
+        // the user declined the extra scopes.
+        try {
+          const oauth = GoogleAuthProvider.credentialFromResult(cred)
+          const googleAccessToken = oauth?.accessToken
+          if (googleAccessToken) {
+            await fetch('/api/connect/google', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                access_token: googleAccessToken,
+                scopes: 'gmail.send calendar.events',
+              }),
+            }).catch(() => {})
+          }
+        } catch { /* non-fatal */ }
+
         // Always go to /dashboard after OAuth — ignore the Supabase-era /auth/callback
         if (typeof window !== 'undefined') window.location.href = `${window.location.origin}/dashboard`
         return { data: { user: mapFirebaseUser(cred.user) }, error: null }

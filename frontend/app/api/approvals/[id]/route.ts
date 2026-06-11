@@ -156,16 +156,46 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           let result: any;
 
           if (isExternalAction) {
-            // GCP migration: external service actions are logged for manual execution.
-            // Google service actions (Gmail, Calendar, etc.) will be executed via
-            // direct Google API calls in a future update. For now, mark as executed.
             const normalizedActionUpper = composioActionForCall.toUpperCase()
-            console.log(`[Approval Execution] Queuing external action "${normalizedActionUpper}" for user ${user.id}`)
-            result = {
-              success: true,
-              action: normalizedActionUpper,
-              status: 'queued',
-              message: `Action "${approval.action_label}" logged. Execute manually or via Google API integration.`,
+            // Native Gmail send via the user's Google OAuth token (no broker).
+            if (normalizedAction.startsWith('gmail_') && normalizedAction.includes('send')) {
+              const { getGoogleToken } = await import('@/lib/google/auth')
+              const { sendGmail } = await import('@/lib/google/gmail')
+              const { accessToken, expired, connected } = await getGoogleToken(supabase, user.id)
+              if (!connected || !accessToken) {
+                throw new Error('Google account not connected — sign in with Google (granting Gmail access) to send email.')
+              }
+              if (expired) {
+                throw new Error('Google session expired — reconnect your Google account to send email.')
+              }
+              const p = (approval.payload ?? {}) as Record<string, any>
+              const sent = await sendGmail({
+                accessToken,
+                to: p.to ?? p.recipient ?? p.recipient_email ?? p.email ?? '',
+                subject: p.subject ?? p.title ?? '',
+                body: p.body ?? p.message ?? p.content ?? p.text ?? '',
+                cc: p.cc,
+                bcc: p.bcc,
+                html: !!p.html,
+              })
+              console.log(`[Approval Execution] Gmail sent (${sent.id}) for user ${user.id}`)
+              result = {
+                success: true,
+                action: normalizedActionUpper,
+                status: 'sent',
+                message_id: sent.id,
+                thread_id: sent.threadId,
+                message: `Email sent to ${p.to ?? 'recipient'}.`,
+              }
+            } else {
+              // Other external actions (Calendar, non-Google) not yet wired natively.
+              console.log(`[Approval Execution] Recording external action "${normalizedActionUpper}" for user ${user.id}`)
+              result = {
+                success: true,
+                action: normalizedActionUpper,
+                status: 'queued',
+                message: `Action "${approval.action_label}" recorded. Native execution for this tool is coming soon.`,
+              }
             }
           } else {
             console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)

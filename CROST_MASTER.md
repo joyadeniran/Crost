@@ -3,11 +3,33 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.12  
+**Current Version:** 13.13  
 **Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Artifact download fixed (private bucket + path).  
+**Deployment Status:** ✅ FULLY LIVE — Native Google tools (real Gmail send, no Composio).  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.13 — Native Google Tools (replace dead Composio with Google OAuth)
+**Date**: June 11, 2026  **Status**: ✅ Shipped  
+**Impact**: Composio was fully stubbed in the GCP migration, so NO external tool executed (gmail sends were faked as "queued"). Replaced with native Google OAuth — real Gmail send, no third-party broker. Fits the "100% Google Cloud" narrative.
+
+### What was broken
+- `runComposioTool` + approval executor faked Google sends ("mark as executed… future update").
+- Google sign-in used a bare `GoogleAuthProvider` (no Gmail scope, no token captured) — the claimed "use the Firebase ID token for Google APIs" can't work.
+- `/api/connect/sync` + settings queried `available_tools.user_id`/`is_action` (don't exist on the global Cloud SQL table) → "Syncing status…" stuck forever.
+
+### Fix (native, no Composio)
+- **Sign-in** (`supabase-browser.ts`): request `gmail.send` + `calendar.events` scopes, capture the Google OAuth access token, POST it to **`/api/connect/google`** which stores it in `connections` (new `access_token`/`token_expires_at`/`scopes` columns).
+- **Gmail send** (`lib/google/gmail.ts`): RFC822 + base64url → `gmail.users.messages.send`. `lib/google/auth.ts` reads/writes the token (with expiry).
+- **Approval executor** (`approvals/[id]`): real Gmail send for `gmail_*send*` using the stored token; graceful "not connected/expired" errors; failures mark the approval failed.
+- **`/api/connect/sync`**: rewritten to derive the Google toolkit catalog + connection status from `connections` (no `available_tools` dependency) → panel resolves.
+- Enabled **gmail.googleapis.com**. Added `tests/unit/gmail.test.ts`. Suite 354/354, tsc clean.
+
+### Manual steps required (founder — only you can do these)
+1. **Sign out and sign back in with Google** to grant the new Gmail/Calendar scopes (token is captured at sign-in; the access token lasts ~1h — refresh-token flow is a follow-up).
+2. **OAuth consent screen** (console.cloud.google.com → APIs & Services → OAuth consent, project `crost-hq`): add scopes `gmail.send` + `calendar.events`; keep app in **Testing** and add your email as a **test user** (gmail.send is restricted — test-user mode avoids Google verification).
 
 ---
 
