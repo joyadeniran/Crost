@@ -86,7 +86,7 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json({
     status: 'ready',
     platform: 'Google Cloud Vertex AI',
-    model: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash',
+    model: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
     framework: '@google/adk',
     capabilities: [
       'multi_agent_orchestration',

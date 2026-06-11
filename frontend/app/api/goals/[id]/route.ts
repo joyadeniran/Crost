@@ -19,19 +19,29 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     const supabase = createServerSupabaseClient()
-    const { data, error } = await supabase
+    // NOTE: the Cloud SQL client does not support PostgREST embedded resources
+    // (`goal_tasks(*)`), so fetch the goal and its tasks in two queries.
+    const { data: goal, error } = await supabase
       .from('goals')
-      .select('*, goal_tasks(*)')
+      .select('*')
       .eq('id', params.id)
       .eq('created_by', user.id)
       .single()
 
-    if (error || !data) {
+    if (error || !goal) {
       return NextResponse.json(
         { success: false, error: 'Goal not found', code: 'NOT_FOUND', timestamp: new Date().toISOString() },
         { status: 404 }
       )
     }
+
+    const { data: tasks } = await supabase
+      .from('goal_tasks')
+      .select('*')
+      .eq('goal_id', params.id)
+      .order('created_at', { ascending: true })
+
+    const data = { ...(goal as Record<string, unknown>), goal_tasks: tasks ?? [] }
 
     return NextResponse.json({ success: true, data, timestamp: new Date().toISOString() })
   } catch (err) {

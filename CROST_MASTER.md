@@ -3,11 +3,30 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.10  
+**Current Version:** 13.11  
 **Last Updated:** June 11, 2026  
-**Deployment Status:** ✅ FULLY LIVE — Onboarding save fixed (shim jsonb/PK, schema parity, claims).  
+**Deployment Status:** ✅ FULLY LIVE — Vertex model + tool/goal schema parity fixed.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New). Deadline June 11, 2026.
+
+---
+
+## Session v13.11 — Tool Exec Error + "No Goals Execute" (Vertex 404 + schema parity)
+**Date**: June 11, 2026  **Status**: ✅ Shipped  
+**Impact**: Fixed "Failed to record tool execution metrics" on tool calls and goals never executing. Unit suite 350/350, type-check clean.
+
+### Root Causes
+1. **Vertex AI 404 → no goals execute**: callGemini hit `gemini-2.0-flash` / `1.5-flash` / `2.5-flash-preview-05-20`, all of which 404 from the Vertex publisher endpoint in `us-central1` (retired / AI-Studio-only). Only `gemini-2.5-flash`, `-flash-lite`, `-pro` resolve. Every model default + fallback chain pointed at dead models.
+2. **`tool_executions` table missing** → executeToolCall threw `relation "tool_executions" does not exist` → CR-TOOL-TRACKING toast.
+3. **More missing/diverged schema**: `company_memo` table missing; `approval_queue` lacked `user_id`/`task_id`/`tool_execution_id`, forced NOT-NULL `department_id`/`name` the HITL path omits, and its `action_type` check rejected `'tool_call'`; `goal_tasks` lacked `created_by`/`expected_deliverable` and forced NOT-NULL JSON `orc_notes`; `goals` route used an unsupported PostgREST embed.
+
+### Fix
+- **Code** (`lib/gemini-client.ts`): `normalizeModel` now remaps any retired/preview/non-Gemini model → `WORKING_GEMINI_MODEL` (`gemini-2.5-flash`), the single choke point every caller funnels through. Fallback chains + defaults updated to the three working 2.5 models across `llm-client.ts`, `orc-decision-gate.ts`, `adk/agents.ts`, `adk/route.ts`, `settings/models/validate`. `goals/[id]` route fetches tasks in a second query (no PostgREST embed).
+- **Cloud SQL** (`cloudsql_fixes_v13.10.sql`, applied via Auth Proxy): created `tool_executions` + `company_memo`; reconciled `approval_queue` and `goal_tasks` columns/constraints. Verified end-to-end through the real `lib/db.ts` shim (goals→tool_executions→approval_queue→goal_tasks→company_memo insert + cleanup).
+- **Tests**: added `tests/unit/gemini-client.test.ts` (normalizeModel remap); updated fallback-chain expectations.
+
+### Note
+`text-embedding-004` confirmed available in Vertex (embeddings OK). Broader `user_id`-vs-`created_by` drift remains in non-core settings/connect routes — see [[project_cloudsql_shim_parity]].
 
 ---
 

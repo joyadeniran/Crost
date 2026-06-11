@@ -10,18 +10,35 @@ const GCP_PROJECT = process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJE
 const IS_GCP = !!GCP_PROJECT
 const API_KEY = process.env.GOOGLE_AI_STUDIO_API_KEY ?? process.env.GEMINI_API_KEY ?? ''
 
-// Normalize model names: strip provider prefix (e.g. 'gemini/gemini-2.0-flash' → 'gemini-2.0-flash')
+// The Gemini model that is actually served by Vertex AI in our region.
+// As of 2026, gemini-2.0-flash / 1.5-flash and the AI-Studio-only preview IDs
+// (e.g. gemini-2.5-flash-preview-05-20) return 404 from the Vertex publisher
+// endpoint in us-central1 — only gemini-2.5-flash resolves. This is the single
+// source of truth so retired names in env vars or the DB still work.
+export const WORKING_GEMINI_MODEL = 'gemini-2.5-flash'
+
+// Normalize model names: strip provider prefix and remap retired/unavailable
+// model IDs to the model Vertex AI actually serves.
+// e.g. 'gemini/gemini-2.0-flash' → 'gemini-2.5-flash'
 export function normalizeModel(model: string): string {
-  if (model.startsWith('gemini/')) return model.slice('gemini/'.length)
-  if (model.startsWith('google/')) return model.slice('google/'.length)
-  if (!model.startsWith('gemini-') && !model.startsWith('models/')) {
-    console.warn(`[gemini-client] Unknown model "${model}", falling back to gemini-2.0-flash`)
-    return 'gemini-2.0-flash'
+  let m = model
+  if (m.startsWith('gemini/')) m = m.slice('gemini/'.length)
+  else if (m.startsWith('google/')) m = m.slice('google/'.length)
+
+  // Non-Gemini providers (groq/llama, anthropic/..., local/...) → working Gemini
+  if (!m.startsWith('gemini-') && !m.startsWith('models/')) {
+    return WORKING_GEMINI_MODEL
   }
-  return model
+
+  // Retired Gemini families and AI-Studio-only preview IDs → working Vertex model
+  if (/^gemini-(1\.5|2\.0)/.test(m) || /preview/i.test(m)) {
+    return WORKING_GEMINI_MODEL
+  }
+
+  return m
 }
 
-export function makeGeminiModel(model = 'gemini-2.0-flash'): Gemini {
+export function makeGeminiModel(model = WORKING_GEMINI_MODEL): Gemini {
   const normalized = normalizeModel(model)
   if (IS_GCP) {
     // On Cloud Run: Vertex AI uses the service account IAM automatically
@@ -112,4 +129,4 @@ export async function getGeminiEmbedding(text: string): Promise<number[]> {
   return result.embedding.values
 }
 
-export const GEMINI_FALLBACK_CHAIN = ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-flash']
+export const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']

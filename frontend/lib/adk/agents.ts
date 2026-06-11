@@ -88,7 +88,7 @@ export function createDepartmentAgent(dept: DepartmentInfo): LlmAgent {
   return new LlmAgent({
     name: dept.slug,
     description: `${dept.name} specialist agent. Capabilities: ${dept.capabilities.slice(0, 3).join(', ')}`,
-    model: makeGeminiModel('gemini-2.0-flash'),
+    model: makeGeminiModel('gemini-2.5-flash'),
     instruction: DEPARTMENT_INSTRUCTION(dept),
     tools: DEPT_TOOLS,
   })
@@ -171,7 +171,7 @@ export async function buildAgentTree(userId?: string): Promise<LlmAgent> {
   return new LlmAgent({
     name: 'orc',
     description: 'Chief of Staff — orchestrates all departments to execute founder goals',
-    model: makeGeminiModel('gemini-2.0-flash'),
+    model: makeGeminiModel('gemini-2.5-flash'),
     instruction: ORC_INSTRUCTION,
     tools: CROST_TOOLS,
     subAgents,

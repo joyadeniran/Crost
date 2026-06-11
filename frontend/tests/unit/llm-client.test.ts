@@ -312,7 +312,7 @@ describe('callLLM — resilient fallback chain', () => {
     expect(result).toBe('chain[0] response')
     // Second call should use the first model in RESILIENT_FALLBACK_CHAIN
     const secondCallBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body)
-    expect(secondCallBody.model).toBe('gemini/gemini-2.0-flash')
+    expect(secondCallBody.model).toBe('gemini/gemini-2.5-flash')
   })
 })
 

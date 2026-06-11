@@ -303,7 +303,7 @@ export async function orcDecisionGate(
     let raw = ''
     try {
       const { content } = await callGemini({
-        model: process.env.CLOUD_MODEL_CLASSIFIER ?? 'gemini-2.0-flash',
+        model: process.env.CLOUD_MODEL_CLASSIFIER ?? 'gemini-2.5-flash',
         prompt: classifierPrompt,
         systemNote: DECISION_GATE_SYSTEM_NOTE,
         temperature: 0.1,

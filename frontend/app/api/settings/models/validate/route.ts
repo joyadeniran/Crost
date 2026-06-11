@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic'
 
 // Map canonical provider to Gemini model names for validation
 const TEST_MODELS: Record<string, string> = {
-  'anthropic': 'gemini-2.0-flash',
-  'gemini':    'gemini-2.0-flash',
-  'groq':      'gemini-2.0-flash',
+  'anthropic': 'gemini-2.5-flash',
+  'gemini':    'gemini-2.5-flash',
+  'groq':      'gemini-2.5-flash',
 }
 
 export async function POST(req: NextRequest) {

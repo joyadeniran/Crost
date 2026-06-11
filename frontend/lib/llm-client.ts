@@ -37,8 +37,8 @@ import { computeMonthlySpend } from './cost-tracker'
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 // Default model — Gemini 2.0 Flash on Google Cloud Vertex AI
-export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash'
-const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash'
+export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash'
+const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash'
 
 export async function getModel(
   taskType: 'planning' | 'execution' | 'analysis' | 'summarization',
@@ -61,10 +61,10 @@ export async function getModel(
   }
 
   const MODELS: Record<string, string> = {
-    planning: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash',
-    execution: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash',
-    analysis: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.0-flash',
-    summarization: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.0-flash'
+    planning: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
+    execution: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash',
+    analysis: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
+    summarization: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash'
   }
   const model = MODELS[taskType] || MODELS.execution
   return { model, provider: model.split('/')[0] }
@@ -736,9 +736,9 @@ async function callLiteLLM(
 // Canonical fallback chain for high-reliability operations.
 // Evaluated in order if the primary model fails.
 const RESILIENT_FALLBACK_CHAIN = [
-  'gemini/gemini-2.0-flash',            // Primary (Google Cloud)
-  'gemini/gemini-2.5-flash-preview-05-20', // Enhanced reasoning backup
-  'gemini/gemini-1.5-flash',            // Stable fallback
+  'gemini/gemini-2.5-flash',            // Primary (Vertex AI, us-central1)
+  'gemini/gemini-2.5-flash-lite',      // Cheaper/faster backup
+  'gemini/gemini-2.5-pro',             // Strongest reasoning fallback
 ]
 
 export async function callLLM(
