@@ -20,7 +20,7 @@ The founder types one goal. Crost plans it, executes it across specialist depart
 
 We built a net-new multi-agent system from scratch using Google ADK:
 
-- **OrcAgent** (Chief of Staff) — `LlmAgent` powered by Gemini 2.0 Flash
+- **OrcAgent** (Chief of Staff) — `LlmAgent` powered by Gemini 2.5 Flash
 - **DepartmentAgents** (Marketing, Engineering, Sales, Research, Operations) — sub-agents spawned dynamically from the database
 - **FunctionTools** — Knowledge base search, artifact creation, memo writing, approval requests
 - **MCP Server** — Exposes Crost's capabilities to external agents via Model Context Protocol
@@ -34,7 +34,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full diagram.
 
 ```
 Founder → POST /api/adk → ADK Runner
-  → OrcAgent (Gemini 2.0 Flash)
+  → OrcAgent (Gemini 2.5 Flash)
     → search_knowledge_base (FunctionTool → Cloud SQL)
     → read_company_memo (FunctionTool → Cloud SQL)
     → plan: 3-5 tasks
@@ -56,7 +56,7 @@ Founder → POST /api/adk → ADK Runner
 | Component | Google Service |
 |-----------|---------------|
 | Agent Framework | **Google ADK v1.2.0** (`@google/adk`) |
-| LLM | **Vertex AI Gemini 2.0 Flash** |
+| LLM | **Vertex AI Gemini 2.5 Flash** |
 | Compute | **Cloud Run** (containerized Next.js) |
 | Database | **Cloud SQL PostgreSQL 15** |
 | File Storage | **Cloud Storage** (artifacts + KB) |
@@ -108,6 +108,18 @@ Every external action requires founder approval:
 5. Agent proceeds only after approval
 
 **No agent takes external action autonomously.**
+
+---
+
+## Native Google Tool Execution (no third-party broker)
+
+Approved actions execute against the founder's own Google account via native OAuth — **no Composio or third-party tool broker**:
+
+- **Google OAuth 2.0** (offline / refresh tokens) grants `gmail.send`, `gmail.readonly`, `calendar.events`
+- On approval, Crost calls the **Gmail API** directly (`users.messages.send`) to send real email in the founder's voice
+- Tokens are stored in Cloud SQL and **auto-refreshed**; the same grant powers Calendar and future Gmail push-event listening
+
+This keeps the entire stack on Google infrastructure end to end.
 
 ---
 
