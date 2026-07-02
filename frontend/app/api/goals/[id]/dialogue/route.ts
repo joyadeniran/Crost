@@ -3,10 +3,11 @@
 // Also supports 'force_plan' to skip clarification.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { runOrchestratorTask } from '@/lib/llm-client'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +20,9 @@ type Params = { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const { message, force_plan } = DialogueSchema.parse(body)

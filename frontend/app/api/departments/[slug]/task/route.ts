@@ -17,13 +17,14 @@
 // - Rule: Long outputs (>1200 chars) → Artifact, Small outputs → Memo
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { buildFinalPrompt, callLLM, runOrcReport } from '@/lib/llm-client'
 import { z } from 'zod'
 import type { ActionType, RiskLevel } from '@/types'
 import { detectOutputType } from '@/lib/artifact-transformers'
 import { loadSkillsForTask } from '@/lib/skills'
 import { classifyOutput } from '@/lib/output-classifier'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -257,11 +258,9 @@ async function createArtifactFromContent(
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const authClient = await createSupabaseServerComponentClient()
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-  }
+  const guardResult = await requireUser(req)
+  if (!guardResult.ok) return guardResult.response
+  const user = { id: guardResult.userId }
 
   const supabase = createServerSupabaseClient()
 

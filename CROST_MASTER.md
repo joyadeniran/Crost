@@ -12,6 +12,30 @@
 
 ---
 
+## Session — 10x Rebuild: Phase 2 (2.1 done, 2.2 deferred, 2.3 in progress)
+**Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
+**Branch**: `feature/gcp-challenge`
+
+### Phase 2.1 — God-module split — COMPLETE
+`lib/llm-client.ts` (1745 lines) split into `lib/engine/{model,prompt,parse,orchestrator,worker,memo,budget,events}.ts`, pure code motion. `lib/llm-client.ts` now a 19-line barrel re-export. Verified: `tsc --noEmit` clean, all 654 tests unchanged and green. User confirmed locally with `npm run build`: compiles clean; the only failures (8 pages, `FirebaseError: auth/invalid-api-key` on `/login`, `/signup`, `/onboarding/*`) were reproduced identically on `HEAD~1` (pre-split) via `git checkout HEAD~1 -- lib/llm-client.ts && rm -rf lib/engine && npm run build` — confirmed pre-existing (missing `NEXT_PUBLIC_FIREBASE_*` in `.env.local`), unrelated to the refactor. Not fixed (out of scope; env-var gap, arguably Phase 4/6).
+
+### Phase 2.2 — Single data layer — DEFERRED (by founder decision)
+Investigated actual scope before starting: the plan assumed raw `pg` and a Supabase-shim coexist; they don't — `lib/supabase.ts` already wraps the one canonical `createDbClient()` (`lib/db.ts`), zero raw `pg`/`getPool()` usage elsewhere. The real work would be converting 76 files' ad-hoc `createServerSupabaseClient().from(table)...` chains into typed `lib/data/` repos, which would also require rewriting ~40 test files' mocks. Founder chose to skip this and move to 2.3/2.4 rather than take on that scope/risk now. Logged here as a follow-up if revisited: start with `goals`, `goal_tasks`, `approvals`, `artifacts` repos (highest reuse, in `lib/engine/*`).
+
+### Phase 2.3 — Central auth guard — substantially done
+Created `lib/auth/guard.ts`: `requireUser(req)`, `checkInternalSecret(req)`, `requireUserOrInternal(req, {bodyUserId})` — extracted verbatim from the `worker/execute` dual-mode pattern and the session-only pattern used elsewhere. New tests: `tests/unit/auth-guard.test.ts` (9 tests).
+
+Migrated 38 routes to the guard (mechanical, response-shape-preserving — same `{error:'Unauthenticated'},401` body/status verified per file before touching it): `worker/execute` (dual-mode), `calendar-events`, `adk`, `approvals` (+`[id]`), `artifacts` (+`[id]`, `/download`, `/make-changes`), `calendar-events/[id]`, `config` (+`/secret-presence`), `connect` (+`/google`, `/google/start`), `departments` (+`[slug]`, `/[slug]/activate`, `/[slug]/reset`, `/[slug]/task`, `/resync`), `goals` (+`[id]`, `/[id]/dialogue`, `/[id]/feedback`, `/[id]/report`, `/[id]/tasks/[taskId]`), `knowledge/read`, `knowledge/search`, `memos`, `onboarding` (`/complete`, `/complete-final`, `/first-goal`), `recurring-missions` (+`[id]`), `toggle`, `tools`, `usage/summary`. `tsc --noEmit` clean after every file (caught 7 real `_req`-vs-`req` param-name mismatches, fixed).
+
+**Not migrated** (different response shape — `{success:false,...}` or `{error:'Unauthorized'}` instead of the guard's `{error:'Unauthenticated'},401` — would silently change the API contract if forced through the guard as-is): `settings/tools*` (3 routes), `settings/models*` (2 routes), `tools/execute`, `tools/invoke`, `suggested-actions/execute`, `suggested-actions/[id]/execute`, `usage/today`, `knowledge/files`, `knowledge/import`, `knowledge/upload`. Also skipped: `goals/[id]/dispatch` (has an internal chain-reaction bypass branch, not the simple two-branch dual-mode shape), `connect/google/callback` (redirects instead of returning JSON on 401), `onboarding/set-step` (uses `user.email`, not just `user.id` — the guard's synthetic `{id}` object would drop that field).
+
+**Verification gap this session**: could not run `vitest` in-sandbox — the sandbox and the founder's Mac share `node_modules`, and the founder's last `npm run build` reinstalled it with only the `darwin-arm64` native `rolldown` binding; the sandbox is `linux-arm64` and has no matching binding. `tsc --noEmit` is clean (verified after every batch) and all touched routes already have T7 tests mocking `@/lib/supabase` (which `guard.ts` calls internally, so the same mocks cover it transparently) — but this needs a local `npm run test:unit` run to confirm before Phase 2.4.
+
+### Next
+Phase 2.4 (uniform `apiOk`/`apiError` responses + `lib/env.ts` zod env validation) after local test confirmation. Then Phase 2 exit gate.
+
+---
+
 ## Session — 10x Rebuild: Phase 0 + Phase 1 (started)
 **Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS (Phase 0 done, Phase 1 started)
 **Branch**: `feature/gcp-challenge`

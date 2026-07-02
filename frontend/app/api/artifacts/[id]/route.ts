@@ -5,8 +5,9 @@
 // DELETE — discard artifact. Blocked if status=active/paused/deprecated (use PATCH to deprecate).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { z } from 'zod'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,9 +17,9 @@ const IMMUTABLE_STATUSES = ['active', 'paused', 'deprecated'] as const
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const supabase = createServerSupabaseClient()
     const { data: artifact, error } = await supabase
@@ -47,9 +48,9 @@ const PatchSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const parsed = PatchSchema.parse(body)
@@ -149,9 +150,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const { id } = params
     if (!id) return NextResponse.json({ error: 'Artifact ID is required' }, { status: 400 })
 
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const supabase = createServerSupabaseClient()
 

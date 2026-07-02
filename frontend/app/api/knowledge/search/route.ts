@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
+import { createServerSupabaseClient } from '@/lib/supabase';
 import { callEmbeddings } from '@/lib/llm-client';
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic';
 
@@ -61,9 +62,9 @@ export async function POST(req: NextRequest) {
       return handleSearch(bodyUserId, query, category, fileType, limit, artifact_id);
     }
 
-    const authClient = await createSupabaseServerComponentClient();
-    const { data: { user } } = await authClient.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
     userId = user.id;
 
     const { query, category, fileType, limit = 5, artifact_id } = await req.json();

@@ -4,8 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
-import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { getOAuthConfig, buildAuthUrl } from '@/lib/google/oauth'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,9 +16,9 @@ function requestOrigin(req: NextRequest): string {
 }
 
 export async function GET(req: NextRequest) {
-  const authClient = await createSupabaseServerComponentClient()
-  const { data: { user } } = await authClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  const guardResult = await requireUser(req)
+  if (!guardResult.ok) return guardResult.response
+  const user = { id: guardResult.userId }
 
   const cfg = getOAuthConfig(requestOrigin(req))
   if (!cfg) {

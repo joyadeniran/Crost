@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { computeMonthlySpend } from '@/lib/cost-tracker'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
     if (!allowed) {

@@ -4,7 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { runOrcReport } from '@/lib/llm-client'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +20,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       // Trusted internal call from worker — proceed directly
     } else {
       // Browser/session call — require auth + ownership
-      const authClient = await createSupabaseServerComponentClient()
-      const { data: { user } } = await authClient.auth.getUser()
-      if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+      const guardResult = await requireUser(req)
+      if (!guardResult.ok) return guardResult.response
+      const user = { id: guardResult.userId }
 
       const supabase = createServerSupabaseClient()
       const { data: goal } = await supabase

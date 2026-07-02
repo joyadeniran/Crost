@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,9 +9,9 @@ const GOOGLE_SERVICES = new Set(['gmail', 'googlecalendar', 'googlesheets', 'goo
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const { provider } = body

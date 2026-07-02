@@ -4,16 +4,17 @@
 // natively. No third-party broker.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { storeGoogleToken } from '@/lib/google/auth'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json().catch(() => ({}))
     const accessToken: string | undefined = body?.access_token

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase';
+import { createServerSupabaseClient } from '@/lib/supabase';
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic';
 
@@ -21,9 +22,9 @@ export async function POST(req: NextRequest) {
       userId = body.userId;
       file_id = body.file_id;
     } else {
-      const authClient = await createSupabaseServerComponentClient();
-      const { data: { user } } = await authClient.auth.getUser();
-      if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+      const guardResult = await requireUser(req)
+      if (!guardResult.ok) return guardResult.response
+      const user = { id: guardResult.userId }
       userId = user.id;
       const body = await req.json();
       file_id = body.file_id;

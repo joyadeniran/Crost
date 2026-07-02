@@ -2,10 +2,11 @@
 // POST /api/artifacts — create a new artifact (lands in 'draft' sandbox by default)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 import { classifyOutput } from '@/lib/output-classifier'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,9 +16,9 @@ const GALLERY_STATUSES = ['review', 'active', 'paused', 'deprecated']
 
 export async function GET(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
@@ -83,9 +84,9 @@ const CreateArtifactSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const parsed = CreateArtifactSchema.parse(body)

@@ -2,10 +2,10 @@
 // Returns Server-Sent Events stream of agent activity.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { createDbClient } from '@/lib/db'
 import { runGoal } from '@/lib/adk/runner'
 import { z } from 'zod'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,9 +15,9 @@ const RunGoalSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const { founder_input } = RunGoalSchema.parse(body)

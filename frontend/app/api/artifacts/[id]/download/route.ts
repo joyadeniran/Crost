@@ -5,8 +5,9 @@
 // public, so the stored storage.googleapis.com URL cannot be fetched directly.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { gcsStorage } from '@/lib/gcs'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,9 +24,9 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const supabase = createServerSupabaseClient()
     const { data: artifact, error } = await supabase

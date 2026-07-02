@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerComponentClient } from '@/lib/supabase'
 import { createRecurringMission, listRecurringMissions } from '@/lib/recurring-missions'
 import { z } from 'zod'
+import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +21,9 @@ const CreateSchema = z.object({
 
 export async function GET(_req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(_req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const missions = await listRecurringMissions(user.id)
     return NextResponse.json({ success: true, data: missions, timestamp: new Date().toISOString() })
@@ -37,9 +38,9 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const body = await req.json()
     const input = CreateSchema.parse(body)
