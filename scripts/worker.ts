@@ -25,12 +25,34 @@ if (fs.existsSync(localEnvPath)) {
 }
 
 const DATABASE_URL = process.env.DATABASE_URL ?? ''
-const STALL_THRESHOLD_MS    = 5 * 60_000   // 5 minutes = stalled
+const STALL_THRESHOLD_MS    = 5 * 60_000   // 5 minutes = stall escalation (approval_queue notice)
+const STALE_RESET_THRESHOLD_MS = 10 * 60_000 // 10 minutes stuck in 'running' = reap (retry or dead-letter)
 const POLL_INTERVAL_ACTIVE  = 15_000       // 15 s when work is in-flight
 const POLL_INTERVAL_IDLE    = 5 * 60_000   // 5 min when nothing is executing
 
+// Phase 3 (10x rebuild): bounded retries with exponential backoff before
+// dead-lettering a task that keeps getting stuck in 'running' (crash,
+// timeout, worker restart mid-execution, etc).
+const MAX_TASK_RETRIES = 3
+const RETRY_BASE_BACKOFF_MS = 30_000 // 30s, 60s, 120s
+
 if (!DATABASE_URL) {
   console.error('[worker] DATABASE_URL is required.')
+  process.exit(1)
+}
+
+// Phase 3 fix: this was previously referenced below as a bare, never-declared
+// `SUPABASE_SERVICE_KEY` identifier — a ReferenceError thrown synchronously
+// on every dispatchTask() call, silently swallowed by pollSupervisor's outer
+// try/catch. Net effect: the worker's entire auto-dispatch path (no-dependency
+// pending tasks + dependency-unblocked tasks) has been dead in production,
+// with the system relying entirely on approval-decision chain-reactions to
+// make progress. Fixed to read the same env vars the dispatch route itself
+// accepts (frontend/middleware.ts checkInternalSecretHeader / app/api/goals/
+// [id]/dispatch's requireUser dual-mode check).
+const WORKER_SECRET = process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+if (!WORKER_SECRET) {
+  console.error('[worker] WORKER_INTERNAL_SECRET (or SUPABASE_SERVICE_ROLE_KEY) is required — the worker cannot authenticate to /api/goals/:id/dispatch without it.')
   process.exit(1)
 }
 
@@ -264,18 +286,78 @@ function startWatchdog(taskId: string, goalId: string) {
   activeWatchdogs.set(taskId, timeout)
 }
 
+// ─── Reaper: bounded retries + dead-letter (Phase 3, 10x rebuild) ─────────────
+// Runs every poll cycle (previously this recovery only ran once, at process
+// boot — meaning a task that stalled mid-run while the worker was already up
+// and healthy was never reaped until the next restart). A task stuck in
+// 'running' longer than STALE_RESET_THRESHOLD_MS is requeued to 'pending'
+// with an exponential-backoff next_retry_at, up to MAX_TASK_RETRIES times;
+// beyond that it is dead-lettered to 'failed_permanent' rather than retried
+// forever.
+function isDueForRetry(nextRetryAt: string | null | undefined): boolean {
+  if (!nextRetryAt) return true
+  return new Date(nextRetryAt).getTime() <= Date.now()
+}
+
+async function reapStaleTasks() {
+  const staleCutoff = new Date(Date.now() - STALE_RESET_THRESHOLD_MS).toISOString()
+  const { data: staleTasks } = await supabase
+    .from('goal_tasks')
+    .select('task_id, goal_id, label, dept_slug, retry_count, assigned_at')
+    .eq('status', 'running')
+    .lte('assigned_at', staleCutoff)
+
+  for (const task of staleTasks ?? []) {
+    const retryCount = task.retry_count ?? 0
+    clearWatchdog(task.task_id)
+
+    if (retryCount >= MAX_TASK_RETRIES) {
+      await supabase.from('goal_tasks').update({
+        status: 'failed_permanent',
+        completed_at: new Date().toISOString(),
+      }).eq('task_id', task.task_id).eq('goal_id', task.goal_id)
+
+      log(`[Reaper] Task ${task.task_id} dead-lettered after ${retryCount} retries (stuck in running > ${STALE_RESET_THRESHOLD_MS / 60_000}m each time)`, { goalId: task.goal_id })
+      await writeEvent(
+        'orc_task_dead_lettered',
+        `Task "${task.label}" exceeded ${MAX_TASK_RETRIES} retries after repeated stalls — marked failed_permanent`,
+        task.goal_id,
+        { task_id: task.task_id, dept_slug: task.dept_slug, retry_count: retryCount }
+      )
+      continue
+    }
+
+    const backoffMs = RETRY_BASE_BACKOFF_MS * Math.pow(2, retryCount)
+    const nextRetryAt = new Date(Date.now() + backoffMs).toISOString()
+    await supabase.from('goal_tasks').update({
+      status: 'pending',
+      retry_count: retryCount + 1,
+      next_retry_at: nextRetryAt,
+    }).eq('task_id', task.task_id).eq('goal_id', task.goal_id)
+
+    log(`[Reaper] Task ${task.task_id} stuck in running > ${STALE_RESET_THRESHOLD_MS / 60_000}m — requeued (attempt ${retryCount + 1}/${MAX_TASK_RETRIES}), backoff ${backoffMs / 1000}s`, { goalId: task.goal_id })
+    await writeEvent(
+      'orc_task_requeued',
+      `Task "${task.label}" requeued after stalling (attempt ${retryCount + 1}/${MAX_TASK_RETRIES})`,
+      task.goal_id,
+      { task_id: task.task_id, dept_slug: task.dept_slug, retry_count: retryCount + 1, backoff_ms: backoffMs }
+    )
+  }
+}
+
 // ─── Goal Management ──────────────────────────────────────────────────────────
 
 async function unblockDependentTasks(goalId: string) {
   const { data: blockedTasks } = await supabase
     .from('goal_tasks')
-    .select('task_id, dept_slug, label, depends_on')
+    .select('task_id, dept_slug, label, depends_on, next_retry_at')
     .eq('goal_id', goalId)
     .in('status', ['planned', 'pending']) // Process both planned and pending with dependencies
 
   for (const blocked of blockedTasks ?? []) {
     const dependencies = blocked.depends_on as string[] || []
     if (dependencies.length === 0) continue
+    if (!isDueForRetry(blocked.next_retry_at)) continue // still in backoff window from a prior stall
 
     // 1. Check if all dependent tasks are 'completed' or 'skipped'
     const { data: depTasks } = await supabase
@@ -323,14 +405,15 @@ async function tryCloseGoal(goalId: string) {
   const { data: tasks } = await supabase.from('goal_tasks').select('*').eq('goal_id', goalId)
   if (!tasks || tasks.length === 0) return
 
-  const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired', 'skipped'])
+  const terminalStatuses = new Set(['completed', 'failed', 'failed_permanent', 'rejected', 'expired', 'skipped'])
   const allTerminal = tasks.every(t => terminalStatuses.has(t.status))
   if (!allTerminal) return
 
   const allSucceeded = tasks.every(t => t.status === 'completed' || t.status === 'skipped')
-  const outcome = allSucceeded 
-    ? 'All tasks completed successfully.' 
-    : `${tasks.filter(t => t.status === 'failed').length} failed, ${tasks.filter(t => t.status === 'completed').length} completed.`
+  const failedCount = tasks.filter(t => t.status === 'failed' || t.status === 'failed_permanent').length
+  const outcome = allSucceeded
+    ? 'All tasks completed successfully.'
+    : `${failedCount} failed, ${tasks.filter(t => t.status === 'completed').length} completed.`
 
   await writeMissionReportMemo(goalId, goal.founder_input, tasks)
   await supabase.from('goals').update({ status: 'completed', outcome }).eq('id', goalId)
@@ -359,7 +442,7 @@ async function dispatchTask(taskId: string, goalId: string) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-crost-internal-secret': SUPABASE_SERVICE_KEY
+      'x-crost-internal-secret': WORKER_SECRET
     },
     body: JSON.stringify({ task_id: taskId })
   }).catch((e) => log(`[Dispatch] fetch failed for task ${taskId}`, e))
@@ -370,6 +453,11 @@ async function dispatchTask(taskId: string, goalId: string) {
 async function pollSupervisor() {
   try {
     log('[Poll] Supervisor cycle starting...')
+
+    // 0. Reap tasks stuck in 'running' — bounded retry with backoff, or
+    //    dead-letter to 'failed_permanent' once retries are exhausted.
+    //    Runs every cycle now, not just at process boot.
+    await reapStaleTasks()
 
     // 1. Sync watchdogs with actual DB state
     const { data: runningTasks } = await supabase
@@ -410,12 +498,16 @@ async function pollSupervisor() {
     //    (covers tasks that weren't dispatched when the plan was approved)
     const { data: pendingTasks } = await supabase
       .from('goal_tasks')
-      .select('task_id, goal_id, depends_on, label, status')
+      .select('task_id, goal_id, depends_on, label, status, next_retry_at')
       .eq('status', 'pending')
 
     for (const task of pendingTasks ?? []) {
       const deps = (task.depends_on as string[]) ?? []
       if (deps.length === 0) {
+        if (!isDueForRetry(task.next_retry_at)) {
+          log(`[Poll] Skipping ${task.task_id} — still in retry backoff window (next_retry_at=${task.next_retry_at})`)
+          continue
+        }
         log(`[Poll] Dispatching no-dependency pending task: ${task.task_id} (${task.label})`)
         await dispatchTask(task.task_id, task.goal_id)
       }
@@ -457,24 +549,30 @@ async function scheduleNextPoll() {
 async function main() {
   log('Orc supervisor starting... [mode: polling-primary + adaptive-backoff, GCP Cloud SQL]')
 
-  // 1. Initial State Recovery — re-sync on boot in case of crash/restart
+  // 1. Initial State Recovery — re-sync on boot in case of crash/restart.
+  // Phase 3 fix: this used to unconditionally reset any 'running' task older
+  // than 10 minutes back to 'pending', forever, with no bound — a task whose
+  // execution reliably crashes would loop through running -> stale -> pending
+  // -> running indefinitely, never surfacing as a real failure. Now routed
+  // through the same bounded-retry + dead-letter reaper the poll loop uses
+  // every cycle, so boot-time recovery and steady-state recovery are one
+  // code path instead of two.
   const { data: runningTasks } = await supabase
     .from('goal_tasks')
     .select('task_id, goal_id, assigned_at')
     .eq('status', 'running')
 
-  const TEN_MINUTES = 10 * 60_000
-  const now = Date.now()
-
   log(`Checking ${runningTasks?.length || 0} active tasks for staleness...`)
+  await reapStaleTasks()
+
+  const now = Date.now()
   for (const task of runningTasks || []) {
     const age = now - new Date(task.assigned_at).getTime()
-    if (age > TEN_MINUTES) {
-      log(`Task ${task.task_id} stuck in running > 10m. Resetting to pending for re-queue...`)
-      await supabase.from('goal_tasks').update({ status: 'pending' }).eq('task_id', task.task_id)
-    } else {
+    if (age <= STALE_RESET_THRESHOLD_MS) {
+      // Not stale — reapStaleTasks() left it in 'running', arm its watchdog.
       startWatchdog(task.task_id, task.goal_id)
     }
+    // Stale tasks were already requeued or dead-lettered by reapStaleTasks() above.
   }
 
   // 2. Start the adaptive polling loop — runs immediately, then backs off when idle
