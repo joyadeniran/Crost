@@ -13,7 +13,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerComponentClient } from '@/lib/supabase'
 
-const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+// Read per-call rather than captured as a module-level constant: env vars are
+// static at runtime in production (no behavior change there), but this makes
+// the function correctly reflect the env in tests instead of freezing
+// whatever value happened to exist at first import.
+function getInternalSecret(): string | undefined {
+  return process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+}
 
 export type GuardOk = { ok: true; userId: string; via: 'session' | 'internal' }
 export type GuardFail = { ok: false; response: NextResponse }
@@ -44,7 +50,8 @@ export async function requireUser(_req: NextRequest): Promise<GuardResult> {
  */
 export function checkInternalSecret(req: NextRequest): boolean {
   const internalSecret = req.headers.get('x-crost-internal-secret')
-  return Boolean(internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET)
+  const configuredSecret = getInternalSecret()
+  return Boolean(internalSecret && configuredSecret && internalSecret === configuredSecret)
 }
 
 /**
