@@ -15,13 +15,21 @@
 
 import { z } from 'zod'
 
+// z.string().min(1, msg) only uses `msg` when the value is present-but-empty;
+// a missing key hits zod's type check first and falls back to its generic
+// "Required" message. required_error covers the missing-key case so the
+// clear, actionable message always shows.
+function requiredEnvVar(message: string) {
+  return z.string({ required_error: message }).min(1, message)
+}
+
 const EnvSchema = z.object({
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (Cloud SQL connection string)'),
-  GCS_BUCKET: z.string().min(1, 'GCS_BUCKET is required (artifact storage)'),
-  FIREBASE_PROJECT_ID: z.string().min(1, 'FIREBASE_PROJECT_ID is required (Firebase Admin auth)'),
-  FIREBASE_CLIENT_EMAIL: z.string().min(1, 'FIREBASE_CLIENT_EMAIL is required (Firebase Admin auth)'),
-  FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required (Firebase Admin auth)'),
-  USER_API_ENCRYPTION_KEY: z.string().min(1, 'USER_API_ENCRYPTION_KEY is required (per-user API key encryption)'),
+  DATABASE_URL: requiredEnvVar('DATABASE_URL is required (Cloud SQL connection string)'),
+  GCS_BUCKET: requiredEnvVar('GCS_BUCKET is required (artifact storage)'),
+  FIREBASE_PROJECT_ID: requiredEnvVar('FIREBASE_PROJECT_ID is required (Firebase Admin auth)'),
+  FIREBASE_CLIENT_EMAIL: requiredEnvVar('FIREBASE_CLIENT_EMAIL is required (Firebase Admin auth)'),
+  FIREBASE_PRIVATE_KEY: requiredEnvVar('FIREBASE_PRIVATE_KEY is required (Firebase Admin auth)'),
+  USER_API_ENCRYPTION_KEY: requiredEnvVar('USER_API_ENCRYPTION_KEY is required (per-user API key encryption)'),
   // Both optional individually — enforced together by refine() below, since
   // WORKER_INTERNAL_SECRET falls back to SUPABASE_SERVICE_ROLE_KEY (see
   // lib/auth/guard.ts). Must be declared here (not just read off process.env
