@@ -5,6 +5,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { logDecision } from '@/lib/company-memo'
+import { log } from '@/lib/log'
 
 export async function getMemoBrief(departmentSlug: string): Promise<string> {
   try {
@@ -86,6 +87,6 @@ export async function saveContextMemo(goalId: string, content: string, userId: s
       }).catch(() => {})
     }
   } catch (err) {
-    console.error('[saveContextMemo] Failed:', err)
+    log.error('[saveContextMemo] Failed', { module: 'engine/memo', goalId, userId, error: String(err) })
   }
 }

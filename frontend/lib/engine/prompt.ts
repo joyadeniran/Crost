@@ -6,6 +6,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { DEPARTMENT_TOOL_RULES } from '@/lib/tools/execute-tool-call'
 import { getMemoBrief, getMemos } from './memo'
+import { log } from '@/lib/log'
 
 const DEFAULT_ASSISTANT_IDENTITY = `You are part of Crost's AI operating system.
 Write professionally and clearly. Be direct, warm, and human.
@@ -331,7 +332,7 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
 
     return sections.join('\n\n')
   } catch (err) {
-    console.error('[buildOrcContext] Error:', err)
+    log.error('[buildOrcContext] Error', { module: 'engine/prompt', userId, error: String(err) })
     return ''
   }
 }

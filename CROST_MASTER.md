@@ -28,8 +28,15 @@ New tests: `tests/unit/db.test.ts` (+2, guard SQL generation), `tests/unit/goals
 
 `tsc --noEmit`: clean. Could not run `vitest` in-sandbox this session (same shared-`node_modules`/native-binding issue as Phase 2.3 — sandbox is `linux-arm64`, `node_modules` currently has only `darwin-arm64` bindings from the founder's last local `npm run build`). Needs local `npm run test:unit` to confirm before continuing Phase 3.
 
+### Structured logging — engine layer done
+`lib/log.ts`: `log.debug/info/warn/error(message, fields)` — single JSON-lines format (`level`, `message`, `timestamp`, plus arbitrary context: `userId`, `goalId`, `taskId`, `module`). New tests: `tests/unit/log.test.ts` (5).
+
+Rolled out to all 8 files in `lib/engine/*.ts` (21 `console.*` call sites → `log.*`, with `goalId`/`taskId`/`userId`/`module` context added wherever available in scope) — the module this rebuild already owns end-to-end from Phase 2.1, so verifiable and low-risk. Deliberately left two things alone: the `orc_timing` telemetry line in `orchestrator.ts` (already its own structured JSON shape with a `type` field, tested by `phase5-refinement.test.ts` as an independent payload contract — converting it to `lib/log.ts`'s shape would be a cosmetic change with no value), and every `console.*` outside `lib/engine/` (61 routes + `scripts/worker.ts` + other `lib/*.ts` — a much larger, separately-scoped sweep, not done this session).
+
+`tsc --noEmit`: clean. Confirmed no test in the repo spies on or asserts the exact console message strings that changed (`grep`ped for the old message text across `tests/`) — this was a pure log-format change, not a behavior change.
+
 ### Remaining Phase 3 scope (not started)
-Bounded retries + backoff for worker task execution, dead-letter status `failed_permanent`, heartbeat/stale-task reaper in `scripts/worker.ts`; `lib/state-machine.ts` explicit transition table for goal/task/approval/artifact status (currently transitions are scattered `.update({status:...})` calls with no central validation); structured logging (`lib/log.ts`, replace `console.*` in engine/worker/routes); idempotency audit across remaining duplicate-prone POSTs.
+Bounded retries + backoff for worker task execution, dead-letter status `failed_permanent`, heartbeat/stale-task reaper in `scripts/worker.ts`; `lib/state-machine.ts` explicit transition table for goal/task/approval/artifact status (currently transitions are scattered `.update({status:...})` calls with no central validation); `lib/log.ts` rollout to routes/`scripts/worker.ts`; idempotency audit across remaining duplicate-prone POSTs.
 
 ---
 

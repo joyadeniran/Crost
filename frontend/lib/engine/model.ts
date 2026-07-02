@@ -8,6 +8,7 @@ import { resolveApiKey } from '@/lib/key-resolver'
 import { logUsage } from '@/lib/usage-logger'
 import { checkTokenBudget } from './budget'
 import { logEvent } from './events'
+import { log } from '@/lib/log'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ export async function getModel(
     try {
       return await getModelForTask(userId, role)
     } catch (err) {
-      console.warn(`[llm-client] Failed to fetch model for role ${role}, using fallback`)
+      log.warn('[getModel] Failed to fetch model for role, using fallback', { module: 'engine/model', userId, role, error: String(err) })
     }
   }
 
@@ -127,7 +128,7 @@ export async function callLLM(
         throw err
       }
 
-      console.warn(`[callLLM] Attempt ${attempts} failed for ${currentModel}:`, err.message)
+      log.warn('[callLLM] Attempt failed', { module: 'engine/model', userId, model: currentModel, attempt: attempts, error: err.message })
 
       if (attempts >= maxAttempts || !useFallbackChain) {
         throw err // Exhausted retries or non-fallbackable model
@@ -145,7 +146,7 @@ export async function callLLM(
 
       if (nextModel) {
         const switchDescription = `Automated provider fallback: ${currentModel} failed (Attempt ${attempts}). Switching to ${nextModel}.`
-        console.info(`[callLLM] ${switchDescription}`)
+        log.info(`[callLLM] ${switchDescription}`, { module: 'engine/model', userId, failedModel: currentModel, nextModel, attempt: attempts })
 
         // SILENT LOGGING: Log to event_log for transparency without interrupting the user
         logEvent({

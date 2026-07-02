@@ -16,6 +16,7 @@ import { getModel, callLLM } from './model'
 import { parseApprovalRequest } from './parse'
 import { logEvent } from './events'
 import { runOrcReport } from './orchestrator'
+import { log } from '@/lib/log'
 
 /**
  * Standalone storage helper — detects format, transforms to docx/xlsx/md, uploads to Storage.
@@ -43,7 +44,7 @@ async function uploadArtifact(
         const parsedContent = isJson ? JSON.parse(stripped) : stripped
         fileContent = await detection.transformer(parsedContent) as string | Buffer
       } catch (err) {
-        console.error('[uploadArtifact] Transform error, falling back to raw:', err)
+        log.error('[uploadArtifact] Transform error, falling back to raw', { module: 'engine/worker', goalId, taskId, error: String(err) })
         fileContent = stripped
         detection.targetFormat = isJson ? 'json' : 'md'
       }
@@ -81,7 +82,7 @@ async function uploadArtifact(
       .upload(fileName, fileContent, { contentType, upsert: false })
 
     if (error || !data) {
-      console.error('[uploadArtifact] Storage upload failed:', error)
+      log.error('[uploadArtifact] Storage upload failed', { module: 'engine/worker', goalId, taskId, error: String(error) })
       return null
     }
 
@@ -89,7 +90,7 @@ async function uploadArtifact(
     const fileSize = typeof fileContent === 'string' ? Buffer.byteLength(fileContent, 'utf8') : fileContent.length
     return { fileUrl: urlData.publicUrl, artifactType, extension: ext, fileSize }
   } catch (err) {
-    console.error('[uploadArtifact] Failed:', err)
+    log.error('[uploadArtifact] Failed', { module: 'engine/worker', goalId, taskId, error: String(err) })
     return null
   }
 }
@@ -174,7 +175,7 @@ export async function runWorkerTask(
       created_by: userId
     })
     if (aqInsertErr) {
-      console.error('[runWorkerTask] approval_queue insert failed:', aqInsertErr.message, (aqInsertErr as any).details)
+      log.error('[runWorkerTask] approval_queue insert failed', { module: 'engine/worker', goalId, taskId: task.id, userId, error: aqInsertErr.message, details: (aqInsertErr as any).details })
       throw new Error(`Failed to create approval request: ${aqInsertErr.message}`)
     }
     await supabase.from('departments').update({ status: 'awaiting_approval' }).eq('id', deptRow.id)
@@ -187,7 +188,7 @@ export async function runWorkerTask(
       description: `Approval requested: ${approvalRequest.action_label || approvalRequest.action_type}`,
       metadata: { action_type: approvalRequest.action_type, reasoning: approvalRequest.reasoning, task_id: task.id },
       created_by: userId
-    }).then(({ error }) => { if (error) console.warn('[runWorkerTask] approval_requested event_log insert failed:', error.message) })
+    }).then(({ error }) => { if (error) log.warn('[runWorkerTask] approval_requested event_log insert failed', { module: 'engine/worker', goalId, taskId: task.id, userId, error: error.message }) })
     return { task_id: task.id, status: 'needs_approval', result: {}, memo_summary: '', errors: [] }
   }
 
@@ -200,7 +201,7 @@ export async function runWorkerTask(
       workerResult.status = parsed.needs_more_data ? 'needs_data' : (parsed.status === 'failed' ? 'failed' : 'completed')
       workerResult.result = parsed
       workerResult.memo_summary = parsed.summary || content.slice(0, 500)
-    } catch (e) { console.error('Worker JSON parse fail', e) }
+    } catch (e) { log.error('[runWorkerTask] Worker JSON parse fail', { module: 'engine/worker', goalId, taskId: task.id, userId, error: String(e) }) }
   }
 
   // Artefact Logic: Any structured JSON output → typed file (docx/xlsx/md)
@@ -322,7 +323,7 @@ export async function runWorkerTask(
       })
     }
   } catch (memoErr) {
-    console.error('[runWorkerTask] Memo insert failed (non-fatal):', memoErr)
+    log.error('[runWorkerTask] Memo insert failed (non-fatal)', { module: 'engine/worker', goalId, taskId: task.id, userId, error: String(memoErr) })
     // Surface to event_log so the founder can see if memory writes are degraded.
     logEvent({
       event_type: 'error',
@@ -350,7 +351,7 @@ export async function runWorkerTask(
   const TERMINAL_ERROR_STATUSES = new Set(['failed'])
   if (TERMINAL_ERROR_STATUSES.has(workerResult.status)) {
     const failReason = workerResult.errors?.join('; ') || workerResult.memo_summary || 'Worker returned failure status without exception'
-    console.error(`[runWorkerTask] Worker returned failure status for task ${task.id}:`, failReason)
+    log.error('[runWorkerTask] Worker returned failure status', { module: 'engine/worker', goalId, taskId: task.id, userId, reason: failReason })
 
     try {
       await supabase.from('event_log').insert({
@@ -378,7 +379,7 @@ export async function runWorkerTask(
         created_by: userId,
       })
     } catch (dbErr) {
-      console.error('[runWorkerTask] Non-exception failure observability write failed:', dbErr)
+      log.error('[runWorkerTask] Non-exception failure observability write failed', { module: 'engine/worker', goalId, taskId: task.id, userId, error: String(dbErr) })
     }
   }
 
@@ -386,7 +387,7 @@ export async function runWorkerTask(
   } catch (workerErr: any) {
     // Step 3: Hardened Exception Handling — prevent silent stalls
     const errorMsg = workerErr.message || String(workerErr)
-    console.error(`[runWorkerTask] CRITICAL FAILURE for task ${task.id}:`, errorMsg)
+    log.error('[runWorkerTask] CRITICAL FAILURE', { module: 'engine/worker', goalId, taskId: task.id, userId, error: errorMsg })
 
     try {
       // 1. Force the goal_tasks status to 'failed' so the UI/Orc knows it's dead
@@ -425,7 +426,7 @@ export async function runWorkerTask(
       // 3. Reset department status to 'error'
       await supabase.from('departments').update({ status: 'error', current_task: null }).eq('id', deptRow.id)
     } catch (dbErr) {
-      console.error('[runWorkerTask] Emergency DB update failed:', dbErr)
+      log.error('[runWorkerTask] Emergency DB update failed', { module: 'engine/worker', goalId, taskId: task.id, userId, error: String(dbErr) })
     }
 
     throw workerErr

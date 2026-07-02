@@ -25,6 +25,7 @@ import { buildOrcContext, buildFinalPrompt, getModeInstructions, formatConversat
 import { getModel, callLLM } from './model'
 import { parseOrchestratorResponse, normalizeClarification } from './parse'
 import { logEvent } from './events'
+import { log } from '@/lib/log'
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ export async function runOrchestratorTask(
     const invalidTasks = result.plan.tasks.filter((t: any) => !activeSlugs.includes(t.dept.toLowerCase()))
 
     if (invalidTasks.length > 0) {
-      console.warn(`[Orchestrator] Hallucination detected: Unknown departments [${invalidTasks.map((t: any) => t.dept).join(', ')}]. Forcing retry...`)
+      log.warn('[Orchestrator] Hallucination detected — forcing retry', { module: 'engine/orchestrator', goalId, userId, unknownDepartments: invalidTasks.map((t: any) => t.dept) })
 
       const retryPrompt = `${prompt}\n\nCRITICAL ERROR: You proposed tasks for departments that do NOT exist: [${invalidTasks.map((t: any) => t.dept).join(', ')}]. \nONLY use these available departments: [${activeSlugs.join(', ')}]. \nRedraft the plan using ONLY these departments.`
 
@@ -438,6 +439,6 @@ export async function runOrcReport(goalId: string): Promise<void> {
       })
     }
   } catch (err) {
-    console.error('[runOrcReport] Failed:', err)
+    log.error('[runOrcReport] Failed', { module: 'engine/orchestrator', goalId, userId: goal.created_by, error: String(err) })
   }
 }

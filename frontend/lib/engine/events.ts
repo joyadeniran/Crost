@@ -5,6 +5,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { truncateString, cleanLargePayload } from '@/lib/utils'
 import { resolveDepartmentBySlug } from './departments'
+import { log } from '@/lib/log'
 
 export interface LogEventInput {
   event_type: string
@@ -40,6 +41,6 @@ export async function logEvent(input: LogEventInput): Promise<void> {
       created_by: input.created_by ?? null
     })
   } catch (err) {
-    console.error('[logEvent] Failed to write event:', err)
+    log.error('[logEvent] Failed to write event', { module: 'engine/events', goalId: input.goal_id, userId: input.created_by, eventType: input.event_type, error: String(err) })
   }
 }
