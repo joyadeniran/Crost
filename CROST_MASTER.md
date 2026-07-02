@@ -35,8 +35,17 @@ Rolled out to all 8 files in `lib/engine/*.ts` (21 `console.*` call sites → `l
 
 `tsc --noEmit`: clean. Confirmed no test in the repo spies on or asserts the exact console message strings that changed (`grep`ped for the old message text across `tests/`) — this was a pure log-format change, not a behavior change.
 
+### Local confirmation: 677/677 green
+Founder confirmed `npm run test:unit` green after both the atomic-claim commit (`7a9afb8`, 668→672) and the structured-logging commit (`f4e6e2e`, 672→677). `tsc --noEmit` clean throughout.
+
+### Session paused here — founder's call
+Asked whether to push into the two remaining Phase 3 items (state machine, worker retries/dead-letter) or stop. Founder chose to stop: both remaining items are large investigative efforts — the status vocab across goals/tasks/approvals/artifacts is inconsistent and scattered across ~60 files (a *characterization-first* state machine needs real per-entity investigation, not just writing an aspirational transition table), and `scripts/worker.ts` is a live polling process with zero test coverage that this sandbox cannot execute or verify at all (separate root-level package, no shared tsconfig/test runner). Rather than ship either half-verified, holding them for a dedicated session.
+
 ### Remaining Phase 3 scope (not started)
-Bounded retries + backoff for worker task execution, dead-letter status `failed_permanent`, heartbeat/stale-task reaper in `scripts/worker.ts`; `lib/state-machine.ts` explicit transition table for goal/task/approval/artifact status (currently transitions are scattered `.update({status:...})` calls with no central validation); `lib/log.ts` rollout to routes/`scripts/worker.ts`; idempotency audit across remaining duplicate-prone POSTs.
+Bounded retries + backoff for worker task execution, dead-letter status `failed_permanent`, heartbeat/stale-task reaper in `scripts/worker.ts`; `lib/state-machine.ts` explicit transition table for goal/task/approval/artifact status (currently transitions are scattered `.update({status:...})` calls with no central validation) — **start with a real investigation of the actual status vocab per entity before writing the table**, the same way the atomic-claim fix started by reading the actual route rather than assuming; `lib/log.ts` rollout to routes/`scripts/worker.ts`; idempotency audit across remaining duplicate-prone POSTs.
+
+### This session's total: 8 commits on `feature/gcp-challenge`
+`ca30c3e` (auth guard module), `3ad7a06` (38-route guard migration), `32188cb` (guard per-call secret fix), `c918f93` (lib/env.ts), `c120fc0` (env.ts required_error fix), `88cafc1` (Phase 2 exit-gate docs), `7a9afb8` (atomic dispatch claim), `f4e6e2e` (structured logging). Test suite: 654 → 677 (23 new tests, zero regressions, zero deletions). Both Phase 2's exit gate and the highest-value Phase 3 item (double-dispatch race) are closed and founder-verified.
 
 ---
 
