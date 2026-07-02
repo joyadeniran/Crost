@@ -43,6 +43,10 @@ Given `next.config.js` sets `typescript.ignoreBuildErrors: true` and `eslint.ign
 
 - **`// KNOWN-BUG(phase-1)`** — `lib/knowledge/extract-text.ts`, `extractSpreadsheet()`: the `catch` branch (low confidence + `"Spreadsheet parse failed"` warning) is effectively unreachable in practice. SheetJS's `XLSX.read()` is lenient across its format detectors and does not throw on garbage or empty buffers — it silently returns a workbook with zero sheets instead. Characterized in `tests/unit/extract-text.test.ts`. Not fixed this phase (behavior-preserving characterization only); worth tightening validation (e.g. reject empty/zero-sheet workbooks explicitly) in a later phase.
 
+## SPEC-DRIFT found during Phase 1 (T7)
+
+- **`// SPEC-DRIFT(§T7)`** — `app/api/goals/[id]/tasks/[taskId]/route.ts`: `docs/TEST_SPEC_10X.md` lists this route as `[dual]` (session OR `x-crost-internal-secret`), but the implementation only checks session auth (`createSupabaseServerComponentClient`) — there is no internal-secret branch. Characterized in `tests/unit/goals-task-patch.test.ts`. Not fixed this phase; if the route is meant to be callable by the worker/internal callers, that's a real gap worth closing in Phase 2/3.
+
 ## Exit gate status
 
 - [x] `docs/BASELINE.md` exists (this file).
