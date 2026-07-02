@@ -38,7 +38,7 @@ function mockSupabaseClient() {
           status: 'running',
           goal_id: 'goal-1',
           dept_slug: 'marketing',
-          created_by: 'user-1',
+          created_by: mockTaskCreatedBy,
         },
         error: null,
       }
@@ -75,6 +75,7 @@ function mockSupabaseClient() {
 
 // ── Mock user session state — toggled per test ─────────────────────────────
 let mockUserNull = false
+let mockTaskCreatedBy: string | null = 'user-1'
 
 vi.mock('@/lib/supabase', () => ({
   createServerSupabaseClient: vi.fn(() => mockSupabaseClient()),
@@ -103,6 +104,7 @@ beforeEach(() => {
   loggedEvents.length = 0
   memoInserts.length = 0
   mockUserNull = false
+  mockTaskCreatedBy = 'user-1'
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -213,5 +215,69 @@ describe('POST /api/worker/execute — auth gate', () => {
 
     const res = await POST(req)
     expect(res.status).toBe(401)
+  })
+
+  it('an invalid internal secret falls through to session auth (not trusted)', async () => {
+    mockUserNull = true // session also absent -> should still 401, proving the bad secret wasn't trusted
+    const { POST } = await import('@/app/api/worker/execute/route')
+
+    const req = new NextRequest('http://localhost/api/worker/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-crost-internal-secret': 'totally-wrong-secret' },
+      body: JSON.stringify({ taskId: 'task-1', goalId: 'goal-1', toolName: 'gmail.send', args: {}, userId: 'attacker-supplied-id' }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(401)
+  })
+
+  it('valid internal secret + body userId is trusted (proceeds past the auth gate)', async () => {
+    const { POST } = await import('@/app/api/worker/execute/route')
+    const req = makeRequest({
+      taskId: 'task-trusted',
+      goalId: 'goal-1',
+      userId: 'user-1', // task fixture's created_by also 'user-1' -> ownership passes
+      toolName: 'gmail.send_email',
+      args: {},
+    })
+    const res = await POST(req)
+    // executeToolCall is mocked to always reject in this suite, so the happy
+    // path still ends in the BUG-6 catch-all (500) — but critically it is NOT
+    // a 401/403, proving the trusted secret + matching ownership let it through
+    // the auth and ownership gates to actual execution.
+    expect(res.status).toBe(500)
+    expect(res.status).not.toBe(401)
+    expect(res.status).not.toBe(403)
+  })
+
+  it('returns 403 when the task belongs to a different user (session auth path)', async () => {
+    mockTaskCreatedBy = 'other-user' // session user is 'user-1' (default mock)
+    const { POST } = await import('@/app/api/worker/execute/route')
+
+    const req = new NextRequest('http://localhost/api/worker/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, // no internal secret -> session path
+      body: JSON.stringify({ taskId: 'task-owned-by-other', goalId: 'goal-1', toolName: 'gmail.send', args: {} }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(403)
+  })
+
+  it('owner (created_by matches session user) passes the ownership gate', async () => {
+    mockTaskCreatedBy = 'user-1' // matches default session mock
+    const { POST } = await import('@/app/api/worker/execute/route')
+
+    const req = new NextRequest('http://localhost/api/worker/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: 'task-owned', goalId: 'goal-1', toolName: 'gmail.send', args: {} }),
+    })
+
+    const res = await POST(req)
+    // Passes auth + ownership, then fails at BUG-6 catch-all (executeToolCall
+    // mocked to reject) — not a 401/403, proving it cleared both gates.
+    expect(res.status).not.toBe(401)
+    expect(res.status).not.toBe(403)
   })
 })
