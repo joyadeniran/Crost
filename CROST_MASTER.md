@@ -12,6 +12,26 @@
 
 ---
 
+## Session — 10x Rebuild: Phase 0 + Phase 1 (started)
+**Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS (Phase 0 done, Phase 1 started)
+**Branch**: `feature/gcp-challenge`
+
+### Phase 0 — Baseline
+`docs/BASELINE.md` created. `npm run type-check`: clean. `npm run test:unit`: 367/367 green (21 files). `npm run build`: could not be confirmed synchronously — the execution sandbox caps any single command at ~45s and cannot keep background processes alive across tool calls, and `next build` for this app (89 routes) reliably exceeds that. No errors surfaced in the time available; `typescript.ignoreBuildErrors`/`eslint.ignoreDuringBuilds` are set and `tsc --noEmit` is independently clean, so failure is unlikely but unverified. Recommend running `npm run build` locally/CI to confirm before the Phase 6 merge gate.
+
+### Phase 1 — Characterization tests (in progress)
+Gap analysis against `docs/TEST_SPEC_10X.md` T1–T8: most modules already had partial suites from prior sessions (risk-assessor, orc-decision-gate, artifact-transformers, execute-tool-call, worker-execute, llm-client, capability-checker, cost-tracker, google-oauth, gmail, recurring-missions, suggested-actions, calendar-prep, artifact-lifecycle, orc-learning, errors/utils). Identified zero-coverage modules: `idempotency.ts`, `rate-limit.ts`, `api-response.ts`, `crypto.ts`, `model-routing.ts`, `key-resolver.ts`, `output-classifier.ts`, `company-memo.ts`, `execute-suggested-action.ts`, `cost-table.ts`, `usage-logger.ts`, `lib/tools/parameter-resolver.ts` (dedicated), `lib/knowledge/extract-text.ts`, `lib/adk/*`, `app/api/mcp/route.ts`, and the full T7 route-auth matrix.
+
+Closed this session: `api-response.ts` (7 tests), `crypto.ts` (7 tests), `idempotency.ts` (10 tests) — 24 new tests, all green, `type-check` clean. Suite now 391 tests / 24 files.
+
+### Open Items
+- `npm run build` unverified in-sandbox (see Phase 0 note above) — verify before Phase 6.
+- Phase 1 remaining T1–T8 gaps (rate-limit, model-routing, key-resolver, output-classifier, company-memo, execute-suggested-action, cost-table, usage-logger, parameter-resolver, extract-text, adk/*, mcp route, T7 auth matrix) not yet started.
+- Legacy `__tests__/artifact-lifecycle.test.ts` and `__tests__/suggested-actions.test.ts` are not run by `vitest.config.ts` (only `tests/unit/**`) — pre-existing, worth consolidating in Phase 2.
+- `next.config.js` `serverExternalPackages` key triggers an "Invalid next.config.js options" warning on this Next version — cosmetic, but worth fixing in Phase 2/4 config cleanup.
+
+---
+
 ## Session v13.16 — Assistant-mode hang + both-domains OAuth + Render-domain finding
 **Date**: June 12, 2026  **Status**: ✅ Shipped  
 
