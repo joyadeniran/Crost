@@ -32,10 +32,19 @@ New/extended tests: `suggested-actions-execute.test.ts` (+1), `approvals-id.test
 
 `tsc --noEmit`: clean across the full project. Founder confirmed `npm run test:unit` green locally.
 
-### Remaining Phase 5 scope (not started)
-Mission Reports (spec §7: silently skips generating a report when there are no memos, no Sources section, zero real test coverage today), Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Artifact lifecycle (spec §9.4: `approved_by` is client-supplied with no server-side check it matches the authenticated founder — real trust gap; version bump only fires in `review` status, not `draft`), Playwright e2e extension for onboarding + waterfall lifecycle.
+### Mission Reports — spec §7 — DONE this session
+`lib/engine/orchestrator.ts`'s `runOrcReport()`:
+1. **No-memo bail bug**: silently `return`ed when a goal had zero `company_memos` rows — meaning a mission where every task failed before producing department output got no report at all, contradicting spec's explicit "written for successful, failed, and partial-completion missions". Fixed: builds a deterministic (non-LLM) debrief from `goal_tasks` status instead of bailing — no real output to summarize, so an LLM call would hallucinate or just restate the task list; a plain status rollup is more trustworthy for a failure report.
+2. **Missing Sources section**: spec requires "every Mission Report includes a Sources section listing every Memo entry, KB file, and tool call referenced during the mission" — never built at all. Built deterministically (not LLM-generated) from data already tracked: memo entries from the existing fetch, KB file IDs + tool calls aggregated from `artifacts.sources` (the same structured field `worker.ts` already populates per-artifact) across every artifact tied to the goal — reused existing tracking, no new bookkeeping. Deduped across artifacts.
 
-### This session's Phase 5 total so far: 1 commit (`cc1e1b8`)
+New tests: `tests/unit/orchestrator-report.test.ts` (8) — first real behavioral coverage of `runOrcReport`; the pre-existing `goals-report.test.ts` mocks the function entirely (tests the route, not the function).
+
+`tsc --noEmit`: clean across the full project.
+
+### Remaining Phase 5 scope (not started)
+Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Artifact lifecycle (spec §9.4: `approved_by` is client-supplied with no server-side check it matches the authenticated founder — real trust gap; version bump only fires in `review` status, not `draft`), Playwright e2e extension for onboarding + waterfall lifecycle.
+
+### This session's Phase 5 total so far: 2 commits (`cc1e1b8`, `c8b4bc7`)
 
 ---
 
