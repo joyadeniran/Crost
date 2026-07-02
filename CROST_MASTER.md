@@ -12,6 +12,27 @@
 
 ---
 
+## Session — 10x Rebuild: Phase 3 (Reliability) — atomic dispatch claim
+**Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
+**Branch**: `feature/gcp-challenge`
+
+### Confirmed real bug before touching anything
+`app/api/goals/[id]/dispatch/route.ts` had a genuine TOCTOU race: it `SELECT`ed `goal_tasks.status`, branched on whether it looked terminal, then — much later, after dependency checks, env-mode snapshot, and a goal-status update — unconditionally `upsert`ed the row to `status:'running'` and called `runWorkerTask(...)`. Two concurrent POSTs for the same `task_id` (a UI double-click, a retry racing the original, or a Chain Reaction recursive call landing at the same time as a manual dispatch) could both pass the early SELECT check and both reach the upsert+dispatch, double-executing the task (double email send, double artifact, double LLM spend). Founder chose "atomic claim fix first" when asked how to scope Phase 3, given this touches the live task-execution path.
+
+### Fix — guarded upsert, not a rewrite
+Extended `lib/db.ts`'s `QueryBuilder.upsert()` with an optional `guard: { column, notIn }` that appends a `WHERE "table"."column" NOT IN (...)` to the `DO UPDATE SET` clause — standard Postgres conditional-upsert pattern. `RETURNING` yields 0 rows when the guard blocks the write, which is a single round-trip, zero-race signal that someone else already claimed the row. Backward compatible: existing `.upsert()` callers without `guard` get identical SQL (verified in `tests/unit/db.test.ts`, new "emits no WHERE guard when guard is not passed" test).
+
+`dispatch/route.ts`: the old unconditional "mark task as running" upsert now passes `guard: { column: 'status', notIn: ['dispatched','completed','running','skipped','rejected'] }` and reads the `RETURNING` result. If null, returns `{dispatched:false, reason:'already_claimed', status:<current>}` instead of proceeding — `runWorkerTask` is never called a second time. The pre-existing early SELECT-based idempotency check (lines ~144-162) was left in place as a fast-path optimization (avoids wasted dependency-check work for the common already-done case); the atomic upsert is what actually guarantees correctness now, not the SELECT.
+
+New tests: `tests/unit/db.test.ts` (+2, guard SQL generation), `tests/unit/goals-dispatch.test.ts` (+2, "atomic claim" describe block — full happy-path dispatch with a table-and-op-aware mock builder, proving both branches: claim succeeds → dispatches once; claim blocked → returns `already_claimed`, `runWorkerTask` not called). Existing 8 auth/ownership/idempotency-gate tests in that file untouched and still pass (they all short-circuit at 401/404/422 before reaching the claim code).
+
+`tsc --noEmit`: clean. Could not run `vitest` in-sandbox this session (same shared-`node_modules`/native-binding issue as Phase 2.3 — sandbox is `linux-arm64`, `node_modules` currently has only `darwin-arm64` bindings from the founder's last local `npm run build`). Needs local `npm run test:unit` to confirm before continuing Phase 3.
+
+### Remaining Phase 3 scope (not started)
+Bounded retries + backoff for worker task execution, dead-letter status `failed_permanent`, heartbeat/stale-task reaper in `scripts/worker.ts`; `lib/state-machine.ts` explicit transition table for goal/task/approval/artifact status (currently transitions are scattered `.update({status:...})` calls with no central validation); structured logging (`lib/log.ts`, replace `console.*` in engine/worker/routes); idempotency audit across remaining duplicate-prone POSTs.
+
+---
+
 ## Session — 10x Rebuild: Phase 2 (2.1 done, 2.2 deferred, 2.3 in progress)
 **Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`

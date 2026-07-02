@@ -113,6 +113,39 @@ describe('db shim — upsert onConflict default', () => {
   })
 })
 
+describe('db shim — upsert guard (atomic claim, Phase 3)', () => {
+  it('appends a WHERE guard to the DO UPDATE clause, parameterized after the row values', async () => {
+    primeMeta({ jsonb: [], pk: ['id'] })
+    const { createDbClient } = await import('@/lib/db')
+
+    await createDbClient().from('goal_tasks_guard_t').upsert(
+      { goal_id: 'g1', task_id: 't1', status: 'running' },
+      {
+        onConflict: 'goal_id,task_id',
+        guard: { column: 'status', notIn: ['running', 'completed', 'dispatched', 'skipped', 'rejected'] },
+      }
+    )
+
+    const [sql, params] = lastDataQuery()!
+    expect(sql).toMatch(/DO UPDATE SET .* WHERE "goal_tasks_guard_t"\."status" NOT IN \(\$\d+, \$\d+, \$\d+, \$\d+, \$\d+\)/)
+    // Guard values come after the row's own bound values in the params array.
+    expect(params.slice(-5)).toEqual(['running', 'completed', 'dispatched', 'skipped', 'rejected'])
+  })
+
+  it('emits no WHERE guard when guard is not passed (backward compatible)', async () => {
+    primeMeta({ jsonb: [], pk: ['id'] })
+    const { createDbClient } = await import('@/lib/db')
+
+    await createDbClient().from('goal_tasks_noguard_t').upsert(
+      { goal_id: 'g1', task_id: 't1', status: 'running' },
+      { onConflict: 'goal_id,task_id' }
+    )
+
+    const [sql] = lastDataQuery()!
+    expect(sql).not.toContain('WHERE')
+  })
+})
+
 describe('db shim — .or() / .not() operator parsing', () => {
   function lastSelect(table: string) {
     const call = queryMock.mock.calls.find(

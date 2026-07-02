@@ -96,6 +96,7 @@ class QueryBuilder<T = Record<string, unknown>> {
   private _updateData: Partial<T> | null = null
   private _upsertRows: Partial<T>[] | null = null
   private _upsertConflict: string | null = null
+  private _upsertGuard: { column: string; notIn: unknown[] } | null = null
   private _isDelete = false
 
   constructor(table: string) {
@@ -298,10 +299,20 @@ class QueryBuilder<T = Record<string, unknown>> {
 
   update(data: Partial<T>) { this._updateData = data; return this }
 
-  upsert(data: Partial<T> | Partial<T>[], opts: { onConflict?: string } = {}) {
+  upsert(
+    data: Partial<T> | Partial<T>[],
+    opts: { onConflict?: string; guard?: { column: string; notIn: unknown[] } } = {}
+  ) {
     this._upsertRows = Array.isArray(data) ? data : [data]
     // null = "not specified" → resolved to the table's primary key at run time.
     this._upsertConflict = opts.onConflict ?? null
+    // Optional atomic claim guard: adds a WHERE clause to the DO UPDATE branch
+    // so the conflict-path write only applies when the *existing* row's
+    // column isn't already one of `notIn` — e.g. claiming a task only if it's
+    // not already 'running'/'completed'. RETURNING then yields 0 rows when
+    // the guard blocks the write, which callers use as "already claimed by
+    // someone else" without a separate SELECT-then-UPDATE race window.
+    this._upsertGuard = opts.guard ?? null
     return this
   }
 
@@ -357,14 +368,25 @@ class QueryBuilder<T = Record<string, unknown>> {
           const vals = cols.map(c => row[c])
           const conflictCols = conflictTarget.split(',').map(s => s.trim()).filter(Boolean)
           const updateCols = cols.filter(c => !conflictCols.includes(c))
+          let guardClause = ''
+          const guardVals: unknown[] = []
+          if (this._upsertGuard && updateCols.length) {
+            const placeholdersGuard = this._upsertGuard.notIn.map((v, i) => {
+              guardVals.push(v)
+              return `$${placeholders.length + i + 1}`
+            })
+            guardClause = placeholdersGuard.length
+              ? ` WHERE "${this._table}"."${this._upsertGuard.column}" NOT IN (${placeholdersGuard.join(', ')})`
+              : ''
+          }
           const updateSet = updateCols.length
-            ? `DO UPDATE SET ${updateCols.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')}`
+            ? `DO UPDATE SET ${updateCols.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')}${guardClause}`
             : 'DO NOTHING'
           const conflictClause = conflictCols.length
             ? `ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) ${updateSet}`
             : ''
           const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) ${conflictClause} RETURNING *`
-          const r = await pool.query(sql, vals)
+          const r = await pool.query(sql, [...vals, ...guardVals])
           results.push(r.rows[0])
         }
         if (this._isSingle || this._isMaybeSingle) return { data: results[0] ?? null, error: null }

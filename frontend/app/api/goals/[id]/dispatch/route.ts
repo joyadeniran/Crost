@@ -8,6 +8,13 @@
 // 3. DEPENDS_ON — checks all dependency tasks are 'completed' before dispatching
 // 4. TOCTOU FIX — goal status set with conditional WHERE clause
 // 5. ENV_MODE SNAPSHOT — locked at first dispatch, all workers in goal use the same mode
+// 6. ATOMIC CLAIM (Phase 3, 10x rebuild) — the actual "mark running + dispatch"
+//    write below is a single guarded upsert (lib/db.ts upsert `guard` option:
+//    DO UPDATE ... WHERE status NOT IN (claimed)). Two concurrent requests for
+//    the same task_id can no longer both pass a SELECT-based check and both
+//    call runWorkerTask — RETURNING is empty for whichever request loses the
+//    race, and it takes the "already claimed" branch instead of dispatching.
+//    See tests/unit/goals-dispatch.test.ts "atomic claim" describe block.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
@@ -226,11 +233,18 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // ─── Mark task as running (V5 status) (+ apply overrides) ─────────────────
     const isModified = !!task_override
-    
-    // Use upsert to handle cases where the orchestrator failed to insert the task row initially
-    const { error: upsertError } = await supabase
+    const CLAIMED_STATUSES = ['dispatched', 'completed', 'running', 'skipped', 'rejected']
+
+    // Atomic claim: inserts the row if the orchestrator failed to pre-insert
+    // it, or updates it to 'running' ONLY if it isn't already claimed/terminal
+    // (guard's WHERE clause on the DO UPDATE — see lib/db.ts). RETURNING is
+    // empty when a concurrent request already won the claim, so this single
+    // statement replaces the old SELECT-status-then-upsert pattern that left
+    // a race window for double dispatch (two callers both proceeding to
+    // runWorkerTask for the same task_id).
+    const { data: claimedTask, error: upsertError } = await supabase
       .from('goal_tasks')
-      .upsert({ 
+      .upsert({
         goal_id: params.id,
         task_id: task_id,
         created_by: goal.created_by,
@@ -247,8 +261,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         assigned_at: new Date().toISOString(),
         ...(isModified && { orc_notes: [{ ts: new Date().toISOString(), note: 'Founder modified task details before dispatch', action_taken: 'MODIFIED_BY_FOUNDER' }] })
       }, {
-        onConflict: 'goal_id,task_id'
+        onConflict: 'goal_id,task_id',
+        guard: { column: 'status', notIn: CLAIMED_STATUSES },
       })
+      .maybeSingle()
 
     if (upsertError) {
       console.error('[dispatch] Failed to upsert task row:', upsertError)
@@ -256,6 +272,33 @@ export async function POST(req: NextRequest, { params }: Params) {
         { success: false, error: 'Database synchronization failed', details: upsertError.message },
         { status: 500 }
       )
+    }
+
+    if (!claimedTask) {
+      // Guard blocked the write — another request already claimed or
+      // finished this task between our earlier idempotency pre-check and
+      // this atomic claim attempt. Report the current status instead of
+      // proceeding to dispatch a second time.
+      const { data: currentTask } = await supabase
+        .from('goal_tasks')
+        .select('status')
+        .eq('goal_id', params.id)
+        .eq('task_id', task_id)
+        .maybeSingle()
+      const responseBody = {
+        success: true,
+        data: {
+          dispatched: false,
+          reason: 'already_claimed',
+          status: currentTask?.status ?? 'unknown',
+          dept: task.dept,
+          task_id,
+          goal_id: goal.id,
+        },
+        timestamp: new Date().toISOString(),
+      }
+      await completeIdempotentRequest(req, supabase, idempotencyUserId, responseBody, 200)
+      return NextResponse.json(responseBody)
     }
 
     // Merge overrides into the task for execution
