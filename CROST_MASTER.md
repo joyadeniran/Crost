@@ -12,6 +12,33 @@
 
 ---
 
+## Session — 10x Rebuild: Phase 5 (Product polish against CROST_SPEC.md)
+**Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
+**Branch**: `feature/gcp-challenge`
+
+### Investigated all four Phase 5 areas before writing code
+Dispatched a research pass over §6.1 (Suggested Next Actions), §7 (Mission Reports), §8 (Memo rules), §9.4 (Artifact Sandbox Lifecycle) against the real implementation. All four have concrete, verified drift — none clean. Founder chose to start with Suggested Actions (worst state, highest blast radius since it touches the approval gate).
+
+### Suggested Actions — spec §6.1 — DONE this session
+Confirmed the live `suggested_action_status` DB enum (`suggested, tapped, approved, executing, completed, failed, dismissed`) against every code path writing to it before changing anything.
+
+1. **Approval-gate timing bug**: `app/api/suggested-actions/[id]/execute/route.ts` set `status='approved'` the moment an `approval_queue` row was merely queued — before the founder decided anything. Real violation of spec's "status = 'approved' only after founder confirms in Inbox". Fixed: status now stays `'tapped'` until `app/api/approvals/[id]/route.ts`'s PATCH decision handler resolves it.
+2. **Wrong-column bug** (pre-existing, found while fixing #1): that same approvals PATCH handler already had code attempting to resolve linked `suggested_actions` on execution success/failure, but queried `.eq('approval_id', approval.tool_execution_id)` — `tool_execution_id` is unrelated; `suggested_actions.approval_id` references `approval_queue.id`. Never matched a real row. Fixed both branches, plus added the missing approved/rejected resolution at decision time.
+3. **`schedule_recurring` never generated** — confirmed via code read. No mission-type taxonomy exists anywhere in the codebase, so added a conservative keyword classifier (`RECURRING_MISSION_PATTERNS` in `lib/suggested-actions.ts`) over whatever text is available at generation time (goal title + founder_input, task label, artifact title); false negatives are low-cost per spec's own framing, false positives are worse, so patterns are narrow by design.
+4. **No 14-day expiry job** existed (spec §6.1 lifecycle). New `app/api/suggested-actions/expire/route.ts`, mirroring `app/api/approvals/expire/route.ts`'s cron-secret pattern exactly. Reuses `'dismissed'` as the terminal status (DB enum has no distinct `'expired'` value).
+5. **Found `gcp-setup.sh`'s existing Cloud Scheduler entry for approval-expiry was itself broken** — pointed at `/api/cron/expire-approvals` (a route that doesn't exist) using a JSON body, when the real route (`/api/approvals/expire`) authenticates via an `x-cron-secret` header. That cron job has likely never successfully fired in production. Fixed path + auth, added the new suggested-action-expiry job the same way. Confirmed with founder that Render.com is fully decommissioned — GCP Cloud Scheduler is the only live path; no Render config touched.
+
+New/extended tests: `suggested-actions-execute.test.ts` (+1), `approvals-id.test.ts` (+2, new describe block), `suggested-actions-expire.test.ts` (new, 6), `suggested-actions-generation.test.ts` (new, 10 — first real behavioral coverage of `generateAndInsertSuggestedActions`; the pre-existing `suggested-actions.test.ts` is tautological, left untouched per "extend, don't delete").
+
+`tsc --noEmit`: clean across the full project. Founder confirmed `npm run test:unit` green locally.
+
+### Remaining Phase 5 scope (not started)
+Mission Reports (spec §7: silently skips generating a report when there are no memos, no Sources section, zero real test coverage today), Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Artifact lifecycle (spec §9.4: `approved_by` is client-supplied with no server-side check it matches the authenticated founder — real trust gap; version bump only fires in `review` status, not `draft`), Playwright e2e extension for onboarding + waterfall lifecycle.
+
+### This session's Phase 5 total so far: 1 commit (`cc1e1b8`)
+
+---
+
 ## Session — 10x Rebuild: Phase 4 (Security completion)
 **Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`
