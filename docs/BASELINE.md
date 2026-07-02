@@ -39,6 +39,10 @@ Given `next.config.js` sets `typescript.ignoreBuildErrors: true` and `eslint.ign
 - `next.config.js` has an "Invalid next.config.js options" warning for `serverExternalPackages` (unrecognized key on this Next version) — cosmetic warning only, does not fail the build. Worth fixing in Phase 2/4 config cleanup (likely should be `experimental.serverComponentsExternalPackages` on 14.2.x, or the key name needs updating for whatever Next version is actually pinned).
 - No KNOWN-BUG tags found yet — Phase 1 will surface these as characterization tests are written against current (possibly buggy) behavior.
 
+## KNOWN-BUGs found during Phase 1
+
+- **`// KNOWN-BUG(phase-1)`** — `lib/knowledge/extract-text.ts`, `extractSpreadsheet()`: the `catch` branch (low confidence + `"Spreadsheet parse failed"` warning) is effectively unreachable in practice. SheetJS's `XLSX.read()` is lenient across its format detectors and does not throw on garbage or empty buffers — it silently returns a workbook with zero sheets instead. Characterized in `tests/unit/extract-text.test.ts`. Not fixed this phase (behavior-preserving characterization only); worth tightening validation (e.g. reject empty/zero-sheet workbooks explicitly) in a later phase.
+
 ## Exit gate status
 
 - [x] `docs/BASELINE.md` exists (this file).
