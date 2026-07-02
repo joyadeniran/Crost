@@ -1,6 +1,31 @@
 import { createServerSupabaseClient } from '@/lib/supabase'
 import type { SuggestedAction } from '@/types'
 
+// ─── schedule_recurring detection (Phase 5, 10x rebuild) ──────────────────────
+// Spec §6.1: "Conditionally include schedule_recurring if the mission type
+// supports periodic regeneration (sales pipeline summary, weekly competitor
+// check, monthly metrics report)." There is no mission-type taxonomy anywhere
+// in the codebase (confirmed: no mission_type/goal_type column or field
+// exists) — this is a best-effort keyword classifier over whatever free text
+// is available at generation time (goal title/founder_input, task label,
+// artifact title). Intentionally conservative: false negatives (missing a
+// schedule_recurring suggestion) are low-cost per spec's own framing ("the
+// full list is always available on the artefact card"); false positives
+// (suggesting recurrence for a one-off mission) are the worse failure mode,
+// so the patterns are narrow rather than broad.
+const RECURRING_MISSION_PATTERNS: Array<{ pattern: RegExp; recurrence: string; intervalLabel: string }> = [
+  { pattern: /\b(sales\s*pipeline|pipeline\s*summary|deal\s*(flow|summary))\b/i, recurrence: 'RRULE:FREQ=WEEKLY', intervalLabel: 'week' },
+  { pattern: /\bcompetitor\b|\bcompetitive\s*(check|analysis|scan|report)\b/i, recurrence: 'RRULE:FREQ=WEEKLY', intervalLabel: 'week' },
+  { pattern: /\b(metrics|kpi|performance)\s*report\b|\bmonthly\s*(metrics|report)\b/i, recurrence: 'RRULE:FREQ=MONTHLY', intervalLabel: 'month' },
+]
+
+function detectRecurringMissionType(text: string): { recurrence: string; intervalLabel: string } | null {
+  for (const rule of RECURRING_MISSION_PATTERNS) {
+    if (rule.pattern.test(text)) return { recurrence: rule.recurrence, intervalLabel: rule.intervalLabel }
+  }
+  return null
+}
+
 // Generate standard generic actions per §6.1
 export async function generateAndInsertSuggestedActions({
   source_entity_type,
@@ -9,6 +34,7 @@ export async function generateAndInsertSuggestedActions({
   artifact_type,
   file_url,
   artifact_title,
+  mission_context,
   created_by
 }: {
   source_entity_type: 'artifact' | 'mission_report' | 'memo'
@@ -17,6 +43,11 @@ export async function generateAndInsertSuggestedActions({
   artifact_type?: string
   file_url?: string
   artifact_title?: string
+  // Optional free text (goal title + founder_input, task label, etc.) used
+  // only for schedule_recurring mission-type detection. Falls back to
+  // artifact_title alone when the caller doesn't have richer context handy —
+  // see call sites in lib/engine/{worker,orchestrator}.ts for what's passed.
+  mission_context?: string
   created_by: string
 }): Promise<string[]> {
   const supabase = createServerSupabaseClient()
@@ -112,6 +143,32 @@ export async function generateAndInsertSuggestedActions({
       required_inputs: ['destination_email'],
       risk_level: 'medium',
       execution_path: 'external',
+      created_by
+    })
+  }
+
+  // Conditionally include schedule_recurring per §6.1 — see
+  // RECURRING_MISSION_PATTERNS / detectRecurringMissionType above for the
+  // classification approach and its caveats.
+  const classificationText = [mission_context, artifact_title].filter(Boolean).join(' ')
+  const recurringMatch = classificationText ? detectRecurringMissionType(classificationText) : null
+  if (recurringMatch) {
+    actionsToInsert.push({
+      source_entity_type,
+      source_entity_id,
+      action_slug: 'schedule_recurring',
+      label: `Run this every ${recurringMatch.intervalLabel}`,
+      reasoning: 'This looks like a recurring mission type — Orc can keep it fresh automatically',
+      payload: {
+        artifact_id: source_entity_type === 'artifact' ? source_entity_id : null,
+        goal_id: goal_id || null,
+        title: artifact_title || 'Recurring Review',
+        recurrence: recurringMatch.recurrence,
+      },
+      required_tool: null,
+      required_inputs: [],
+      risk_level: 'low',
+      execution_path: 'internal',
       created_by
     })
   }

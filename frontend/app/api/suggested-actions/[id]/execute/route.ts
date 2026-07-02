@@ -224,8 +224,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     if ((result as any).status === 'requires_approval') {
+      // Phase 5 fix (spec §6.1 execution contract): a chip tap is intent, not
+      // approval. Per spec: "SuggestedAction.status = 'approved' only after
+      // founder confirms in Inbox" — this used to jump straight to 'approved'
+      // the moment an approval_queue row was merely CREATED, before the
+      // founder had decided anything. Status stays 'tapped' (already set
+      // above) with approval_id populated; app/api/approvals/[id]/route.ts's
+      // PATCH decision handler is what actually resolves it to
+      // approved/completed/failed once the founder decides.
       await supabase.from('suggested_actions')
-        .update({ status: 'approved', approval_id: (result as any).execution_id || null })
+        .update({ approval_id: (result as any).execution_id || null })
         .eq('id', actionId)
       const responseBody = {
         requires_approval: true,

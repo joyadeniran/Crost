@@ -88,6 +88,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     if (updateErr) throw updateErr
 
+    // Phase 5 fix (spec §6.1 execution contract): resolve any SuggestedAction
+    // linked to this approval (suggested_actions.approval_id -> approval_queue.id)
+    // now that the founder has actually decided. Previously the linked
+    // suggested_action's status was set to 'approved' the moment the approval
+    // row was merely QUEUED (in the [id]/execute route, at tap time) — this is
+    // the actual founder confirmation the spec requires before that status is
+    // legitimate. Guarded on status='tapped' so this is a no-op if there's no
+    // linked suggested_action, or it was already resolved by something else.
+    await supabase
+      .from('suggested_actions')
+      .update({
+        status: decision === 'approved' ? 'approved' : 'failed',
+        resolved_at: decision === 'rejected' ? new Date().toISOString() : null,
+      })
+      .eq('approval_id', params.id)
+      .eq('status', 'tapped')
+
     // Reset department status to idle
     await supabase
       .from('departments')
@@ -240,13 +257,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           }).eq('id', params.id)
           executionFinalStatus = 'executed'
 
-          // Mark the linked suggested_action chip as completed so the UI can transition
-          if (approval.tool_execution_id) {
-            await supabase.from('suggested_actions')
-              .update({ status: 'completed', resolved_at: new Date().toISOString() })
-              .eq('approval_id', approval.tool_execution_id)
-              .neq('status', 'completed')
-          }
+          // Mark the linked suggested_action chip as completed so the UI can
+          // transition. Phase 5 fix: this previously queried
+          // .eq('approval_id', approval.tool_execution_id) — tool_execution_id
+          // is an unrelated column on approval_queue; suggested_actions.approval_id
+          // actually references approval_queue.id (params.id), so this never
+          // matched a real row. It also unconditionally required
+          // approval.tool_execution_id to be truthy, which most suggested-action
+          // approvals never populate.
+          await supabase.from('suggested_actions')
+            .update({ status: 'completed', resolved_at: new Date().toISOString() })
+            .eq('approval_id', params.id)
+            .neq('status', 'completed')
 
           // Note: event_type 'tool_executed' is whitelisted in event_log CHECK constraint
           const { error: logErr } = await supabase.from('event_log').insert({
@@ -326,12 +348,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             execution_result: { error: executionError }
           }).eq('id', params.id)
 
-          if (approval.tool_execution_id) {
-            await supabase.from('suggested_actions')
-              .update({ status: 'failed' })
-              .eq('approval_id', approval.tool_execution_id)
-              .neq('status', 'completed')
-          }
+          // Phase 5 fix: same wrong-column bug as the success path above —
+          // approval_id, not tool_execution_id.
+          await supabase.from('suggested_actions')
+            .update({ status: 'failed' })
+            .eq('approval_id', params.id)
+            .neq('status', 'completed')
 
           // Mark the associated goal task as failed so it doesn't stay stuck in 'running'.
           const failedTaskId = (approval.payload as any)?.__task_id

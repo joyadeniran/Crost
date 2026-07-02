@@ -135,6 +135,22 @@ describe('POST /api/suggested-actions/[id]/execute', () => {
     expect(body.requires_approval).toBe(true)
   })
 
+  // Phase 5 fix (spec §6.1): a chip tap is intent, not approval — the founder
+  // hasn't decided anything yet when executeToolCall merely queues an
+  // approval_queue row. Status must stay 'tapped' (with approval_id recorded)
+  // until app/api/approvals/[id]/route.ts's PATCH decision handler resolves
+  // it. Previously this jumped straight to 'approved' right here, before any
+  // founder decision existed.
+  it('does NOT set status to approved when an approval is merely queued — stays tapped, only approval_id is recorded', async () => {
+    mockAction = { id: 'a1', status: 'suggested', action_slug: 'send_to_email', payload: { destination_email: 'x@y.com' }, required_inputs: [] }
+    executeToolCallMock.mockResolvedValueOnce({ status: 'requires_approval', execution_id: 'appr-1' })
+    await POST(makeReq(), { params: { id: 'a1' } })
+    const approvalUpdate = updateCalls.find((u) => 'approval_id' in u)
+    expect(approvalUpdate).toBeDefined()
+    expect(approvalUpdate.status).not.toBe('approved')
+    expect(approvalUpdate.approval_id).toBe('appr-1')
+  })
+
   it('catches executeToolCall throwing and returns 500 + marks failed', async () => {
     mockAction = { id: 'a1', status: 'suggested', action_slug: 'send_to_email', payload: { destination_email: 'x@y.com' }, required_inputs: [] }
     executeToolCallMock.mockRejectedValueOnce(new Error('boom'))

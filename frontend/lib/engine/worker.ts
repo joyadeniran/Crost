@@ -252,6 +252,8 @@ export async function runWorkerTask(
           artifact_type: uploaded.artifactType,
           file_url: uploaded.fileUrl,
           artifact_title: `Output: ${task.label}`,
+          // Phase 5: task label is the best available mission-type signal here.
+          mission_context: task.label,
           created_by: userId
         })
         if (actionIds.length > 0) {

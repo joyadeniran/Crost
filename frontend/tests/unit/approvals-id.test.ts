@@ -9,24 +9,34 @@ import { NextRequest } from 'next/server'
 let mockUser: { id: string } | null = { id: 'user-1' }
 let mockApproval: any = null
 let mockRateLimitAllowed = true
+// Phase 5: table-aware builder so suggested_actions writes (linked-action
+// resolution) can be asserted separately from approval_queue/departments/
+// goal_tasks/event_log writes that happen in the same PATCH handler.
+let updateCallsByTable: Record<string, any[]> = {}
 
 vi.mock('@/lib/supabase', () => ({
   createSupabaseServerComponentClient: vi.fn(async () => ({
     auth: { getUser: vi.fn(async () => ({ data: { user: mockUser }, error: null })) },
   })),
-  createServerSupabaseClient: vi.fn(() => {
-    const builder: any = {
-      select: vi.fn(() => builder),
-      eq: vi.fn(() => builder),
-      or: vi.fn(() => builder),
-      neq: vi.fn(() => builder),
-      maybeSingle: vi.fn(() => Promise.resolve({ data: mockApproval, error: null })),
-      update: vi.fn(() => builder),
-      insert: vi.fn(() => Promise.resolve({ error: null })),
-      single: vi.fn(() => Promise.resolve({ data: mockApproval, error: null })),
-    }
-    return { from: vi.fn(() => builder) }
-  }),
+  createServerSupabaseClient: vi.fn(() => ({
+    from: vi.fn((table: string) => {
+      const builder: any = {
+        select: vi.fn(() => builder),
+        eq: vi.fn(() => builder),
+        or: vi.fn(() => builder),
+        neq: vi.fn(() => builder),
+        maybeSingle: vi.fn(() => Promise.resolve({ data: table === 'approval_queue' ? mockApproval : null, error: null })),
+        single: vi.fn(() => Promise.resolve({ data: table === 'approval_queue' ? mockApproval : null, error: null })),
+        update: vi.fn((payload: any) => {
+          updateCallsByTable[table] = updateCallsByTable[table] || []
+          updateCallsByTable[table].push(payload)
+          return builder
+        }),
+        insert: vi.fn(() => Promise.resolve({ error: null })),
+      }
+      return builder
+    }),
+  })),
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -39,6 +49,7 @@ beforeEach(() => {
   mockUser = { id: 'user-1' }
   mockApproval = null
   mockRateLimitAllowed = true
+  updateCallsByTable = {}
 })
 
 function makeGetReq() {
@@ -117,5 +128,41 @@ describe('PATCH /api/approvals/[id] — auth/validation gates', () => {
     }
     const res = await PATCH(makePatchReq({ decision: 'rejected' }), { params: { id: 'appr-1' } })
     expect(res.status).toBe(200)
+  })
+})
+
+// Phase 5 fix (spec §6.1 execution contract): app/api/suggested-actions/[id]/
+// execute/route.ts used to jump straight to status='approved' the moment an
+// approval_queue row was merely queued — before the founder had decided
+// anything. The fix moves that resolution here, to the actual decision
+// handler, keyed on suggested_actions.approval_id = the approval being
+// decided. Also fixes a pre-existing bug further down this same route (the
+// execution success/failure branches queried
+// .eq('approval_id', approval.tool_execution_id) — the wrong column;
+// tool_execution_id is unrelated to suggested_actions.approval_id, which
+// references approval_queue.id — so those branches never matched a real row
+// before this fix either.
+describe('PATCH /api/approvals/[id] — linked suggested_action resolution', () => {
+  it('approving resolves a linked (tapped) suggested_action to approved, not a terminal state', async () => {
+    mockApproval = {
+      id: 'appr-1', user_id: 'user-1', created_by: 'user-1', status: 'pending',
+      action_type: 'other', payload: {}, department_id: 'dept-1',
+    }
+    await PATCH(makePatchReq({ decision: 'approved' }), { params: { id: 'appr-1' } })
+    const suggestedActionUpdates = updateCallsByTable['suggested_actions'] ?? []
+    const resolutionUpdate = suggestedActionUpdates.find((u) => u.status === 'approved')
+    expect(resolutionUpdate).toBeDefined()
+  })
+
+  it('rejecting resolves a linked (tapped) suggested_action to failed, with resolved_at stamped', async () => {
+    mockApproval = {
+      id: 'appr-1', user_id: 'user-1', created_by: 'user-1', status: 'pending',
+      action_type: 'other', payload: {}, department_id: 'dept-1',
+    }
+    await PATCH(makePatchReq({ decision: 'rejected' }), { params: { id: 'appr-1' } })
+    const suggestedActionUpdates = updateCallsByTable['suggested_actions'] ?? []
+    const resolutionUpdate = suggestedActionUpdates.find((u) => u.status === 'failed')
+    expect(resolutionUpdate).toBeDefined()
+    expect(resolutionUpdate.resolved_at).toBeTruthy()
   })
 })

@@ -426,6 +426,9 @@ export async function runOrcReport(goalId: string): Promise<void> {
         source_entity_type: 'mission_report',
         source_entity_id: newReport.id,
         goal_id: goalId,
+        // Phase 5: richest text signal available for schedule_recurring
+        // mission-type detection — goal title + the founder's original ask.
+        mission_context: `${goal.title ?? ''} ${goal.founder_input ?? ''}`,
         created_by: goal.created_by
       })
 

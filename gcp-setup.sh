@@ -21,7 +21,7 @@ gcloud config set project $PROJECT_ID
 gcloud config set run/region $REGION
 
 # ── 2. Enable required APIs ────────────────────────────────────────────────────
-echo "[1/8] Enabling APIs..."
+echo "[1/9] Enabling APIs..."
 gcloud services enable \
   run.googleapis.com \
   sqladmin.googleapis.com \
@@ -33,7 +33,7 @@ gcloud services enable \
   --quiet
 
 # ── 3. Create Cloud SQL (PostgreSQL 15) ────────────────────────────────────────
-echo "[2/8] Creating Cloud SQL instance (this takes ~5 minutes)..."
+echo "[2/9] Creating Cloud SQL instance (this takes ~5 minutes)..."
 gcloud sql instances create $DB_INSTANCE \
   --database-version=POSTGRES_15 \
   --region=$REGION \
@@ -45,7 +45,7 @@ gcloud sql instances create $DB_INSTANCE \
   --maintenance-window-hour=4 \
   --quiet 2>/dev/null || echo "  (instance already exists, skipping)"
 
-echo "[3/8] Creating database and user..."
+echo "[3/9] Creating database and user..."
 gcloud sql databases create $DB_NAME --instance=$DB_INSTANCE --quiet 2>/dev/null || true
 
 DB_PASSWORD=$(openssl rand -base64 24)
@@ -59,19 +59,19 @@ DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@/${DB_NAME}?host=/cloudsql/
 echo "  DATABASE_URL (Cloud SQL connector): saved to secrets"
 
 # ── 4. Run schema migrations ───────────────────────────────────────────────────
-echo "[4/8] Running schema migrations..."
+echo "[4/9] Running schema migrations..."
 echo "  → Import crost_all_migrations.sql to your Cloud SQL instance via:"
 echo "     gcloud sql connect $DB_INSTANCE --user=$DB_USER --database=$DB_NAME"
 echo "     Then run: \\i /path/to/crost_all_migrations.sql"
 echo "  → Or use Cloud SQL Studio in the GCP Console"
 
 # ── 5. Create GCS bucket ───────────────────────────────────────────────────────
-echo "[5/8] Creating GCS storage bucket..."
+echo "[5/9] Creating GCS storage bucket..."
 gsutil mb -p $PROJECT_ID -c STANDARD -l $REGION gs://$GCS_BUCKET 2>/dev/null || echo "  (bucket exists)"
 gsutil iam ch allUsers:objectViewer gs://$GCS_BUCKET
 
 # ── 6. Store secrets in Secret Manager ────────────────────────────────────────
-echo "[6/8] Storing secrets..."
+echo "[6/9] Storing secrets..."
 
 store_secret() {
   local name=$1
@@ -98,7 +98,7 @@ echo ""
 echo "  Run: gcloud secrets create SECRET_NAME --data-file=- <<< 'value'"
 
 # ── 7. Grant Cloud Run service account access ──────────────────────────────────
-echo "[7/8] Granting permissions..."
+echo "[7/9] Granting permissions..."
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
@@ -118,12 +118,30 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$SA" \
   --role="roles/aiplatform.user" --quiet
 
-# ── 8. Create Cloud Scheduler for approval expiry ──────────────────────────────
-echo "[8/8] Creating Cloud Scheduler job..."
+# ── 8. Create Cloud Scheduler jobs (approval + suggested-action expiry) ────────
+# Phase 5 fix (10x rebuild): this job previously pointed at
+# /api/cron/expire-approvals, which does not exist anywhere in the app — the
+# real route is /api/approvals/expire, and it authenticates via an
+# x-cron-secret HEADER (the consistent pattern across every real cron route:
+# /api/approvals/expire, /api/cron/recurring-missions, etc.), not a JSON
+# {"secret":...} body. This job has likely never successfully fired. Fixed
+# both the path and the auth mechanism below.
+echo "[8/9] Creating Cloud Scheduler job: approval expiry..."
 gcloud scheduler jobs create http crost-approval-expiry \
   --schedule="0 * * * *" \
-  --uri="https://crost-frontend-HASH-uc.a.run.app/api/cron/expire-approvals" \
-  --message-body='{"secret":"REPLACE_WITH_CRON_SECRET"}' \
+  --uri="https://crost-frontend-HASH-uc.a.run.app/api/approvals/expire" \
+  --headers="x-cron-secret=REPLACE_WITH_CRON_SECRET" \
+  --http-method=POST \
+  --location=$REGION \
+  --quiet 2>/dev/null || echo "  (update the URI after first deployment)"
+
+# Phase 5 (10x rebuild): suggested_actions 14-day auto-expiry, spec §6.1.
+# Daily (not hourly) since the expiry window is 14 days, not 24h.
+echo "[9/9] Creating Cloud Scheduler job: suggested-action expiry..."
+gcloud scheduler jobs create http crost-suggested-action-expiry \
+  --schedule="0 3 * * *" \
+  --uri="https://crost-frontend-HASH-uc.a.run.app/api/suggested-actions/expire" \
+  --headers="x-cron-secret=REPLACE_WITH_CRON_SECRET" \
   --http-method=POST \
   --location=$REGION \
   --quiet 2>/dev/null || echo "  (update the URI after first deployment)"
