@@ -12,6 +12,34 @@
 
 ---
 
+## Session — 10x Rebuild: Phase 4 (Security completion)
+**Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
+**Branch**: `feature/gcp-challenge`
+
+### Investigated all four line items before writing code
+1. **Rotate internal secret** — already done in a prior session. `.env.example` documents `WORKER_INTERNAL_SECRET` as primary and marks `SUPABASE_SERVICE_ROLE_KEY` "Legacy (no longer required post-GCP migration)"; all 11 production call sites (`grep -rn "x-crost-internal-secret"`) consistently use the `WORKER_INTERNAL_SECRET ?? SUPABASE_SERVICE_ROLE_KEY` fallback, and `lib/env.ts` (Phase 2.4) already validates one of the two is set. Nothing to do.
+2. **Security headers** — zero configured in `next.config.js`. Real gap, fixed this session.
+3. **CSRF** — `middleware.ts` only ran on page routes (`/dashboard`, `/onboarding`, `/login`, `/signup`); the matcher never included `/api/*`, so state-changing API requests had no origin check at all beyond the `SameSite=Lax` cookie setting. Real gap, fixed this session.
+4. **RLS audit** — `docs/REMEDIATION_HANDOFF.md` (referenced by the dev plan for the gap query) doesn't exist in this repo. Checked `cloudsql_migration.sql` (the canonical schema) directly: zero `ROW LEVEL SECURITY`/`CREATE POLICY` statements. The app moved off Supabase-hosted Postgres/PostgREST to raw Cloud SQL (`lib/db.ts`, a private `pg` pool only the app server can reach) — RLS is not the active security boundary anymore. The `supabase/migrations/*.sql` files with RLS policies are pre-migration and inactive. The real equivalent boundary is app-layer ownership scoping (`created_by = user.id` on every query, per the CLAUDE.md hard invariant), which Phase 1's T7 route-auth matrix already tests extensively. Logging this as **superseded, not actionable as originally scoped** rather than silently skipping it.
+
+### Security headers + next.config.js cleanup
+`next.config.js`: added `headers()` returning `Content-Security-Policy-Report-Only` (report-only deliberately — this app talks to Firebase Auth popups/iframes, Vertex AI, GCS, and Composio, so an enforcing policy risks breaking real flows without first seeing violation reports from production traffic), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security` (2yr, includeSubDomains, preload), `Referrer-Policy: strict-origin-when-cross-origin`.
+
+Same-file cleanup: moved `serverExternalPackages` (top-level) to `experimental.serverComponentsExternalPackages` — the top-level key is Next.js 15 only; on this app's Next 14.2.35 it was silently ignored, producing the "Invalid next.config.js options... Unrecognized key(s): 'serverExternalPackages'" warning visible in every local build (flagged as a Phase 1 open item, "cosmetic, fix in Phase 2/4"). Also found and removed a duplicate `experimental` object key later in the same file (the second one was silently shadowing the first's `serverActions.allowedOrigins` — object literal keys don't merge, the last one wins — now merged into one block, no behavior loss).
+
+New tests: `tests/unit/next-config.test.ts` (10) — `require()`s the actual config module and calls its real `headers()` function, asserting each header is present with the right value/semantics, and that the Next-14-compatibility fixes hold (no top-level `serverExternalPackages`, `experimental` defined exactly once).
+
+### CSRF origin-check middleware
+`middleware.ts`: added `checkCsrf()`, gated on `/api/*` + state-changing methods (POST/PUT/PATCH/DELETE) only. Trusted internal callers (`x-crost-internal-secret` matching `WORKER_INTERNAL_SECRET`/`SUPABASE_SERVICE_ROLE_KEY` — same fallback as `lib/auth/guard.ts`) always pass regardless of Origin. Otherwise: no `Origin` header → pass (non-browser callers, e.g. webhooks, don't send one — Origin-based CSRF checks are specifically a browser-request concern); `Origin` present → must exactly match the request's own resolved origin (`request.nextUrl.origin`, so both the run.app URL and the custom domain work automatically without a hardcoded list) or the explicit `NEXT_PUBLIC_APP_URL`/`https://app.crosthq.com` allowlist (same pattern already used for OAuth redirect URIs in `lib/google/oauth.ts`) — otherwise 403.
+
+Matcher expanded to include `/api/:path*` (previously API routes were never touched by this middleware at all). Added a short-circuit so API paths skip the Firebase JWKS token-verification round-trip entirely (nothing in the page-auth-redirect logic below reads `user` for an `/api/*` path) — avoids adding real latency to every API call for logic that was never going to apply to it.
+
+New tests: `tests/unit/middleware-csrf.test.ts` (14) — unit tests on the exported `isTrustedOrigin`/`checkInternalSecretHeader` pure functions, plus 5 full `middleware()` invocations against real `/api/*` `NextRequest`s (GET passes regardless of Origin; cross-origin POST → 403; same-origin POST → passes; cross-origin POST with valid internal secret → passes; POST with no Origin header → passes) — these don't need Firebase JWKS network mocking since the API-path short-circuit means that code is never reached.
+
+`tsc --noEmit`: clean. Needs local `npm run test:unit` to confirm (expecting 677 + 10 + 14 = 701) before continuing to the remaining Phase 4/plan items.
+
+---
+
 ## Session — 10x Rebuild: Phase 3 (Reliability) — atomic dispatch claim
 **Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`
