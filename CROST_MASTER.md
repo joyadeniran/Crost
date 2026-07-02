@@ -36,7 +36,17 @@ Matcher expanded to include `/api/:path*` (previously API routes were never touc
 
 New tests: `tests/unit/middleware-csrf.test.ts` (14) — unit tests on the exported `isTrustedOrigin`/`checkInternalSecretHeader` pure functions, plus 5 full `middleware()` invocations against real `/api/*` `NextRequest`s (GET passes regardless of Origin; cross-origin POST → 403; same-origin POST → passes; cross-origin POST with valid internal secret → passes; POST with no Origin header → passes) — these don't need Firebase JWKS network mocking since the API-path short-circuit means that code is never reached.
 
-`tsc --noEmit`: clean. Needs local `npm run test:unit` to confirm (expecting 677 + 10 + 14 = 701) before continuing to the remaining Phase 4/plan items.
+`tsc --noEmit`: clean. **Local confirmation: 701/701 green**, founder-verified.
+
+### Phase 4 — EXIT GATE STATUS: MET
+Per `docs/DEVELOPMENT_PLAN_10X.md`: "T7 auth-matrix tests green including new secret; headers verified by a unit test on the config; suite green."
+- T7 auth-matrix: green, no regressions (701/701). Internal-secret rotation was already complete pre-session.
+- Headers verified by a unit test on the config: ✅ `tests/unit/next-config.test.ts`.
+- Suite green: ✅ 701/701, `tsc --noEmit` clean.
+
+All 4 Phase 4 line items addressed this session: internal secret rotation (confirmed pre-existing), security headers (built), CSRF (built), RLS audit (investigated and documented as superseded by the Cloud SQL migration rather than actionable as originally scoped). **Phase 4 complete.**
+
+### This session's Phase 4 total: 1 commit (`8e7f739`, amended once for a commit-message quoting fix). Test suite: 677 → 701 (24 new tests, zero regressions).
 
 ---
 
