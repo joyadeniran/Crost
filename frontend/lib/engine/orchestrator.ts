@@ -389,19 +389,105 @@ export async function runOrcReport(goalId: string): Promise<void> {
   if (existingReport) return
 
   const { data: memos } = await supabase.from('company_memos').select('*').eq('goal_id', goalId)
-  if (!memos || memos.length === 0) return
 
-  const context = memos.map((m: any) => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
-  const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief. Use ## markdown headers (not **bold** pseudo-headers). Lead with the outcome, then key findings, then what's next. No preamble, no "I am pleased to present". Be direct and specific.`
+  // Phase 5 fix (spec §7: "Mission Reports are written for successful,
+  // failed, and partial-completion missions"). This used to `return` here
+  // when there were no memos — meaning a mission where every task failed
+  // before producing any department output got NO report at all, silently
+  // contradicting the spec's explicit failed-mission requirement. A goal
+  // with zero memos still has goal_tasks to describe, so build a
+  // deterministic (non-LLM) debrief from task outcomes instead of bailing.
+  // Skipping the LLM here is deliberate: there is no real department output
+  // to summarize, so an LLM call would either hallucinate content or just
+  // restate the task list with more words — a plain status rollup is more
+  // trustworthy for a failure report.
+  if (!memos || memos.length === 0) {
+    const { data: tasks } = await supabase.from('goal_tasks').select('label, dept_slug, status').eq('goal_id', goalId)
+    const taskList = tasks && tasks.length > 0
+      ? tasks.map((t: any) => `- [${t.dept_slug}] ${t.label} — **${t.status}**`).join('\n')
+      : '_No tasks were recorded for this mission._'
+    const body = [
+      `## Outcome`,
+      `No department produced output for this mission — nothing was saved to the Memo.`,
+      ``,
+      `## Tasks`,
+      taskList,
+      ``,
+      `## Sources`,
+      `_None — no Memo entries, Knowledge Base files, or tool calls were recorded for this mission._`,
+    ].join('\n')
 
-  try {
-    const { model: reportModel } = await getModel('summarization', goal.created_by)
-    const { content } = await callLLM(reportModel, prompt, "You are Orc, a sharp Chief of Staff. Write concise, direct mission debriefs in clean markdown. Use ## and ### headers for sections. No ceremonial language. Get straight to the point.", goal.created_by)
     const { data: newReport } = await supabase.from('company_memos').insert({
       goal_id: goalId,
       from_department: 'Orchestrator',
       title: `[Mission Report] ${goal.title}`,
-      body: content,
+      body,
+      priority: 'high',
+      source_type: 'orchestrator',
+      created_by: goal.created_by
+    }).select('id').single()
+
+    if (newReport) {
+      await generateAndInsertSuggestedActions({
+        source_entity_type: 'mission_report',
+        source_entity_id: newReport.id,
+        goal_id: goalId,
+        mission_context: `${goal.title ?? ''} ${goal.founder_input ?? ''}`,
+        created_by: goal.created_by
+      })
+      await logEvent({
+        event_type: 'goal_mission_report_written',
+        department_slug: 'orchestrator',
+        goal_id: goalId,
+        description: `Mission Report written for goal: "${goal.title}" (no department output)`,
+        created_by: goal.created_by,
+      })
+    }
+    return
+  }
+
+  const context = memos.map((m: any) => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
+  const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief. Use ## markdown headers (not **bold** pseudo-headers). Lead with the outcome, then key findings, then what's next. No preamble, no "I am pleased to present". Be direct and specific. Do NOT write a "Sources" section yourself — one will be appended automatically after your content.`
+
+  try {
+    const { model: reportModel } = await getModel('summarization', goal.created_by)
+    const { content } = await callLLM(reportModel, prompt, "You are Orc, a sharp Chief of Staff. Write concise, direct mission debriefs in clean markdown. Use ## and ### headers for sections. No ceremonial language. Get straight to the point.", goal.created_by)
+
+    // Phase 5 fix (spec §7): "Every Mission Report includes a Sources
+    // section listing every Memo entry, KB file, and tool call referenced
+    // during the mission." No Sources section was ever built — the LLM
+    // output alone (whatever it happened to include) was used as-is. Built
+    // deterministically rather than left to the LLM, so it's guaranteed
+    // accurate rather than merely plausible. KB files and tool calls are
+    // pulled from artifacts.sources (the same structured field worker.ts
+    // already populates per-artifact — kb_file_ids/tool_calls — so this
+    // reuses existing tracking rather than inventing new bookkeeping).
+    const { data: goalArtifacts } = await supabase
+      .from('artifacts')
+      .select('sources')
+      .eq('goal_id', goalId)
+    const kbFileIds = new Set<string>()
+    const toolCalls: string[] = []
+    for (const art of goalArtifacts ?? []) {
+      const src = (art as any).sources ?? {}
+      for (const id of src.kb_file_ids ?? []) kbFileIds.add(id)
+      for (const tc of src.tool_calls ?? []) {
+        if (tc?.service && tc?.action) toolCalls.push(`${tc.service}.${tc.action}`)
+      }
+    }
+    const sourcesLines = [
+      `## Sources`,
+      `**Memo entries:** ${memos.map((m: any) => `[${m.from_department}] ${m.title}`).join('; ') || 'none'}`,
+      `**Knowledge Base files:** ${kbFileIds.size > 0 ? Array.from(kbFileIds).join(', ') : 'none'}`,
+      `**Tool calls:** ${toolCalls.length > 0 ? Array.from(new Set(toolCalls)).join(', ') : 'none'}`,
+    ].join('\n')
+    const contentWithSources = `${content.trim()}\n\n${sourcesLines}`
+
+    const { data: newReport } = await supabase.from('company_memos').insert({
+      goal_id: goalId,
+      from_department: 'Orchestrator',
+      title: `[Mission Report] ${goal.title}`,
+      body: contentWithSources,
       priority: 'high',
       source_type: 'orchestrator',
       created_by: goal.created_by
