@@ -8,13 +8,12 @@
 export const dynamic = 'force-dynamic'
 
 import { executeToolCall } from "@/lib/tools/execute-tool-call";
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { cleanLargePayload } from "@/lib/utils";
+import { requireUserOrInternal } from "@/lib/auth/guard";
 
 // uploadArtifactFile logic extracted into unified execute-tool-call layer
-
-const INTERNAL_SECRET = process.env.WORKER_INTERNAL_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(req: NextRequest) {
   // Hoisted so the catch block can reference them for observability writes
@@ -38,20 +37,11 @@ export async function POST(req: NextRequest) {
     // Auth gate: accept either a valid user session OR the internal service secret.
     // The internal secret path is used by server-side workers (runWorkerTask).
     // External callers without a session or the secret are rejected.
-    const internalSecret = req.headers.get('x-crost-internal-secret')
-
-    if (internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET) {
-      // Trusted internal call — accept userId from body (must still pass ownership check below)
-      userId = bodyUserId ?? null
-    } else {
-      // Browser / external call — derive userId from authenticated session only
-      const authClient = await createSupabaseServerComponentClient()
-      const { data: { user } } = await authClient.auth.getUser()
-      if (!user) {
-        return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-      }
-      userId = user.id
+    const guardResult = await requireUserOrInternal(req, { bodyUserId })
+    if (!guardResult.ok) {
+      return guardResult.response
     }
+    userId = guardResult.via === 'internal' ? (bodyUserId ?? null) : guardResult.userId
 
     const supabase = createServerSupabaseClient();
 

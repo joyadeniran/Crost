@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { requireUser } from '@/lib/auth/guard'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -18,9 +19,9 @@ const CreateEventSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
     if (!allowed) {
@@ -58,9 +59,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createSupabaseServerComponentClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    const guardResult = await requireUser(req)
+    if (!guardResult.ok) return guardResult.response
+    const user = { id: guardResult.userId }
 
     const { allowed, retryAfterSeconds } = checkRateLimit(user.id)
     if (!allowed) {
