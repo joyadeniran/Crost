@@ -24,11 +24,17 @@ Gap analysis against `docs/TEST_SPEC_10X.md` T1–T8: most modules already had p
 
 Closed this session: `api-response.ts` (7 tests), `crypto.ts` (7 tests), `idempotency.ts` (10 tests) — 24 new tests, all green, `type-check` clean. Suite now 391 tests / 24 files.
 
-### Open Items
-- `npm run build` unverified in-sandbox (see Phase 0 note above) — verify before Phase 6.
-- Phase 1 remaining T1–T8 gaps (rate-limit, model-routing, key-resolver, output-classifier, company-memo, execute-suggested-action, cost-table, usage-logger, parameter-resolver, extract-text, adk/*, mcp route, T7 auth matrix) not yet started.
-- Legacy `__tests__/artifact-lifecycle.test.ts` and `__tests__/suggested-actions.test.ts` are not run by `vitest.config.ts` (only `tests/unit/**`) — pre-existing, worth consolidating in Phase 2.
-- `next.config.js` `serverExternalPackages` key triggers an "Invalid next.config.js options" warning on this Next version — cosmetic, but worth fixing in Phase 2/4 config cleanup.
+### Phase 1 — closed out this session
+All previously-zero-coverage T1–T8 modules now have characterization tests: `rate-limit`, `model-routing`, `key-resolver`, `output-classifier`, `company-memo`, `execute-suggested-action`, `cost-table`, `usage-logger`, `lib/tools/parameter-resolver`, `lib/knowledge/extract-text`, `app/api/mcp/route`. Suite grew from 367 → **518 tests across 33 files**, all green, `type-check` clean throughout (verified after every commit). One `KNOWN-BUG(phase-1)` logged (see below).
+
+### Open Items (handoff — not completed this session)
+- **`npm run build` still unverified** — sandbox cannot run a >45s foreground command or keep background processes alive across tool calls; `next build` for this app consistently exceeds that. No errors surfaced. Run locally/CI before Phase 6.
+- **T7 route-auth matrix** (the security lock — ~25 routes × 3-4 tests) not started. Highest-value remaining Phase 1 item; do this before Phase 2 if resuming.
+- **`lib/adk/{agents,runner,tools}.ts`** (agent tree, zod schemas) untested.
+- **Phase 2 (god-module split of `lib/llm-client.ts`, 1745 lines) intentionally NOT started this session.** Read the full file (deeply interdependent: `runOrchestratorTask`/`runWorkerTask`/`runOrcReport` share module-level constants and helpers). A mechanical split done without the ability to run a full `next build` or exercise the live app is a real risk of silently breaking orchestration — this sandbox can only verify via `tsc --noEmit` + `vitest`, not integration/e2e. Given the hard rule "never commit... refactors [without] zero behavior change" and that Phase 1's tests are the safety net for exactly this refactor, recommend doing Phase 2 in an environment where `npm run build` and ideally `npm run dev` + manual smoke test are available, with the T7 matrix (route-level safety net) finished first.
+- Phases 3–6 (worker durability, security hardening, product/spec polish + e2e, final merge) not started — each is independently plan-sized at 1–4 days against a live production app; same reasoning as above applies even more strongly (worker retry logic and security headers are exactly the kind of change you do not want to ship unverified).
+- Legacy `__tests__/artifact-lifecycle.test.ts` / `__tests__/suggested-actions.test.ts` still outside `vitest.config.ts`'s `include` — consolidate in Phase 2.
+- `next.config.js` `serverExternalPackages` warning — cosmetic, fix in Phase 2/4 config cleanup.
 
 ---
 
