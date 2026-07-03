@@ -173,6 +173,44 @@ Available tools:
 - Cloud Run services use **service account IAM** (no hardcoded credentials)
 - Row-level scoping: every query filters by `created_by = userId`
 
+## Codebase Module Map (post-10x-rebuild)
+
+`frontend/lib/llm-client.ts` (originally 1,744 lines — "the god module") was
+split in Phase 2 into `frontend/lib/engine/`, and now exists only as a
+19-line barrel re-export so nothing else broke during the migration:
+
+| Module | Responsibility |
+|---|---|
+| `engine/model.ts` | `getModel`, `CLOUD_MODEL`, `callLiteLLM`, `callLLM`, `callEmbeddings` |
+| `engine/prompt.ts` | `buildFinalPrompt`, `buildOrcContext`, `getModeInstructions`, `formatConversationHistory` |
+| `engine/parse.ts` | `parseApprovalRequest`, `extractJsonObject`, `parseOrchestratorResponse`, `normalizeClarification` |
+| `engine/orchestrator.ts` | `runOrchestratorTask` (Orc's planning loop), `runOrcReport` (Mission Report synthesis, spec §7) |
+| `engine/worker.ts` | `runWorkerTask` (department task execution) |
+| `engine/memo.ts` | `getMemoBrief`, `getMemos`, `saveContextMemo` |
+| `engine/budget.ts` | `checkTokenBudget` |
+| `engine/events.ts` | `logEvent` |
+| `engine/departments.ts` | Department resolution helpers |
+
+Other load-bearing `lib/` modules introduced or hardened during the
+rebuild:
+
+| Module | Responsibility |
+|---|---|
+| `lib/auth/guard.ts` | Central auth guard (`requireUser`, `requireUserOrInternal`) — replaces per-route copy-pasted session/internal-secret checks (Phase 2.3) |
+| `lib/env.ts` | Zod-validated required env vars, fail-fast at boot (Phase 2.4) |
+| `lib/api-response.ts`, `lib/errors.ts` | Uniform `apiOk`/`apiError` response shape + error taxonomy |
+| `lib/log.ts` | Structured JSON-lines logging (`level`, `message`, `userId`, `goalId`, `taskId`, `module`) — rolled out to `lib/engine/*` (Phase 3) |
+| `lib/dual-write-log.ts` | Shared helper making `company_memo` dual-write failures observable instead of silently swallowed (Phase 5, spec §8) |
+| `lib/state-machine.ts` | Characterization-based status transition tables for goals/goal_tasks/approval_queue/artifacts (Phase 3) |
+| `lib/db.ts` | The one canonical Cloud SQL `pg` client (`createDbClient`), including guarded conditional-upsert support (atomic dispatch claim, Phase 3) |
+| `lib/company-memo.ts` | Singular `company_memo` table CRUD — the spec §8 structured source of truth |
+| `lib/suggested-actions.ts`, `lib/execute-suggested-action.ts` | Suggested Next Actions generation (spec §6.1) and execution gateway — note: `execute-suggested-action.ts`'s gateway is not wired to any current UI caller and writes status values/columns that don't exist in the live schema; the actually-used execution path is `app/api/suggested-actions/[id]/execute/route.ts` |
+| `scripts/worker.ts` | Separate root-level polling supervisor (own `package.json`, no shared tsconfig/test runner) — bounded retry/backoff/dead-letter reaper for stalled tasks (Phase 3) |
+
+`app/api/**` routes call into `lib/engine/*` and the modules above; nothing
+in `app/api/**` should read `userId` from a request body without going
+through `requireInternal`/`requireUserOrInternal`.
+
 ## Challenge Track: Track 1 — Build Net-New Agents
 
 This submission demonstrates:
