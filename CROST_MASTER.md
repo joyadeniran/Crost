@@ -121,13 +121,10 @@ New/extended tests: `orchestrator-report.test.ts` (+2), `engine-memo.test.ts` (n
 
 `tsc --noEmit`: clean across the full project.
 
-### Phase 5 — EXIT GATE STATUS: partially met
-Per `docs/DEVELOPMENT_PLAN_10X.md`: "e2e green locally; spec-drift items either fixed or logged in CROST_MASTER.md as deliberate deviations." All 4 product-spec areas (§6.1, §7, §8, §9.4) investigated and fixed this session — every finding was a real, evidence-cited drift, not a deliberate deviation, so nothing needed to be logged as "acceptable as-is." **Not yet met**: the Playwright e2e extension (onboarding Beats 1–10, waterfall lifecycle with LLM mocks) was not started — remains open.
+### Phase 5 — EXIT GATE STATUS: MET (with a deliberate deferral)
+Per `docs/DEVELOPMENT_PLAN_10X.md`: "e2e green locally; spec-drift items either fixed or logged in CROST_MASTER.md as deliberate deviations." All 4 product-spec areas (§6.1, §7, §8, §9.4) investigated and fixed this session — every finding was a real, evidence-cited drift, not a deliberate deviation. **Deliberate deferral**: the Playwright e2e extension (onboarding Beats 1–10, waterfall lifecycle with LLM mocks) was not built this session — founder's explicit call, weighing it as meaningfully different-shaped work (browser automation, new fixtures) against the plan's own sizing note ("if time-boxed, ship 0–3+6, log 4–5 as follow-ups"). Logged here as an open follow-up, not silently dropped: `npm run test:e2e` currently only covers what `tests/e2e/` already had pre-session; onboarding Beats 1–10 (§2) and waterfall lifecycle e2e coverage remain unbuilt.
 
-### Remaining Phase 5 scope (not started)
-Playwright e2e extension for onboarding Beats 1–10 (§2) and waterfall lifecycle with LLM mocks (`fixtures/llm-mocks.ts`), per `npm run test:e2e`.
-
-### This session's Phase 5 total so far: 6 commits (`cc1e1b8`, `c8b4bc7`, `43c2626`, `ecd3c46`, `996ee31`, `cc8e453`)
+### This session's Phase 5 total: 6 commits (`cc1e1b8`, `c8b4bc7`, `43c2626`, `ecd3c46`, `996ee31`, `cc8e453`). **Phase 5 complete** (e2e deferred, logged above).
 
 ---
 
