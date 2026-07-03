@@ -112,10 +112,22 @@ New tests: 5 in `tests/unit/artifacts-id.test.ts`, all confirmed failing against
 
 `tsc --noEmit`: clean across the full project.
 
-### Remaining Phase 5 scope (not started)
-Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Playwright e2e extension for onboarding + waterfall lifecycle.
+### Memo rules — spec §8 — DONE this session
+Investigated with `executor-discipline` rigor before concluding scope. Spec line 572 explicitly sanctions `company_memo` (singular, source of truth) and `company_memos` (plural, legacy chat/log) coexisting — "new writes prefer the structured `company_memo`." So the real bug is narrower than "wrong table used": the dual-write to `company_memo` was fire-and-forget with `.catch(() => {})` at all three call sites that perform it (`orchestrator.ts:507`, `engine/memo.ts:87`, `execute-tool-call.ts:404`) — any failure to persist to the declared source-of-truth table was completely invisible, no log, no metric, no retry.
 
-### This session's Phase 5 total so far: 5 commits (`cc1e1b8`, `c8b4bc7`, `43c2626`, `ecd3c46`, `996ee31`)
+Fixed all three: `orchestrator.ts` and `memo.ts` fixed inline (each already had per-function test coverage this session to extend); `execute-tool-call.ts` — no existing test reaches that branch (would need mocking the entire Composio/GCS pipeline, disproportionate for a logging fix), so extracted the shared pattern into `lib/dual-write-log.ts` (`logDualWriteFailure`), independently unit-testable, wired at that one site. Control flow unchanged (still fire-and-forget, per spec's own design) — only makes real failures observable.
+
+New/extended tests: `orchestrator-report.test.ts` (+2), `engine-memo.test.ts` (new, 3), `dual-write-log.test.ts` (new, 3). All confirmed failing against pre-fix code by trace before implementing.
+
+`tsc --noEmit`: clean across the full project.
+
+### Phase 5 — EXIT GATE STATUS: partially met
+Per `docs/DEVELOPMENT_PLAN_10X.md`: "e2e green locally; spec-drift items either fixed or logged in CROST_MASTER.md as deliberate deviations." All 4 product-spec areas (§6.1, §7, §8, §9.4) investigated and fixed this session — every finding was a real, evidence-cited drift, not a deliberate deviation, so nothing needed to be logged as "acceptable as-is." **Not yet met**: the Playwright e2e extension (onboarding Beats 1–10, waterfall lifecycle with LLM mocks) was not started — remains open.
+
+### Remaining Phase 5 scope (not started)
+Playwright e2e extension for onboarding Beats 1–10 (§2) and waterfall lifecycle with LLM mocks (`fixtures/llm-mocks.ts`), per `npm run test:e2e`.
+
+### This session's Phase 5 total so far: 6 commits (`cc1e1b8`, `c8b4bc7`, `43c2626`, `ecd3c46`, `996ee31`, `cc8e453`)
 
 ---
 
