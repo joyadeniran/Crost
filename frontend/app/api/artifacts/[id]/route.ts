@@ -40,10 +40,21 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
+// Phase 5 fix (spec §9.4): approved_by removed from client-accepted input.
+// Evidence: cloudsql_migration.sql:445-446 defines artifacts.approved_by as
+// TEXT (Firebase UID, same convention as created_by), but this schema
+// validated it as a UUID — a format real Firebase UIDs fail, and no
+// frontend caller ever sent it (grep-confirmed) — so it was always null.
+// Root cause: approved_by was designed as client input instead of a
+// server-derived value at the moment of approval, unlike published_at,
+// which the DB trigger (enforce_artifact_status_transition) already stamps
+// server-side on the same review->active transition. Now derived below from
+// the authenticated session, the same way — never trust-worthy as client
+// input since the artifact owner could otherwise attribute approval to an
+// arbitrary UID.
 const PatchSchema = z.object({
   title: z.string().min(1).optional(),
   status: z.enum(['draft', 'review', 'active', 'paused', 'deprecated', 'discarded']).optional(),
-  approved_by: z.string().uuid().optional(),
 })
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -97,12 +108,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
 
-    // Bump version when editing during review phase
-    const versionBump = artifact.status === 'review' && isFieldEdit ? { version: artifact.version + 1 } : {}
+    // Bump version on field edits during draft or review (spec §9.4 line
+    // 655: "draft: ... Version increments on each edit"; line 656 says the
+    // same for review). Previously only checked for 'review' — draft edits
+    // never bumped version.
+    const versionBump = ['draft', 'review'].includes(artifact.status) && isFieldEdit ? { version: artifact.version + 1 } : {}
+
+    // Phase 5 fix (spec §9.4): approved_by is server-derived from the
+    // authenticated session at the moment of transition INTO active, never
+    // accepted from the client (see PatchSchema comment above).
+    const approvalStamp = artifact.status !== 'active' && parsed.status === 'active' ? { approved_by: user.id } : {}
 
     const { data: updated, error: updateErr } = await supabase
       .from('artifacts')
-      .update({ ...parsed, ...versionBump })
+      .update({ ...parsed, ...versionBump, ...approvalStamp })
       .eq('id', params.id)
       .select()
       .single()
