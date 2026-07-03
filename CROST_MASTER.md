@@ -3,18 +3,58 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.16  
-**Last Updated:** June 12, 2026  
-**Deployment Status:** ✅ LIVE — Assistant-mode hang fixed; both-domains OAuth.  
+**Current Version:** 13.18  
+**Last Updated:** July 3, 2026  
+**Deployment Status:** ✅ LIVE — 10x rebuild Phases 0–5 complete on `feature/gcp-challenge`, Phase 6 (verification & merge) in progress; not yet merged to `main`.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Repo:** https://github.com/joyadeniran/Crost (public, default branch = submission code)  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New).
 
 ---
 
-## Session — Model handover: pre-flight capture (Fable 5 → successor models)
-**Date**: 2026-07-03 **Status**: 📋 SNAPSHOT — read this first if you are a new model picking up the 10x rebuild
+## Session — 10x Rebuild: Phase 6 (Verification & merge prep)
+**Date**: 2026-07-03 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`
+
+### KNOWN-BUG / SPEC-DRIFT cleanup (plan item 2)
+Grepped the full repo for remaining `KNOWN-BUG` tags — one found, in `tests/unit/extract-text.test.ts`. Fixed: `lib/knowledge/extract-text.ts`'s `extractSpreadsheet()` reported `'high'` confidence unconditionally whenever `XLSX.read()` didn't throw, but SheetJS is lenient and rarely throws on garbage/empty buffers — so an unparseable spreadsheet was reported as high-confidence extraction with no real content. Now explicitly detects empty-content across all sheets and downgrades to `'low'` confidence with a warning. Test updated (not deleted) to assert corrected behavior; `docs/BASELINE.md` updated to RESOLVED.
+
+Second item — the `goals/[id]/tasks/[taskId]` `[dual]`-auth SPEC-DRIFT from Phase 1 — investigated, not fixed: grepped for any internal/worker caller of this route and found none (only `WarRoom.tsx`, founder session-initiated). Building unused internal-secret bypass logic would add auth surface with no matching, testable need. Documented in `docs/BASELINE.md` as a deliberate deviation — either the test spec's `[dual]` catalog entry is aspirational and should be corrected, or dual-mode should be added if/when a real internal caller (e.g. a future worker reaper interaction) needs it.
+
+### Housekeeping: institutional memory was untracked in git
+An earlier handover snapshot (see entry below) flagged that `CLAUDE.md`, `docs/DEVELOPMENT_PLAN_10X.md`, `docs/TEST_SPEC_10X.md`, and `.claude/skills/crost/SKILL.md` — the entire institutional memory that has guided this rebuild — were sitting untracked in git the whole time, on one machine. Committed (`400d39c`). `.claude/settings.local.json` added to `.gitignore` (machine-specific, not institutional memory).
+
+### ARCHITECTURE.md — module map added (plan item 3)
+Added a "Codebase Module Map" section documenting the actual post-refactor `lib/engine/*` split (Phase 2) and the load-bearing modules introduced/hardened since (`lib/auth/guard.ts`, `lib/env.ts`, `lib/log.ts`, `lib/dual-write-log.ts`, `lib/state-machine.ts`, etc.) — the pre-existing file was a high-level submission/architecture diagram with no code-structure documentation at all.
+
+`.env.example` reviewed — already accurate and complete (`WORKER_INTERNAL_SECRET`, `CRON_SECRET`, `DATABASE_URL` all present and documented); no changes needed.
+
+### Full verification suite (plan item 1) — status
+`tsc --noEmit`: clean across the full project, confirmed repeatedly throughout this session including after this Phase 6 batch. Cannot run `npm run test:unit`, `npm run test:e2e`, `npm run lint`, or `npm run build` in-sandbox (shared `node_modules` has only `darwin-arm64` native bindings from the founder's local machine; sandbox is `linux-arm64` — the same constraint noted every session). **Needs founder confirmation**: `npm run test:all && npm run type-check && npm run lint && npm run build`, all green, before this phase's exit gate can be called met.
+
+Expected test count based on every commit's stated new-test additions since the last founder-confirmed number (701/701, Phase 4 exit gate) — **unverified, pending the founder's actual run**: +18 (`lib/state-machine.ts`), +19 (Suggested Actions: suggested-actions-execute +1, approvals-id +2, suggested-actions-expire +6, suggested-actions-generation +10), +8 (Mission Reports: orchestrator-report.test.ts), +5 (Artifact lifecycle: artifacts-id.test.ts), +8 (Memo rules: orchestrator-report +2, engine-memo +3, dual-write-log +3) = 701 + 58 = **759 expected**, zero regressions or deletions claimed throughout (every fix this session followed "extend, don't delete"). Worker retry/reaper logic (`scripts/worker.ts`) has zero automated test coverage by design (separate package, no test runner) — verified live against the real Cloud SQL DB instead (see Phase 3 entry).
+
+### Remaining before Phase 6 can close
+1. Founder runs the full check suite above and confirms green (or reports failures to fix).
+2. Push `feature/gcp-challenge` and open the PR to `main` (plan item 4) — founder's call on timing/whether to merge immediately or hold for a final look.
+3. Playwright e2e extension remains deliberately deferred (Phase 5 exit-gate entry) — not a Phase 6 blocker per the plan's own wording ("spec-drift items either fixed or logged... as deliberate deviations"), but worth flagging in the PR description as known follow-up work, not silently omitted.
+
+---
+
+## Session — Model handover: pre-flight capture (Fable 5 → successor models)
+**Date**: 2026-07-03 **Status**: 📋 SNAPSHOT — SUPERSEDED, see "Phase 6" entry above this one for current status
+**Branch**: `feature/gcp-challenge`
+
+> **UPDATE (2026-07-03, later same day)**: everything this snapshot lists as
+> "remaining" or "not started" below is now done — Phase 5 is complete
+> (Memo rules §8, Artifact lifecycle §9.4 including the `approved_by` fix
+> this snapshot recommended doing first, both closed), the housekeeping flag
+> at the bottom is resolved (institutional memory committed, `400d39c`), and
+> Phase 6 is in progress. Left the original text below unedited for the
+> historical record — read the Phase 6 entry at the top of this file for
+> what's actually true now. Only the Playwright e2e extension (item 3 in
+> "what I would do next" below) remains genuinely undone, deliberately
+> deferred per founder decision — see the Phase 5 exit-gate entry.
 
 Written 4 days before the authoring model is retired. This is the current mental
 model of the rebuild, verified against the working tree and git log today.
