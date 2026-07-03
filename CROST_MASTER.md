@@ -12,6 +12,67 @@
 
 ---
 
+## Session — Model handover: pre-flight capture (Fable 5 → successor models)
+**Date**: 2026-07-03 **Status**: 📋 SNAPSHOT — read this first if you are a new model picking up the 10x rebuild
+**Branch**: `feature/gcp-challenge`
+
+Written 4 days before the authoring model is retired. This is the current mental
+model of the rebuild, verified against the working tree and git log today.
+
+### Where the 10x rebuild actually stands (verified, not from memory)
+- **Phases 0–4: COMPLETE.** Baseline recorded (`docs/BASELINE.md`, 367/367 green,
+  type-check clean). God module split done — `lib/llm-client.ts` is a 19-line
+  barrel; engine lives in `lib/engine/{model,prompt,parse,orchestrator,worker,
+  memo,budget,events,departments}.ts`. `lib/auth/guard.ts`, `lib/env.ts`,
+  `lib/state-machine.ts`, `lib/log.ts` all exist and are live. Phase 4 exit gate
+  confirmed 701/701 (`fafd52d`). RLS item resolved as superseded — the boundary
+  is app-layer ownership scoping, not RLS (see Phase 4 entry below).
+- **Phase 2.2 (lib/data/ typed repos) was DEFERRED, not done.** No `lib/data/`
+  exists. The two DB access styles still coexist. This is the largest remaining
+  architectural debt; don't mistake Phase 2's "complete" gate for this being done.
+- **Phase 5: IN PROGRESS.** Done: Suggested Actions §6.1 (`cc1e1b8`) and Mission
+  Reports §7 (`c8b4bc7`), both founder-verified. Remaining, with drift already
+  diagnosed (see Phase 5 entry below): **Memo rules §8** (orchestrator writes
+  primarily to legacy `company_memos` plural; spec-correct singular
+  `company_memo` is a silently-failable secondary write), **Artifact lifecycle
+  §9.4** (`approved_by` is client-supplied with NO server-side check against the
+  authenticated founder — a real trust gap, arguably a security bug, do this
+  first; and version bump only fires in `review` status, not `draft`), and the
+  **Playwright e2e extension** (onboarding Beats 1–10 + waterfall lifecycle).
+- **Phase 6 (verification & merge to main): not started.**
+
+### What I would do next, in order, and why
+1. **Artifact §9.4 `approved_by` server-side check** — it's the approval gate's
+   integrity, the product's core trust primitive. Smallest diff: derive
+   `approved_by` from the authenticated session, ignore the client value; add a
+   T-series test proving a mismatched client value is overridden/rejected.
+2. **Memo §8 dual-write inversion** — make singular `company_memo` the primary,
+   hard-failing write; keep plural as legacy fallback if anything still reads it
+   (grep first). The v11.34 entry below documents the dual-write intent.
+3. **Playwright e2e extension**, then **Phase 6 gate**.
+4. Only after merge: revisit deferred Phase 2.2 (`lib/data/`) as its own effort.
+   Don't interleave it with Phase 5/6 — the test suite is the safety net and
+   repo-layer churn invalidates the least of it when done in isolation.
+
+### Judgment calls a successor should preserve
+- Every Phase 5 fix so far began by verifying the LIVE DB enum/schema against
+  code before changing anything (e.g. `suggested_action_status`). Keep doing
+  that — the schema has drifted from spec more than once.
+- Pattern-match infra fixes to existing exemplars (the new expire route mirrors
+  `approvals/expire` exactly). Novelty in cron/auth wiring has repeatedly been
+  where production breaks (the Scheduler job that never fired, fixed 2026-07-02).
+- When a plan item turns out to be already-done or superseded (Phase 4 items 1
+  and 4), log it explicitly as such — never silently skip, never redo.
+
+### Housekeeping flag (important)
+`CLAUDE.md`, `docs/DEVELOPMENT_PLAN_10X.md`, `docs/TEST_SPEC_10X.md`, and
+`.claude/skills/` are currently **untracked in git** (`git status`). That's the
+entire institutional memory sitting uncommitted on one machine. Commit them to
+`feature/gcp-challenge` before doing anything else. (`.claude/settings.local.json`
+should stay untracked — add to `.gitignore`.)
+
+---
+
 ## Session — 10x Rebuild: Phase 5 (Product polish against CROST_SPEC.md)
 **Date**: 2026-07-02 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`
@@ -41,10 +102,20 @@ New tests: `tests/unit/orchestrator-report.test.ts` (8) — first real behaviora
 
 `tsc --noEmit`: clean across the full project.
 
-### Remaining Phase 5 scope (not started)
-Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Artifact lifecycle (spec §9.4: `approved_by` is client-supplied with no server-side check it matches the authenticated founder — real trust gap; version bump only fires in `review` status, not `draft`), Playwright e2e extension for onboarding + waterfall lifecycle.
+### Artifact lifecycle — spec §9.4 — DONE this session
+`app/api/artifacts/[id]/route.ts`. Applied `executor-discipline` skill from this point (evidence-cited, test-first, one step at a time).
 
-### This session's Phase 5 total so far: 2 commits (`cc1e1b8`, `c8b4bc7`)
+1. **`approved_by` trust gap (P1, security posture)**: `cloudsql_migration.sql:445-446` defines `artifacts.approved_by` as `TEXT` (Firebase UID, same convention as `created_by`), but `PatchSchema` validated it as `z.string().uuid()` — a format real Firebase UIDs fail — and grep confirms no frontend caller ever sent it. Net effect: permanently null on every artifact, contradicting its own type comment. Root cause: designed as client input instead of server-derived, unlike `published_at` (already stamped server-side by the DB trigger on the same transition). Fixed: removed from `PatchSchema` (Zod strips unknown keys — client-supplied value is now a no-op); server-derives `approved_by = user.id` automatically on transition into `active`.
+2. **Draft-state versioning gap**: spec line 655 — "draft: ... Version increments on each edit." `versionBump` only checked `status === 'review'`; draft edits never bumped version. Fixed: `['draft','review'].includes(artifact.status)`.
+
+New tests: 5 in `tests/unit/artifacts-id.test.ts`, all confirmed failing against pre-fix code by trace before implementing. Both existing tautological "approved_by" tests left untouched per "extend, don't delete" — still tautological, not fixed this session (flagged as a known gap).
+
+`tsc --noEmit`: clean across the full project.
+
+### Remaining Phase 5 scope (not started)
+Memo rules (spec §8: orchestrator writes primarily to the legacy `company_memos` table while the spec-correct `company_memo` singular table is only a secondary silently-failable write), Playwright e2e extension for onboarding + waterfall lifecycle.
+
+### This session's Phase 5 total so far: 5 commits (`cc1e1b8`, `c8b4bc7`, `43c2626`, `ecd3c46`, `996ee31`)
 
 ---
 
