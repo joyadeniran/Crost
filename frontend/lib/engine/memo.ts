@@ -75,6 +75,8 @@ export async function saveContextMemo(goalId: string, content: string, userId: s
     })
 
     // DUAL-WRITE: Log as a decision in singular company_memo (§8)
+    // Phase 5 fix: same observability fix as runOrcReport's identical
+    // pattern — a failure here used to be completely invisible.
     if (userId) {
       logDecision(supabase, userId, {
         id: crypto.randomUUID(),
@@ -84,7 +86,7 @@ export async function saveContextMemo(goalId: string, content: string, userId: s
         reasoning: 'Direct founder input provided during orchestration.',
         made_by: 'founder',
         created_at: new Date().toISOString()
-      }).catch(() => {})
+      }).catch((err) => log.warn('[saveContextMemo] company_memo dual-write (logDecision) failed', { module: 'engine/memo', goalId, userId, error: String(err) }))
     }
   } catch (err) {
     log.error('[saveContextMemo] Failed', { module: 'engine/memo', goalId, userId, error: String(err) })

@@ -3,6 +3,7 @@ import { runComposioTool, ToolResult } from "./providers/composio";
 import { detectOutputType } from "@/lib/artifact-transformers";
 import { addTaskLog, addArtifactReference } from "../company-memo";
 import { normalizeToolName } from "@/lib/utils";
+import { logDualWriteFailure } from "@/lib/dual-write-log";
 
 export type ToolCallPayload = {
   service: string;
@@ -401,7 +402,11 @@ async function handleToolResultArchiving({
         memoBody = `Executed tool: ${result.service}.${result.action}\n\nOutput saved as downloadable artifact (ID: ${artifact.id}).`;
         
         // DUAL-WRITE: Add artifact reference to singular company_memo (§8)
-        addArtifactReference(supabase, userId, artifact.id).catch(() => {});
+        // Phase 5 fix: this used to swallow failures completely silently
+        // (.catch(() => {})) — see lib/dual-write-log.ts for the shared fix
+        // and rationale (same pattern also fixed at the two other call sites
+        // in lib/engine/orchestrator.ts and lib/engine/memo.ts).
+        logDualWriteFailure('executeToolCall', addArtifactReference(supabase, userId, artifact.id), { goalId, taskId, userId });
 
         // Generate suggested next-step chips for this tool-output artifact (§6.1)
         try {

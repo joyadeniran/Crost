@@ -74,8 +74,9 @@ vi.mock('@/lib/suggested-actions', () => ({
   generateAndInsertSuggestedActions: (...args: any[]) => generateActionsMock(...args),
 }))
 
+const logWarnMock = vi.fn()
 vi.mock('@/lib/log', () => ({
-  log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  log: { debug: vi.fn(), info: vi.fn(), warn: (...args: any[]) => logWarnMock(...args), error: vi.fn() },
 }))
 
 import { runOrcReport } from '@/lib/engine/orchestrator'
@@ -90,6 +91,36 @@ beforeEach(() => {
   logEventMock.mockClear()
   logDecisionMock.mockClear()
   callLLMMock.mockClear()
+  logWarnMock.mockClear()
+})
+
+// Phase 5 fix (spec §8 — "company_memo (singular) is the source of truth").
+// Evidence: logDecision(...).catch(() => {}) silently swallowed failures
+// with zero observability — no log, no metric, no retry. Root cause: the
+// dual-write to the source-of-truth table was fire-and-forget with no error
+// visibility at all. This does not change control flow (still
+// fire-and-forget, spec sanctions the dual-table design at line 572) — it
+// only makes a real failure observable instead of invisible.
+describe('runOrcReport — dual-write failure visibility (spec §8)', () => {
+  it('logs a warning when the company_memo dual-write (logDecision) fails, instead of swallowing it silently', async () => {
+    mockMemos = [{ from_department: 'marketing', title: 'Notes', body: 'x' }]
+    logDecisionMock.mockRejectedValueOnce(new Error('db unavailable'))
+    await runOrcReport('goal-1')
+    // Flush the microtask queue so the fire-and-forget .catch() has run.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(logWarnMock).toHaveBeenCalled()
+    const [message, fields] = logWarnMock.mock.calls[0]
+    expect(message).toContain('logDecision')
+    expect(fields).toEqual(expect.objectContaining({ goalId: 'goal-1' }))
+  })
+
+  it('does not log a warning when the dual-write succeeds', async () => {
+    mockMemos = [{ from_department: 'marketing', title: 'Notes', body: 'x' }]
+    logDecisionMock.mockResolvedValueOnce(undefined)
+    await runOrcReport('goal-1')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(logWarnMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('runOrcReport — no-memo fallback (spec §7 failed-mission requirement)', () => {
