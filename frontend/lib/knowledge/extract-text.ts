@@ -120,10 +120,26 @@ function extractSpreadsheet(buffer: Buffer, ext: string): ExtractionResult {
   try {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const lines: string[] = [];
+    let hasContent = false;
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName];
       const csv = XLSX.utils.sheet_to_csv(sheet);
+      if (csv.trim().length > 0) hasContent = true;
       lines.push(`=== Sheet: ${sheetName} ===\n${csv}`);
+    }
+    // Phase 6 fix (was KNOWN-BUG(phase-1)): XLSX.read() is lenient and does
+    // not throw on garbage/empty buffers — it silently returns a workbook
+    // with zero sheets, or sheets with no rows, instead. The catch branch
+    // below was written to signal a failed extraction but was effectively
+    // unreachable, so a genuinely unparseable file was reported as "high"
+    // confidence with essentially no content. Detect that case explicitly.
+    if (!hasContent) {
+      return {
+        text: lines.join('\n\n'),
+        method: 'local',
+        confidence: 'low',
+        warnings: ['Spreadsheet parse produced no readable content — file may be empty, corrupted, or in an unsupported format.'],
+      };
     }
     return {
       text: lines.join('\n\n'),

@@ -110,18 +110,23 @@ describe('extractText — spreadsheet (real xlsx)', () => {
     expect(result.text).toContain('1,2')
   })
 
-  // KNOWN-BUG(phase-1): extractSpreadsheet's catch branch (low confidence +
-  // "Spreadsheet parse failed" warning) is effectively unreachable in practice —
-  // SheetJS's XLSX.read() is lenient across format detectors and does not throw
-  // even on garbage/empty buffers; it silently returns a workbook with zero
-  // sheets instead. Characterizing actual behavior here rather than the
-  // presumably-intended error path. Logged in docs/BASELINE.md.
-  it('returns an empty joined string with "high" confidence for an unparseable buffer (SheetJS does not throw)', async () => {
+  // FIXED (phase-6, was KNOWN-BUG(phase-1)): extractSpreadsheet's catch
+  // branch (low confidence + "Spreadsheet parse failed" warning) was
+  // effectively unreachable in practice — SheetJS's XLSX.read() is lenient
+  // across format detectors and does not throw even on garbage/empty
+  // buffers; it silently returns a workbook with zero (or empty) sheets
+  // instead, and the function reported "high" confidence regardless. Root
+  // cause: confidence was set unconditionally on the non-throw path, never
+  // checking whether any content was actually extracted. Fixed by
+  // explicitly detecting the empty-content case and downgrading confidence
+  // + adding a warning, rather than relying on XLSX.read() throwing (which
+  // it doesn't). See docs/BASELINE.md for the original characterization.
+  it('downgrades to "low" confidence with a warning for an unparseable/empty buffer (SheetJS does not throw, so this is detected explicitly)', async () => {
     const result = await extractText(Buffer.alloc(0), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'empty.xlsx')
     expect(result.method).toBe('local')
-    expect(result.confidence).toBe('high')
-    expect(result.text).toBe('=== Sheet: Sheet1 ===\n')
-    expect(result.warnings).toBeUndefined()
+    expect(result.confidence).toBe('low')
+    expect(result.warnings).toBeDefined()
+    expect(result.warnings![0]).toMatch(/no (readable )?content|empty/i)
   })
 })
 
