@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Apple / service auth keys — never commit
 *.p8
+
+# Local Claude Code / agent session settings — machine-specific, not institutional memory
+.claude/settings.local.json
