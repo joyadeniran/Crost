@@ -26,10 +26,15 @@ vi.mock('@/lib/supabase', () => ({
       eq: vi.fn((col: string, val: any) => { eqCalls.push([col, val]); return builder }),
       contains: vi.fn(() => builder),
       order: vi.fn(() => builder),
-      limit: vi.fn(() => Promise.resolve({ data: mockMemos, error: mockListError })),
+      // Mirrors the real shim (lib/db.ts): .limit() stays chainable (returns
+      // the builder), the actual query only resolves when awaited via .then().
+      // A prior version of this mock resolved eagerly inside .limit(), which
+      // broke as soon as a filter (goal_id/source_type) was applied *after*
+      // .limit(50) — the same order the real route uses.
+      limit: vi.fn(() => builder),
       insert: vi.fn(() => builder),
       single: vi.fn(() => Promise.resolve({ data: insertedMemo, error: null })),
-      then: (resolve: any) => Promise.resolve({ error: null }).then(resolve),
+      then: (resolve: any) => Promise.resolve({ data: mockMemos, error: mockListError }).then(resolve),
     }
     return { from: vi.fn(() => builder) }
   }),
