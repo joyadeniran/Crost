@@ -12,6 +12,34 @@
 
 ---
 
+## Session — Production incident + P1 bug fix (out-of-band, same day as Phase 6)
+**Date**: 2026-07-04 **Status**: ✅ FIXED
+
+### Production incident: total DB failure (P0, resolved)
+Founder reported every DB-touching route (departments, calendar-events, tools, goal creation) returning 500 on `app.crosthq.com`. Root-caused via Cloud SQL console + Cloud Run revision inspection (log-based debugging was unproductive — pivoted to checking the Secret Manager `DATABASE_URL` value directly): the `crost` Cloud SQL user's password had drifted from the password baked into the `DATABASE_URL` secret (which only had a single version, never updated). No code deploy was involved — last Cloud Run revision was from Jun 12; this was a pure infra/secret-rotation gap. Fixed by adding a new `DATABASE_URL` secret version with the current password (URL-encoding the `@` in the password as `%40`) and redeploying to pick it up. Confirmed fixed live (departments/dashboard loading again). **Follow-up recommended, not yet built**: a scheduled health check hitting a real DB-backed endpoint so this alerts instead of waiting for a founder report; treat Cloud SQL password rotation and `DATABASE_URL` secret rotation as one atomic operation going forward.
+
+### P1: Orc responses (and other WarRoom panels) silently failing to render
+Founder reported asking Orc "What can you do?" produced no response and no visible error. Root cause: `lib/supabase-browser.ts` (the client-side Supabase→Firebase/GCP compatibility shim) has a real `auth.*` implementation but its `.from(table)` is a stub (`makeQueryBuilder()`) that always resolves `{ data: [], error: null }` / `{ data: null, error: null }` regardless of table/filters — a leftover from the Supabase→Cloud SQL migration that was never ported to real API calls for these call sites. Three sites in `components/war-room/WarRoom.tsx` depended on it directly:
+- `SynthesisReportCard` — fetched the `company_memos` row that renders Orc's answer/mission report. Always got `[]`, so the card silently rendered nothing (`if (!report) return null`) even though the backend had already completed the goal and written the answer (confirmed via direct DB query: `goals.outcome` had the correct assistant response, `status = 'completed'`).
+- `DeferredMissionReportChips` — suggested-action chips after a mission report. Always empty.
+- Inline failed-goal error-detail panel — last 3 `event_log` rows for a failed goal. Always empty.
+
+None of these throw (`error: null`), which is why there was no console error, no toast — a clean, total silent failure.
+
+**Fix** (test-first, `tsc --noEmit` clean; unit tests need founder to run locally — sandbox can't run vitest, native-binding mismatch):
+- `app/api/memos/route.ts` — added optional `goal_id` and `source_type` query filters (ownership scoping via `created_by` unaffected); added `goal_id` to the select list. Tests added: `tests/unit/memos-route.test.ts` (+3).
+- `app/api/event-log/route.ts` (new) — ownership-scoped GET, optional `goal_id` + comma-separated `event_type` filters, `limit` (default 20, capped at 50). Tests: `tests/unit/event-log-route.test.ts` (new, 9).
+- `components/war-room/WarRoom.tsx` — replaced all three `supabaseClient.from(...)` call sites with `fetch()` calls to the routes above; removed the now-unused `supabaseClient` import and a stale comment referencing it.
+
+**Found but deliberately NOT fixed in this pass (flagged for founder decision)**:
+- `app/signup/page.tsx` line ~74 also calls `supabaseClient.from('user_consents').insert(...)` — same dead stub. Low severity: it's explicitly marked best-effort in a comment, and the real, compliance-relevant consent write already happens server-side in `POST /api/onboarding/complete` (step 6) via the real pg-backed client. Redundant, not urgent.
+- Five more files use `supabaseClient.channel(...)` for Supabase Realtime subscriptions, also dead against the same stub (`channel()`/`.on()`/`.subscribe()` never fire): `components/providers/RealtimeProvider.tsx`, `components/event-log/EventLogClient.tsx`, `components/dashboard/LiveEventsPanel.tsx`, `components/providers/LayoutStoreHydrator.tsx`, `components/approvals/ApprovalsLiveRefresh.tsx`. Checked `LiveEventsPanel.tsx` specifically: it degrades gracefully (initial list comes from a real server-rendered prop), but new events never stream in live without a page refresh. Same likely story for the other four — not confirmed individually. This is a real but lower-severity, broader fix (5 files, "replace realtime push with polling" is a different shape of change per component) — deliberately scoped out of this pass pending founder sign-off on the approach (poll interval? keep SSE? something else?).
+
+### Task list
+`#11` (this fix) marked in_progress → pending founder's local test:unit + type-check confirmation before closing.
+
+---
+
 ## Session — 10x Rebuild: Phase 6 (Verification & merge prep)
 **Date**: 2026-07-03 **Status**: 🔄 IN PROGRESS
 **Branch**: `feature/gcp-challenge`

@@ -9,6 +9,7 @@ let mockMemos: any[] = []
 let mockListError: any = null
 let mockIdempotencyResponse: any = { kind: 'none' }
 const insertedMemo = { id: 'memo-1', title: 'T', body: 'B' }
+let eqCalls: [string, any][] = []
 
 vi.mock('@/lib/idempotency', () => ({
   beginIdempotentRequest: vi.fn(() => Promise.resolve(mockIdempotencyResponse)),
@@ -22,7 +23,7 @@ vi.mock('@/lib/supabase', () => ({
   createServerSupabaseClient: vi.fn(() => {
     const builder: any = {
       select: vi.fn(() => builder),
-      eq: vi.fn(() => builder),
+      eq: vi.fn((col: string, val: any) => { eqCalls.push([col, val]); return builder }),
       contains: vi.fn(() => builder),
       order: vi.fn(() => builder),
       limit: vi.fn(() => Promise.resolve({ data: mockMemos, error: mockListError })),
@@ -41,6 +42,7 @@ beforeEach(() => {
   mockMemos = []
   mockListError = null
   mockIdempotencyResponse = { kind: 'none' }
+  eqCalls = []
 })
 
 describe('GET /api/memos', () => {
@@ -62,6 +64,26 @@ describe('GET /api/memos', () => {
     mockListError = { message: 'db down' }
     const res = await GET(new NextRequest('http://localhost/api/memos'))
     expect(res.status).toBe(500)
+  })
+
+  it('filters by goal_id when provided (needed by WarRoom to fetch a goal\'s memo)', async () => {
+    const res = await GET(new NextRequest('http://localhost/api/memos?goal_id=goal-1'))
+    expect(res.status).toBe(200)
+    expect(eqCalls).toContainEqual(['goal_id', 'goal-1'])
+    // Ownership scoping must still apply even when goal_id is present.
+    expect(eqCalls).toContainEqual(['created_by', 'user-1'])
+  })
+
+  it('filters by source_type when provided', async () => {
+    const res = await GET(new NextRequest('http://localhost/api/memos?source_type=orchestrator'))
+    expect(res.status).toBe(200)
+    expect(eqCalls).toContainEqual(['source_type', 'orchestrator'])
+  })
+
+  it('does not apply goal_id/source_type filters when the params are absent', async () => {
+    await GET(new NextRequest('http://localhost/api/memos'))
+    expect(eqCalls.some(([col]) => col === 'goal_id')).toBe(false)
+    expect(eqCalls.some(([col]) => col === 'source_type')).toBe(false)
   })
 })
 

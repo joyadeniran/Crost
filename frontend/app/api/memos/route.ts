@@ -20,10 +20,12 @@ export async function GET(req: NextRequest) {
     const tag = searchParams.get('tag')
     const department = searchParams.get('department')
     const priority = searchParams.get('priority')
+    const goalId = searchParams.get('goal_id')
+    const sourceType = searchParams.get('source_type')
 
     let query = supabase
       .from('company_memos')
-      .select('id, title, body, priority, from_department, from_department_id, tags, created_at, read_by, source_type')
+      .select('id, title, body, priority, from_department, from_department_id, tags, created_at, read_by, source_type, goal_id')
       .eq('created_by', user.id)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -31,6 +33,8 @@ export async function GET(req: NextRequest) {
     if (tag) query = query.contains('tags', [tag])
     if (department) query = query.eq('from_department', department)
     if (priority) query = query.eq('priority', priority)
+    if (goalId) query = query.eq('goal_id', goalId)
+    if (sourceType) query = query.eq('source_type', sourceType)
 
     const { data, error } = await query
     if (error) throw error

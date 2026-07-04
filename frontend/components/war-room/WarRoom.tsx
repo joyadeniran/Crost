@@ -6,7 +6,6 @@ import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 // components/war-room/WarRoom.tsx
 // The War Room: goal input + live plan card + per-task approve/reject.
 // This is the core of the founder→orchestrator→worker loop.
-import { supabaseClient } from '@/lib/supabase-browser'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrostStore } from '@/lib/store'
 import type { Goal, OrchestratorTask, RiskLevel, Department, GoalTaskStatus, CalendarEvent } from '@/types'
@@ -505,15 +504,19 @@ function DeferredMissionReportChips({ goalId }: { goalId: string }) {
       if (cancelled || attempts >= MAX_ATTEMPTS) return
       attempts++
       try {
-        const { data } = await supabaseClient
-          .from('company_memos')
-          .select('id')
-          .eq('goal_id', goalId)
-          .or('title.ilike.[Mission Report]%,title.ilike.[ORC REPORT]%')
-          .maybeSingle()
-        if (data?.id) {
-          if (!cancelled) setReportId(data.id)
-          return
+        // NOTE: previously queried supabaseClient.from('company_memos') directly —
+        // lib/supabase-browser.ts's .from() is a Supabase→GCP migration stub that
+        // always resolves { data: null, error: null }, so this silently never found
+        // a report. Fetching through the real API route instead.
+        const res = await fetch(`/api/memos?goal_id=${encodeURIComponent(goalId)}`)
+        if (res.ok) {
+          const json = await res.json()
+          const memos: any[] = Array.isArray(json?.data) ? json.data : []
+          const match = memos.find((m) => /^\[(mission report|orc report)\]/i.test(m?.title ?? ''))
+          if (match?.id) {
+            if (!cancelled) setReportId(match.id)
+            return
+          }
         }
       } catch { /* ignore */ }
       setTimeout(poll, 3000)
@@ -1709,16 +1712,20 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
   useEffect(() => {
     async function fetchReport() {
       try {
-        const { data: memos } = await supabaseClient
-          .from('company_memos')
-          .select('*')
-          .eq('goal_id', goalId)
-          .eq('source_type', 'orchestrator')
-          .order('created_at', { ascending: false })
-          .limit(1)
-
-        if (memos && memos.length > 0) {
-          setReport(memos[0])
+        // NOTE: previously queried supabaseClient.from('company_memos') directly —
+        // lib/supabase-browser.ts's .from() is a Supabase→GCP migration stub that
+        // always resolves { data: [], error: null }, so this card silently rendered
+        // nothing for every completed goal (assistant-mode "What can you do?"
+        // included) even though the backend had already written the real answer.
+        // Fetching through the real API route instead; it already orders by
+        // created_at desc, so the first row is the latest.
+        const res = await fetch(`/api/memos?goal_id=${encodeURIComponent(goalId)}&source_type=orchestrator`)
+        if (res.ok) {
+          const json = await res.json()
+          const memos: any[] = Array.isArray(json?.data) ? json.data : []
+          if (memos.length > 0) {
+            setReport(memos[0])
+          }
         }
       } catch (err) {
         console.error('[SynthesisReportCard] Failed to fetch report:', err)
@@ -2085,7 +2092,7 @@ export function WarRoom() {
   const [messagesHydrated, setMessagesHydrated] = useState(false)
   const [pollError, setPollError] = useState<string | null>(null)
   // One-shot error detail fetch: populated only when goal status flips to 'failed'.
-  // Uses the already-imported supabaseClient — no new subscription, no polling.
+  // Fetched via GET /api/event-log — no subscription, no polling.
   const [goalErrorEvents, setGoalErrorEvents] = useState<{ description: string; event_type: string; created_at: string }[]>([])
 
   // ── Calendar prep ──
@@ -2193,16 +2200,18 @@ export function WarRoom() {
   useEffect(() => {
     if (activeGoal?.status !== 'failed' || !activeGoal?.id) return
     setGoalErrorEvents([]) // reset from any prior failure
-    supabaseClient
-      .from('event_log')
-      .select('description, event_type, created_at')
-      .eq('goal_id', activeGoal.id)
-      .in('event_type', ['error', 'task_failed', 'orc_stall_detected'])
-      .order('created_at', { ascending: false })
-      .limit(3)
-      .then(({ data }: { data: any }) => {
-        if (data && data.length > 0) setGoalErrorEvents(data)
+    // NOTE: previously queried supabaseClient.from('event_log') directly —
+    // lib/supabase-browser.ts's .from() is a Supabase→GCP migration stub that
+    // always resolves { data: [], error: null }, so this inline detail panel
+    // silently never showed anything for a failed goal. Fetching through the
+    // real, ownership-scoped API route instead.
+    fetch(`/api/event-log?goal_id=${encodeURIComponent(activeGoal.id)}&event_type=error,task_failed,orc_stall_detected&limit=3`)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((json: any) => {
+        const data = Array.isArray(json?.data) ? json.data : []
+        if (data.length > 0) setGoalErrorEvents(data)
       })
+      .catch(() => { /* ignore — panel just stays empty */ })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGoal?.status, activeGoal?.id])
 
