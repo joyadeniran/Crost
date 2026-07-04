@@ -3,12 +3,36 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.18  
-**Last Updated:** July 3, 2026  
-**Deployment Status:** ✅ LIVE — 10x rebuild Phases 0–5 complete on `feature/gcp-challenge`, Phase 6 (verification & merge) in progress; not yet merged to `main`.  
+**Current Version:** 13.19  
+**Last Updated:** July 4, 2026  
+**Deployment Status:** ✅ LIVE — commit `69e02f0` (10x rebuild Phases 0–6 + WarRoom P1 fix, merged to `main`) deployed to Cloud Run revision `crost-frontend-00024-wdd` on 2026-07-04.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Repo:** https://github.com/joyadeniran/Crost (public, default branch = submission code)  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New).
+
+---
+
+## Session v13.19 — Deploy unblocked + cron infrastructure repaired (production readiness sweep)
+**Date**: 2026-07-04 **Status**: ✅ COMPLETE — verified live
+
+### Deploy blocker: root cause found and fixed (no code change needed)
+Every deploy attempt since ~17:14 UTC failed with `Application failed to start: failed to load /app/frontend/Dockerfile`. Root cause: the earlier console edit intended to fix the auto-CD trigger's Dockerfile path actually landed in the **Cloud Run service's container command (entrypoint) field** — the service spec carried `command: [frontend/Dockerfile]`, inherited by every new revision (00020–00023) regardless of image, so the container tried to *execute the Dockerfile path as its startup binary*. The images themselves were fine: the manual `gcloud builds submit --config cloudbuild.yaml --substitutions=COMMIT_SHA=…` attempts succeeded through build+push (`gcr.io/crost-hq/crost-frontend:69e02f08…`); only the deploy step failed.
+
+**Fix**: `gcloud run deploy crost-frontend --region us-central1 --image gcr.io/crost-hq/crost-frontend:69e02f08… --command ""` → revision `crost-frontend-00024-wdd`, Ready, 100% traffic. Verified live: `app.crosthq.com` 307→login; `GET /api/event-log` returns 401 `Unauthenticated` (route only exists in `69e02f0` → new code confirmed live; old code would 404).
+
+### Cron infrastructure: found broken/missing during readiness inspection, repaired
+- **`crost-approval-expiry` had been 404ing hourly since ≥Jun 5** (last-attempt status NOT_FOUND): it POSTed to `/api/cron/expire-approvals` (route doesn't exist; real route is `/api/approvals/expire`) AND sent the secret in the JSON body while the route requires the `x-cron-secret` header. Approvals never auto-expired in prod — silent approval-gate violation. Fixed: URI corrected, secret moved to header (value from Secret Manager `CRON_SECRET`), body cleared. Force-ran: status now OK.
+- **Three cron routes had no scheduler jobs at all** — `recurring-missions`, `calendar-sync`, `orc-learning` never fired in prod. Created jobs per the cadence documented in each route: `crost-recurring-missions` (`*/15 * * * *`), `crost-calendar-sync` (`0 6 * * *` UTC), `crost-orc-learning` (`0 5 * * 1` UTC), all POST with `x-cron-secret` header, 300s attempt deadline. Force-ran all three: status OK.
+- **Deleted the rogue auto-CD trigger** (`rmgpgab-crost-frontend-…`, created by Cloud Run "Connect to repo"): fired on every push to `main`, built repo root with `-f Dockerfile` (doesn't exist), pushed to a different registry (`us-central1-docker.pkg.dev/…/cloud-run-source-deploy`) than `cloudbuild.yaml` (gcr.io). It was the source of the console edit that caused the deploy blocker. Zero triggers remain — deploys are manual `gcloud builds submit --config cloudbuild.yaml --substitutions=COMMIT_SHA=$(git rev-parse HEAD) .` until a proper trigger is set up.
+
+### Verification state
+`main` = origin/main = `69e02f0`; `npm run type-check` clean; 787/787 unit tests green (run locally this session). Task `#11` (WarRoom stub fix) now closed — deployed and verified live.
+
+### Still open (founder decisions / follow-ups, unchanged from last session plus new findings)
+- **CPU throttling risk (new finding)**: task execution is in-process fire-and-forget from dialogue/dispatch routes; the service has default CPU throttling + min-instances 0, so background LLM work can be starved after the HTTP response returns. Mitigation options: `--no-cpu-throttling` (changes billing to instance-based) or min-instances 1, or the 10x plan's deployed worker. Not changed — billing implications need founder sign-off.
+- Dead Supabase Realtime `.channel()` in 5 components (no live streaming; refresh required) — approach decision pending.
+- `app/signup/page.tsx` dead stub call (low severity, redundant with server-side write).
+- No CI/CD trigger (deliberate for now — see above), no uptime alerting on DB-backed endpoints (recommended after the Jun password-drift outage).
 
 ---
 
