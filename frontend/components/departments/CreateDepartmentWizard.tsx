@@ -63,6 +63,9 @@ export function CreateDepartmentWizard({ onClose }: Props) {
   const [customCap, setCustomCap] = useState('')
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [modelName, setModelName] = useState('groq/llama-3.3-70b-versatile')
+  const [restrictions, setRestrictions] = useState<string[]>([])
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
 
   // Load from draft
   useEffect(() => {
@@ -124,6 +127,37 @@ export function CreateDepartmentWizard({ onClose }: Props) {
     setSelectedTools((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]))
   }
 
+  // Auto-generate persona + capabilities + restrictions from the department
+  // name and company context. Prefills only — everything stays editable.
+  const handleGeneratePersona = async () => {
+    setGenerating(true)
+    setGenerateError(null)
+    try {
+      const res = await fetch('/api/departments/generate-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          // Any rough notes the founder already typed become the description hint
+          description: personaPrompt.trim() ? personaPrompt.slice(0, 500) : undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Generation failed')
+      setPersonaPrompt(json.data.persona_prompt)
+      if (Array.isArray(json.data.capabilities) && json.data.capabilities.length > 0) {
+        setCapabilities((prev) => Array.from(new Set([...prev, ...json.data.capabilities])))
+      }
+      if (Array.isArray(json.data.restrictions)) {
+        setRestrictions(json.data.restrictions)
+      }
+    } catch (e: any) {
+      setGenerateError(e.message || 'Generation failed — you can write the persona manually.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   const submit = async () => {
     setSubmitting(true)
     setError(null)
@@ -142,7 +176,7 @@ export function CreateDepartmentWizard({ onClose }: Props) {
           model_name: modelName,
           tools: selectedTools,
           capabilities,
-          restrictions: [],
+          restrictions,
           icon: ICON_OPTIONS.find((o) => o.value === icon)?.label ?? '💼',
           color,
         }),
@@ -355,10 +389,28 @@ export function CreateDepartmentWizard({ onClose }: Props) {
               <div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>
                   <span>Persona Prompt</span>
-                  <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: personaPrompt.length < 50 ? 'var(--red)' : 'var(--text-3)' }}>
-                    {personaPrompt.length}/50 min
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                      onClick={handleGeneratePersona}
+                      disabled={generating || name.length < 2}
+                      title={name.length < 2 ? 'Enter a department name first (Step 1)' : 'Draft the persona, capabilities and restrictions from your company context'}
+                      style={{
+                        fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, padding: '4px 8px',
+                        borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                        background: 'var(--bg-3)', color: 'var(--text-2)',
+                        cursor: generating || name.length < 2 ? 'not-allowed' : 'pointer', opacity: generating ? 0.6 : 1,
+                      }}
+                    >
+                      {generating ? 'Generating…' : '✨ Generate with Orc'}
+                    </button>
+                    <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: personaPrompt.length < 50 ? 'var(--red)' : 'var(--text-3)' }}>
+                      {personaPrompt.length}/50 min
+                    </span>
                   </span>
                 </label>
+                {generateError && (
+                  <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 6 }}>{generateError}</div>
+                )}
                 <textarea
                   value={personaPrompt}
                   onChange={(e) => setPersonaPrompt(e.target.value)}
