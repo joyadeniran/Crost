@@ -3,12 +3,53 @@
 
 # CROST MASTER (Execution Log)
 
-**Current Version:** 13.19  
-**Last Updated:** July 4, 2026  
+**Current Version:** 13.20  
+**Last Updated:** July 5, 2026  
 **Deployment Status:** ✅ LIVE — commit `69e02f0` (10x rebuild Phases 0–6 + WarRoom P1 fix, merged to `main`) deployed to Cloud Run revision `crost-frontend-00024-wdd` on 2026-07-04.  
 **URL:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app`  
 **Repo:** https://github.com/joyadeniran/Crost (public, default branch = submission code)  
 **Challenge:** Google for Startups AI Agents Challenge — Track 1 (Build Net-New).
+
+---
+
+## Session v13.20 — "Self-destructive flow" root-cause fixes + prompt hardening for weak models + dept prompt auto-generation
+**Date**: 2026-07-05 **Status**: ✅ COMPLETE — type-check clean, 804/804 unit tests green (787 baseline + 17 new). NOT yet committed/deployed.
+
+### Problem (founder-reported)
+A goal like "write our pitch deck" produced an artifact stuck "in sandbox", later tasks blocked forever waiting on a KB upload, and the mid-task upload button opened a new tab with no way back or resume.
+
+### Root causes found (three Explore agents + manual verification, all file:line evidenced)
+1. **RC1 — prior task outputs never reached later tasks**: `buildFinalPrompt` (lib/engine/prompt.ts) had zero artifact references, so Task 2 couldn't see Task 1's deck → declared `needs_more_data` → blocked.
+2. **RC2 — KB upload never resumed anything**: `processFileAsync` (app/api/knowledge/upload/route.ts) set `processing_status: 'completed'` and stopped; no CHAIN_REACTION hook anywhere.
+3. **RC3 — upload link opened a new tab** with no goal context (`WarRoom.tsx` `target="_blank"`).
+4. **Bonus (invariant #5 weakening)**: unknown/custom department slugs fell back to **executive god-mode** tools (`execute-tool-call.ts` `|| DEPARTMENT_TOOL_RULES['executive']`).
+
+### What was built (all test-first; founder approved plan + each policy decision)
+1. **Artifact context injection**: new `getGoalArtifactContext()` (lib/engine/memo.ts) + `## PRIOR TASK OUTPUTS` section in `buildFinalPrompt`; worker now stores raw output in `artifacts.body` at insert time (immutability untouched — insert-only). Status filtering done in JS to avoid new shim operators. Tests: `engine-prompt.test.ts` (4).
+2. **KB upload auto-resume**: new `lib/knowledge/resume-tasks.ts` — resets the goal's `needs_data` tasks to `planned` with an orc_note (`DATA_UPLOADED_RESUMING`) and fires CHAIN_REACTION dispatch with the internal-secret header. Upload route accepts optional `goal_id` (ownership-verified, cross-user silently ignored). Tests: `knowledge-resume-tasks.test.ts` (3).
+3. **Upload UX**: WarRoom "↑ Upload Data" now same-tab with `?goalId=`; knowledge page reads the param, sends it with the upload, shows a resume banner + "Back to Mission Control" link.
+4. **Tool fallback hardened** (founder decision: internal-only): new `getAllowedServices()` — unknown slugs get `["internal"]`; orchestrator/executive unchanged; both call sites (execute-tool-call, prompt.ts) use it. Tests: `execute-tool-call.test.ts` (+2).
+5. **Prompt hardening for weak execution models (Groq/Llama, Gemini Lite)**:
+   - Worker task prompt extracted to exported `buildWorkerTaskPrompt()` with an explicit three-shape output contract (`completed`/`failed`/`needs_more_data`) — the parser's fields were previously never told to the model. Also mandates checking PRIOR TASK OUTPUTS → memos → KB before blocking.
+   - `ORCHESTRATOR_SYSTEM_NOTE`: fixed duplicate rule numbering, added rule 13 (self-sufficient sequencing — never plan founder-upload-wait tasks unless data is genuinely external), added two parseable JSON examples (exported + tested).
+   - Decision gate: 11 few-shot input→mode examples + tie-break guidance (quick_plan over clarify; assistant over quick_plan).
+   - `getModeInstructions` quick/full_plan: sequencing sentence.
+   - Mission report: exact `## Outcome / ## Key Findings / ## Next Steps` structure.
+   - Parameter resolver (llama-3.1-8b): outermost-JSON salvage fallback (was silently returning `{}` → thin emails). Test added.
+6. **Department prompt auto-generation**: new `POST /api/departments/generate-prompt` (session-auth, zod, 502 on unusable LLM output, enforces ≥50-char persona to match CreateSchema) + "✨ Generate with Orc" button in CreateDepartmentWizard step 2 (prefills persona/capabilities/restrictions, all editable; wizard now submits generated restrictions instead of hardcoded `[]`). Tests: `departments-generate-prompt.test.ts` (5).
+
+### Files changed
+`lib/engine/{memo,prompt,worker,orchestrator}.ts`, `lib/orc-decision-gate.ts`, `lib/tools/{execute-tool-call,parameter-resolver}.ts`, `lib/knowledge/resume-tasks.ts` (new), `app/api/knowledge/upload/route.ts`, `app/api/departments/generate-prompt/route.ts` (new), `components/war-room/WarRoom.tsx`, `components/departments/CreateDepartmentWizard.tsx`, `app/dashboard/knowledge/page.tsx`, + 5 test files (3 new).
+
+### Invariants re-checked
+Dual-mode auth (resume fetch uses internal secret, mirrors dispatch exemplar); ownership scoping on the new goal_id path (cross-user → silently ignored, no existence leak); approval gate untouched; artifact immutability untouched (body set at insert only); no new shim operators; tool allowlist strengthened.
+
+### Open items / unverified suspicions (not fixed this session)
+- Artifacts remain `status: 'draft'` with no publish/approve transition anywhere (founder chose to keep drafts for now; content now flows to later tasks regardless). A draft→active lifecycle + UI action is still missing.
+- Existing custom departments (if any) lose god-mode external tools due to the fallback change — they need explicit grants (suspected none exist in prod; unverified).
+- `needs_data` tasks are resumed only via goal-linked uploads; uploads without `goalId` don't resume anything (by design this session).
+- The resilient LLM fallback chain is still Gemini-only; Groq appears only via explicit user model assignment.
+- `__tests__/` legacy dir is NOT in the vitest include path — `npm run test:unit` never runs it (stale CLAUDE.md claim; worth a follow-up).
 
 ---
 
