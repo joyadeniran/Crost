@@ -737,3 +737,52 @@ describe('Goal dispatch — idempotency guard', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 })
+
+// ── Tests: prompt hardening for weak execution models ──────────────────────
+
+describe('buildWorkerTaskPrompt — explicit output contract', () => {
+  it('spells out all three legal response shapes and the approval escape hatch', async () => {
+    const { buildWorkerTaskPrompt } = await import('@/lib/engine/worker')
+    const prompt = buildWorkerTaskPrompt({
+      id: 'task-1',
+      action: 'draft_pitch_deck',
+      label: 'Draft pitch deck',
+      reasoning: 'Needed for the investor meeting',
+      expected_deliverable: '10-slide outline',
+      params: { audience: 'seed investors' },
+      risk_level: 'low',
+      model: 'cloud',
+    } as any)
+
+    // Task fields present
+    expect(prompt).toContain('task-1')
+    expect(prompt).toContain('draft_pitch_deck')
+    // The three shapes the runWorkerTask parser understands
+    expect(prompt).toContain('"status": "completed"')
+    expect(prompt).toContain('"status": "failed"')
+    expect(prompt).toContain('"needs_more_data": true')
+    expect(prompt).toContain('"missing_data"')
+    // Must steer the model to prior outputs before blocking
+    expect(prompt).toContain('PRIOR TASK OUTPUTS')
+    expect(prompt).toContain('KNOWLEDGE_BASE_SEARCH')
+    // External actions route through the approval protocol, not JSON
+    expect(prompt).toContain('REQUEST_APPROVAL')
+  })
+})
+
+describe('ORCHESTRATOR_SYSTEM_NOTE — embedded examples stay parseable', () => {
+  it('every example JSON line in the system note parses', async () => {
+    const { ORCHESTRATOR_SYSTEM_NOTE } = await import('@/lib/engine/orchestrator')
+    const exampleLines = ORCHESTRATOR_SYSTEM_NOTE
+      .split('\n')
+      .filter((l: string) => l.trim().startsWith('{"is_valid_goal"'))
+    expect(exampleLines.length).toBeGreaterThanOrEqual(2)
+    for (const line of exampleLines) {
+      const parsed = JSON.parse(line.trim())
+      expect(typeof parsed.is_valid_goal).toBe('boolean')
+    }
+    // The planning example must model output-consuming dependencies
+    const planExample = JSON.parse(exampleLines[0].trim())
+    expect(planExample.plan.tasks[1].depends_on).toContain(planExample.plan.tasks[0].id)
+  })
+})

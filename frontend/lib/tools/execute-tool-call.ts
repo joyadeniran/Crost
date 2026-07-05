@@ -31,6 +31,25 @@ export const DEPARTMENT_TOOL_RULES: Record<string, string[]> = {
   executive: ["gmail", "slack", "notion", "googlecalendar", "internal", "github", "hubspot", "linear", "apollo", "googlesheets", "web_search", "file_reader", "supabase_query"] // God-mode for orchestrator/executive/founder access
 };
 
+// Safe default for custom departments not in the allowlist above:
+// internal-only (knowledge base, memos). Founder grants external tools
+// explicitly per department. Previously this fell back to executive
+// god-mode, which silently gave any custom department every tool.
+const DEFAULT_TOOL_RULES: string[] = ["internal"];
+
+/**
+ * Resolve the tool-service allowlist for a department slug.
+ * - orchestrator/executive (and internal calls with no slug) keep full access
+ * - known department slugs use their DEPARTMENT_TOOL_RULES entry
+ * - unknown/custom slugs get the internal-only safe default
+ */
+export function getAllowedServices(departmentSlug?: string | null): string[] {
+  if (!departmentSlug) return DEPARTMENT_TOOL_RULES['executive'];
+  const slug = departmentSlug.toLowerCase();
+  if (slug === 'orchestrator') return DEPARTMENT_TOOL_RULES['executive'];
+  return DEPARTMENT_TOOL_RULES[slug] || DEFAULT_TOOL_RULES;
+}
+
 // Auto-run rules
 const LOW_RISK_READ_TOOLS = [
   "gmail.search_emails",
@@ -161,7 +180,7 @@ export async function executeToolCall(options: ExecuteOptions) {
   }
 
   // 2. Department Permission Guard
-  const allowedServices = DEPARTMENT_TOOL_RULES[departmentId.toLowerCase()] || DEPARTMENT_TOOL_RULES['executive'];
+  const allowedServices = getAllowedServices(departmentId);
   if (!allowedServices.includes(service.toLowerCase())) {
     return {
       status: "permission_denied",

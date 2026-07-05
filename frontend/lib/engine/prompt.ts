@@ -4,8 +4,8 @@
 // lib/llm-client.ts during the Phase 2 god-module split — no behavior change.
 
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { DEPARTMENT_TOOL_RULES } from '@/lib/tools/execute-tool-call'
-import { getMemoBrief, getMemos } from './memo'
+import { getAllowedServices } from '@/lib/tools/execute-tool-call'
+import { getMemoBrief, getMemos, getGoalArtifactContext } from './memo'
 import { log } from '@/lib/log'
 
 const DEFAULT_ASSISTANT_IDENTITY = `You are part of Crost's AI operating system.
@@ -80,6 +80,10 @@ export async function buildFinalPrompt(
     }
   }
 
+  // Prior task outputs of this goal — the root-cause fix for departments
+  // declaring needs_more_data for work already produced earlier in the goal.
+  const priorArtifacts = goalId ? await getGoalArtifactContext(goalId) : ''
+
   // Strategic context from the singular company_memo table (Spec §8)
   let strategicContext = ''
   if (userId) {
@@ -111,9 +115,7 @@ export async function buildFinalPrompt(
     : ''
 
   // Tool definitions filtered by department-specific permission rules (Spec §11)
-  const allowedServices = departmentSlug
-    ? (DEPARTMENT_TOOL_RULES[departmentSlug.toLowerCase()] || DEPARTMENT_TOOL_RULES['executive'])
-    : DEPARTMENT_TOOL_RULES['executive']
+  const allowedServices = getAllowedServices(departmentSlug)
 
   const toolsQuery = supabase
     .from('available_tools')
@@ -213,6 +215,7 @@ Rules:
     `## AVAILABLE TOOLS\n${toolDefinitions}`,
     recoveryProtocol,
     hitlProtocol,
+    priorArtifacts ? `## PRIOR TASK OUTPUTS (this goal)\nEarlier tasks in this goal already produced the outputs below. USE THEM as your source material — build on them, refine them, extend them.\nDo NOT return needs_more_data for information that already appears here. Only request more data if what you need is genuinely absent from this section, the memos, and the knowledge base.\n<prior_task_outputs>\n${priorArtifacts}\n</prior_task_outputs>` : '',
     memoBrief ? `## COMPANY MEMOS (recent, high priority)\n<trusted_internal_memos>\n${memoBrief}\n</trusted_internal_memos>` : '',
     `## TASK\n${task}`,
   ].filter(Boolean).join('\n\n---\n\n')
@@ -348,9 +351,9 @@ export function getModeInstructions(mode: string): string {
     case 'clarify':
       return 'Set is_valid_goal=false. Write clarification_question as 1-2 focused conversational questions in prose — not a form, not bullet points, not multiple choice. State your reasonable assumptions first ("I\'m assuming X based on Y"). Then ask only what would materially change the plan. Keep it under 4 sentences total.'
     case 'quick_plan':
-      return 'Generate a focused plan of 3-5 tasks maximum. Prefer parallel execution (minimal depends_on). All tasks should have risk_level "low" or "medium". Avoid over-engineering. Assume reasonable defaults and document them in risk_note rather than asking.'
+      return 'Generate a focused plan of 3-5 tasks maximum. Prefer parallel execution (minimal depends_on). All tasks should have risk_level "low" or "medium". Avoid over-engineering. Assume reasonable defaults and document them in risk_note rather than asking. Sequence tasks so later tasks consume earlier tasks\' outputs — never plan a task that waits on a founder upload unless the data is genuinely external.'
     case 'full_plan':
-      return 'This is a complex strategic goal. Generate a thorough plan with 5-15 tasks. Establish clear task dependencies. Organize tasks into logical phases in the risk_note. Surface all risks, resource needs, and timeline estimates in risk_note.'
+      return 'This is a complex strategic goal. Generate a thorough plan with 5-15 tasks. Establish clear task dependencies. Organize tasks into logical phases in the risk_note. Surface all risks, resource needs, and timeline estimates in risk_note. Sequence tasks so later tasks consume earlier tasks\' outputs — never plan a task that waits on a founder upload unless the data is genuinely external.'
     case 'command':
       return 'Set is_direct_response=true. Execute or acknowledge the command. Confirm what was done or provide the requested system information. Be brief.'
     case 'escalate':

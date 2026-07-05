@@ -925,6 +925,7 @@ type TaskDecision = 'approved' | 'rejected' | 'held' | 'skipped' | null
 function TaskApprovalItem({
   task,
   dbTask,
+  goalId,
   decision,
   onApprove,
   onReject,
@@ -936,6 +937,7 @@ function TaskApprovalItem({
 }: {
   task: OrchestratorTask
   dbTask?: any
+  goalId?: string
   decision: TaskDecision
   onApprove: (overrides?: { label?: string; reasoning?: string }) => void
   onReject: () => void
@@ -1119,11 +1121,12 @@ function TaskApprovalItem({
                   : `Orc needs: ${Array.isArray(dbTask?.orc_notes) && dbTask!.orc_notes.length > 0 ? (dbTask!.orc_notes[dbTask!.orc_notes.length - 1] as any).note : 'More information to proceed.'}`}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
+                {/* Same-tab navigation with goal context: the KB page passes
+                    goalId through the upload, and processing completion
+                    auto-resumes this goal's blocked tasks (RC2/RC4 fix). */}
                 {resolvedStatus === 'needs_data' && (
-                  <a 
-                    href="/dashboard/knowledge" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                  <a
+                    href={`/dashboard/knowledge${(goalId || dbTask?.goal_id) ? `?goalId=${encodeURIComponent(goalId || dbTask?.goal_id)}` : ''}`}
                     style={{...btnStyle('#60a5fa', '#60a5fa22'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center'}}
                   >
                     ↑ Upload Data
@@ -1383,6 +1386,7 @@ function PlanCard({
             key={task.id}
             task={task}
             dbTask={goal.goal_tasks?.find(gt => gt.task_id === task.id)}
+            goalId={goal.id}
             decision={decisions[task.id] ?? null}
             onApprove={(overrides) => onDispatch(task.id, overrides)}
             onReject={() => onReject(task.id)}

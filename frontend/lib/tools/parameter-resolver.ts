@@ -45,7 +45,17 @@ export async function resolveToolParameters(
 
     try {
       return JSON.parse(jsonStr);
-    } catch (parseErr) {
+    } catch {
+      // Small models (this runs on llama-3.1-8b) often add preamble despite
+      // the ONLY-JSON rule. Salvage the outermost {...} before giving up —
+      // an empty return here silently produces thin/empty emails downstream.
+      const first = jsonStr.indexOf('{');
+      const last = jsonStr.lastIndexOf('}');
+      if (first !== -1 && last > first) {
+        try {
+          return JSON.parse(jsonStr.slice(first, last + 1));
+        } catch { /* fall through */ }
+      }
       console.error('[resolveToolParameters] JSON parse failed:', jsonStr);
       return {};
     }

@@ -29,7 +29,8 @@ import { log } from '@/lib/log'
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
-const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
+// Exported for unit tests (schema example must stay parseable JSON).
+export const ORCHESTRATOR_SYSTEM_NOTE = `You are Orc, the company's Chief of Staff. You are a JSON-only orchestration engine. You MUST respond with valid JSON matching this exact schema — no prose, no markdown fences, no commentary before or after:
 
 {
   "is_valid_goal": boolean,
@@ -64,13 +65,20 @@ Rules:
 3. ACTION VERB TRIGGER: If the goal contains substantive action verbs like "design", "write", "create", "build", "research", "analyze", "draft", "make", "generate", "schedule", "publish", or "execute", you MUST use Planning Mode (is_valid_goal=true, is_direct_response=false). Do NOT perform creative or substantive work in the direct_response; assign it to the correct department.
 4. PLANNING THRESHOLD: Reserve Planning Mode for goals that genuinely need one or more department agents to do meaningful work — a real deliverable, a real action (send email, post content, run research), or coordination across multiple steps. The presence of action verbs alone does NOT force Planning Mode if the task is trivially small. Apply judgment: "Write hello world HTML" → direct response; "Write a full email marketing campaign targeting SMBs" → plan.
 5. ASSUMPTION OVER INTERROGATION: Do not ask pedantic clarification questions for common abbreviations, social platforms, or standard business terms (e.g., assuming "X" = Twitter, "Insta" = Instagram, "Deck" = Pitch Deck). Make the industry-standard assumption, proceed with the plan, and explicitly document your assumption in the plan's risk_note.
-5. AMBIGUOUS GOALS: If the goal is truly non-sensical or critically ambiguous, set is_valid_goal=false and provide a clarification_question.
-6. NEVER provide both a plan and a direct_response. If the request is informational or conversational, reply only with direct_response and no plan.
-7. ALWAYS provide a risk_note in the plan.
-8. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
-9. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
-10. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."
-11. RESPONSE MODE: A pre-classifier has suggested a response_mode (see ORCHESTRATOR MODE HINT in the prompt). Confirm it in your response_mode field, or override it if your analysis of the full context disagrees. This field is optional but strongly preferred.`
+6. AMBIGUOUS GOALS: If the goal is truly non-sensical or critically ambiguous, set is_valid_goal=false and provide a clarification_question.
+7. NEVER provide both a plan and a direct_response. If the request is informational or conversational, reply only with direct_response and no plan.
+8. ALWAYS provide a risk_note in the plan.
+9. You MUST ONLY assign tasks to the PROVIDED list of departments in the "Available Departments" section. Do NOT hallucinate or create new departments.
+10. CAPABILITY AWARENESS: You must look end-to-end at the requested goal. NEVER fail silently or attempt to hire external freelancers to bypass missing capabilities. Solo founders use Crost to avoid external costs.
+11. SELF-INTRODUCTION: If asked "Who are you?", explain: "I am Orc (short for Orchestrator), your AI Chief of Staff."
+12. RESPONSE MODE: A pre-classifier has suggested a response_mode (see ORCHESTRATOR MODE HINT in the prompt). Confirm it in your response_mode field, or override it if your analysis of the full context disagrees. This field is optional but strongly preferred.
+13. SELF-SUFFICIENT SEQUENCING: Chain tasks so each later task consumes the OUTPUTS of earlier tasks (via depends_on). Departments automatically see prior task outputs. Do NOT plan tasks that wait for the founder to upload data unless the information is genuinely external and unknowable (e.g. bank statements, signed contracts) — prefer a drafting task with placeholders over a blocked plan.
+
+EXAMPLE — planning response (structure only; use real departments and details):
+{"is_valid_goal":true,"is_direct_response":false,"direct_response":null,"clarification_question":null,"response_mode":"quick_plan","plan":{"goal":"Write our investor pitch deck","risk_note":"Assuming a standard 10-slide seed deck; financials drafted from memos with placeholders where data is missing.","data_gathered":{"dept_slug":"marketing"},"tasks":[{"id":"a1b2c3d4-0000-4000-8000-000000000001","dept":"marketing","action":"draft_pitch_deck_outline","label":"Draft pitch deck outline","reasoning":"An outline aligned to our positioning is needed before full copy.","expected_deliverable":"10-slide outline with key message per slide","params":{},"risk_level":"low","depends_on":[],"model":"cloud"},{"id":"a1b2c3d4-0000-4000-8000-000000000002","dept":"sales","action":"write_full_deck_copy","label":"Write full deck copy from the outline","reasoning":"Turns the approved outline into complete slide copy.","expected_deliverable":"Complete slide-by-slide copy","params":{},"risk_level":"low","depends_on":["a1b2c3d4-0000-4000-8000-000000000001"],"model":"cloud"}]}}
+
+EXAMPLE — direct response:
+{"is_valid_goal":true,"is_direct_response":true,"direct_response":"You have 3 tasks running: ...","clarification_question":null,"response_mode":"assistant","plan":null}`
 
 export async function runOrchestratorTask(
   founderInput: string,
@@ -447,7 +455,7 @@ export async function runOrcReport(goalId: string): Promise<void> {
   }
 
   const context = memos.map((m: any) => `### [${m.from_department}] ${m.title}\n${m.body}`).join('\n\n')
-  const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief. Use ## markdown headers (not **bold** pseudo-headers). Lead with the outcome, then key findings, then what's next. No preamble, no "I am pleased to present". Be direct and specific. Do NOT write a "Sources" section yourself — one will be appended automatically after your content.`
+  const prompt = `Goal: ${goal.founder_input}\n\nDepartment findings:\n${context}\n\nWrite a concise mission debrief with EXACTLY these three ## markdown sections, in this order:\n## Outcome — 2-3 sentences: what was accomplished against the goal.\n## Key Findings — the most decision-relevant facts from the department findings, attributed to their department. Synthesize across departments; do not repeat each finding verbatim.\n## Next Steps — 2-4 concrete, actionable recommendations.\n\nNo preamble, no "I am pleased to present", no **bold** pseudo-headers. Be direct and specific. Do NOT write a "Sources" section yourself — one will be appended automatically after your content.`
 
   try {
     const { model: reportModel } = await getModel('summarization', goal.created_by)

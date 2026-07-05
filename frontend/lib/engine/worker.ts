@@ -19,6 +19,58 @@ import { runOrcReport } from './orchestrator'
 import { log } from '@/lib/log'
 
 /**
+ * Build the task section of the worker prompt. Exported for unit tests.
+ *
+ * Written for weak/cheap execution models (Groq Llama, Gemini Lite): the
+ * output contract is explicit — an exact JSON schema with the three legal
+ * response shapes — because the parser in runWorkerTask infers task status
+ * from `needs_more_data` / `status` fields the model was previously never
+ * told about.
+ */
+export function buildWorkerTaskPrompt(task: WorkerTask): string {
+  return `Execute the task below. Respond with EXACTLY ONE JSON object — no prose before or after it, no markdown fences.
+
+TASK:
+ID: ${task.id}
+Action: ${task.action}
+Label: ${task.label}
+Reasoning: ${task.reasoning}
+Expected Deliverable: ${task.expected_deliverable}
+Params: ${JSON.stringify(task.params)}
+
+OUTPUT FORMAT — your response must be one of these three JSON shapes:
+
+1. Task done (the normal case):
+{
+  "status": "completed",
+  "summary": "<2-3 sentences: what you produced and the key takeaway>",
+  ...the full deliverable content as additional fields in this same object.
+  If a SKILLS GUIDANCE section is present above, follow its structure for the
+  deliverable exactly. Otherwise use sensible fields, e.g. for a document:
+  "title": "...", "sections": [{ "heading": "...", "content": "..." }]
+}
+
+2. Task attempted but cannot succeed:
+{ "status": "failed", "summary": "<one sentence: what failed and why>" }
+
+3. Required data is genuinely missing — BEFORE using this shape you MUST check,
+in order: the PRIOR TASK OUTPUTS section, the COMPANY MEMOS section, and the
+KNOWLEDGE_BASE_SEARCH tool. Only if the data is absent from all three:
+{
+  "needs_more_data": true,
+  "missing_data": ["<specific, founder-actionable item, e.g. 'Q1 revenue figures'>"],
+  "summary": "<what you need and what you will do once you have it>"
+}
+
+Hard rules:
+- Never invent facts, numbers, or names. Use the recovery protocol's template
+  fallback (placeholders) when drafting documents with missing data.
+- Never return an empty object or plain prose.
+- External actions (email, post, payment) → output the REQUEST_APPROVAL block
+  from your protocol INSTEAD of this JSON, and nothing else.`
+}
+
+/**
  * Standalone storage helper — detects format, transforms to docx/xlsx/md, uploads to Storage.
  * Returns { fileUrl, artifactType, extension } or null on failure.
  */
@@ -124,7 +176,7 @@ export async function runWorkerTask(
     task.params
   )
 
-  const taskPrompt = `Execute precisely and output JSON.\n\nTASK:\nID: ${task.id}\nAction: ${task.action}\nLabel: ${task.label}\nReasoning: ${task.reasoning}\nExpected Deliverable: ${task.expected_deliverable}\nParams: ${JSON.stringify(task.params)}\n\nResponse MUST be JSON.`
+  const taskPrompt = buildWorkerTaskPrompt(task)
 
   const finalPrompt = await buildFinalPrompt(
     deptRow.persona_prompt,
@@ -222,6 +274,10 @@ export async function runWorkerTask(
         department_id: deptRow.id,
         artifact_type: uploaded.artifactType,
         title: `Output: ${task.label}`,
+        // Store the raw output so later tasks in this goal can read it via
+        // the PRIOR TASK OUTPUTS prompt section (set at insert time only —
+        // artifact immutability untouched).
+        body: strippedContent.slice(0, 20000),
         file_url: uploaded.fileUrl,
         file_size: uploaded.fileSize,
         task_id: task.id,

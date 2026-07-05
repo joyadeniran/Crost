@@ -254,6 +254,21 @@ Classify the founder's input into exactly one response mode:
 - "command":       An explicit system command or override. ("Retry", "Cancel", "Show me all tasks", "Stop")
 - "escalate":      Goal exceeds system capabilities or requires human authority. Surface alternatives instead.
 
+EXAMPLES (input → mode):
+- "What's our runway?" → assistant
+- "Who are you?" → assistant
+- "Send the investor update draft to sam@fund.com" → direct_action
+- "Save this note to the knowledge base" → direct_action
+- "Grow revenue" (no product, market, or metric in context) → clarify
+- "Write our pitch deck" → quick_plan
+- "Draft a welcome email sequence for new signups" → quick_plan
+- "Plan and execute our expansion into two new markets next quarter" → full_plan
+- "Retry the last task" → command
+- "Cancel this goal" → command
+- "File our corporate taxes in three jurisdictions" → escalate
+
+Prefer quick_plan over clarify when a reasonable industry-standard assumption exists — planning documents assumptions instead of asking. Prefer assistant over quick_plan when no department needs to produce anything.
+
 Return exactly this JSON shape:
 {
   "mode": "assistant|direct_action|clarify|quick_plan|full_plan|command|escalate",

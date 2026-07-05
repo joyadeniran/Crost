@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 type KBFile = {
@@ -62,6 +62,15 @@ export default function KnowledgePage() {
   const [hasFetched, setHasFetched] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  // Mid-task upload flow: when arriving from a blocked mission task, the
+  // goalId query param ties this upload to that goal so its needs_data tasks
+  // auto-resume after processing. Read from window to avoid a Suspense
+  // boundary for useSearchParams.
+  const [resumeGoalId, setResumeGoalId] = useState('');
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get('goalId');
+    if (p) setResumeGoalId(p);
+  }, []);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -100,6 +109,7 @@ export default function KnowledgePage() {
       form.append('file', pendingFile);
       form.append('title', uploadTitle || pendingFile.name);
       form.append('category', uploadCategory);
+      if (resumeGoalId) form.append('goal_id', resumeGoalId);
 
       const res = await fetch('/api/knowledge/upload', { method: 'POST', body: form });
       const data = await res.json();
@@ -109,7 +119,9 @@ export default function KnowledgePage() {
       setUploadTitle('');
       setUploadCategory('custom');
       setUploadProgress('');
-      setSuccessMessage('File uploaded. Text extraction is running in the background — it will appear as "Ready" shortly.');
+      setSuccessMessage(resumeGoalId
+        ? 'File uploaded. Once processing finishes, your blocked mission task will resume automatically — you can head back to Mission Control.'
+        : 'File uploaded. Text extraction is running in the background — it will appear as "Ready" shortly.');
       setTimeout(() => { setSuccessMessage(''); fetchFiles(); }, 6000);
     } catch (err: any) {
       setUploadProgress(`Error: ${err.message}`);
@@ -128,6 +140,16 @@ export default function KnowledgePage() {
 
   return (
     <div className="knowledge-page">
+      {resumeGoalId && (
+        <div style={{
+          padding: '10px 14px', marginBottom: 12, borderRadius: 8,
+          background: '#60a5fa1a', border: '1px solid #60a5fa55',
+          fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+        }}>
+          <span>You're uploading data for a blocked mission task. It will resume automatically once processing finishes.</span>
+          <a href="/dashboard" style={{ color: '#60a5fa', textDecoration: 'none', whiteSpace: 'nowrap' }}>← Back to Mission Control</a>
+        </div>
+      )}
       <ConfirmationModal
         isOpen={!!fileToDelete}
         title="Delete File"

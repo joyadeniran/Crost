@@ -242,6 +242,39 @@ describe('executeToolCall — graceful returns for blocked requests', () => {
     expect((result as any).status).toBe('permission_denied')
   })
 
+  // Invariant #5 hardening: an unknown/custom department slug must NOT fall
+  // back to executive god-mode tool access. Safe default is internal-only.
+  it('denies external tools to a custom department not in DEPARTMENT_TOOL_RULES', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+
+    const result = await executeToolCall({
+      userId: 'user-1',
+      departmentId: 'growth-hacking', // custom dept, not in allowlist
+      taskId: 'task-5',
+      goalId: 'goal-1',
+      toolCall: {
+        service: 'gmail',
+        action: 'send_email',
+        params: {},
+        reasoning: 'Custom dept trying an external tool',
+        risk: 'low',
+        requiresApproval: false,
+      },
+    })
+
+    expect((result as any).status).toBe('permission_denied')
+  })
+
+  it('getAllowedServices: unknown slug → internal only; orchestrator/executive keep full access; known slug unchanged', async () => {
+    const { getAllowedServices, DEPARTMENT_TOOL_RULES } = await import('@/lib/tools/execute-tool-call')
+
+    expect(getAllowedServices('growth-hacking')).toEqual(['internal'])
+    expect(getAllowedServices('orchestrator')).toEqual(DEPARTMENT_TOOL_RULES['executive'])
+    expect(getAllowedServices('executive')).toEqual(DEPARTMENT_TOOL_RULES['executive'])
+    expect(getAllowedServices(undefined)).toEqual(DEPARTMENT_TOOL_RULES['executive'])
+    expect(getAllowedServices('marketing')).toEqual(DEPARTMENT_TOOL_RULES['marketing'])
+  })
+
   it('humanizes knowledge base search results instead of leaking raw JSON', async () => {
     const priorFetch = global.fetch
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({

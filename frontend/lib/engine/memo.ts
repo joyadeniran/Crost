@@ -54,6 +54,44 @@ export async function getMemos(goalId: string, lastN: number = 10): Promise<stri
   }
 }
 
+// Root-cause fix for the "needs_more_data" loop: expose prior task outputs
+// (artifacts) of the same goal so subsequent tasks can build on them instead
+// of blocking on founder uploads. Read-only — never mutates artifacts.
+export async function getGoalArtifactContext(goalId: string, lastN: number = 5): Promise<string> {
+  try {
+    const supabase = createServerSupabaseClient()
+
+    const { data: artifacts } = await supabase
+      .from('artifacts')
+      .select('id, title, artifact_type, department_slug, status, body, file_url, task_id')
+      .eq('goal_id', goalId)
+      .order('created_at', { ascending: false })
+      .limit(lastN)
+
+    if (!artifacts || artifacts.length === 0) return ''
+
+    // Status filtering happens in JS on purpose: the createDbClient() shim
+    // hand-parses query operators, and adding .neq/.not here would need its
+    // own shim test. eq/order/limit are already exercised by getMemos.
+    const usable = (artifacts as any[]).filter(
+      a => a.status !== 'discarded' && a.status !== 'deprecated'
+    )
+    if (usable.length === 0) return ''
+
+    return usable
+      .map((a: any) => {
+        const excerpt = a.body
+          ? String(a.body).slice(0, 2000)
+          : '(content stored as a file — reference it by title and artifact id)'
+        return `[ARTIFACT][${a.artifact_type}][status: ${a.status}] "${a.title}" (by ${a.department_slug}, artifact id: ${a.id})\n${excerpt}`
+      })
+      .join('\n\n')
+  } catch (err) {
+    log.warn('[getGoalArtifactContext] Failed (non-fatal)', { module: 'engine/memo', goalId, error: String(err) })
+    return ''
+  }
+}
+
 export async function saveContextMemo(goalId: string, content: string, userId: string | null) {
   const supabase = createServerSupabaseClient()
   const validUntil = new Date()

@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { extractText } from '@/lib/knowledge/extract-text';
 import { callLLM, getModel, callEmbeddings } from '@/lib/llm-client';
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency';
+import { resumeBlockedTasksAfterUpload } from '@/lib/knowledge/resume-tasks';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest) {
     const title = (formData.get('title') as string) || '';
     const category = (formData.get('category') as string) || 'custom';
     const description = (formData.get('description') as string) || '';
+    // Optional: goal whose needs_data tasks should auto-resume once this
+    // file finishes processing (mid-task upload flow). Ownership-verified below.
+    const goalIdRaw = (formData.get('goal_id') as string) || '';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -125,8 +129,21 @@ export async function POST(req: NextRequest) {
       processing_status: 'processing',
     }).eq('id', fileId);
 
+    // Ownership check for the auto-resume goal: cross-user goal ids are
+    // silently ignored (never error the upload, never leak existence).
+    let resumeGoalId: string | null = null;
+    if (goalIdRaw) {
+      const { data: ownedGoal } = await supabase
+        .from('goals')
+        .select('id')
+        .eq('id', goalIdRaw)
+        .eq('created_by', user.id)
+        .single();
+      if (ownedGoal) resumeGoalId = ownedGoal.id;
+    }
+
     // 3. Extract text (async — do not block the response)
-    processFileAsync(buffer, file.type, file.name, fileId, user.id, supabase);
+    processFileAsync(buffer, file.type, file.name, fileId, user.id, supabase, resumeGoalId);
 
     const responseBody = {
       success: true,
@@ -151,7 +168,8 @@ async function processFileAsync(
   fileName: string,
   fileId: string,
   userId: string,
-  supabase: any
+  supabase: any,
+  resumeGoalId: string | null = null
 ) {
   try {
     // Extract text
@@ -250,6 +268,12 @@ Respond in JSON exactly: { "summary": "...", "tags": ["tag1", "tag2", ...] }`;
       processing_status: 'completed',
       updated_at: new Date().toISOString(),
     }).eq('id', fileId);
+
+    // Mid-task upload flow: unblock the goal's needs_data tasks now that the
+    // new knowledge is searchable. Non-fatal by contract.
+    if (resumeGoalId) {
+      await resumeBlockedTasksAfterUpload(resumeGoalId, userId);
+    }
 
   } catch (err) {
     console.error('[KB Process Async]', err);
