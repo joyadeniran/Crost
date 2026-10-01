@@ -109,10 +109,10 @@ describe('PATCH /api/approvals/[id] — auth/validation gates', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 403 when the approval belongs to a different user', async () => {
+  it('returns 404 (not 403) when the approval belongs to a different user', async () => {
     mockApproval = { id: 'appr-1', user_id: 'other-user', created_by: 'other-user', status: 'pending' }
     const res = await PATCH(makePatchReq({ decision: 'approved' }), { params: { id: 'appr-1' } })
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
   })
 
   it('returns 409 when the approval is not in pending status', async () => {

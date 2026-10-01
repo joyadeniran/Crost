@@ -25,8 +25,10 @@ import { detectOutputType } from '@/lib/artifact-transformers'
 import { loadSkillsForTask } from '@/lib/skills'
 import { classifyOutput } from '@/lib/output-classifier'
 import { requireUser } from '@/lib/auth/guard'
+import { runInBackground } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 interface Params { params: { slug: string } }
 
@@ -353,45 +355,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     const approvalReq = extractApprovalRequest(answer)
 
     if (approvalReq) {
-      // Pre-flight connection check: if the action is composio-tool-backed,
-      // verify the user has connected the relevant integration. This prevents
-      // the UI from getting stuck on a "pending" approval that can never execute.
-      const { SUPPORTED_TOOLKITS } = await import('@/lib/composio-tools')
-      const actionLower = (approvalReq.action_type || '').toLowerCase()
-      // Derive a service slug from: (1) explicit composio-style action (e.g. gmail_send_email)
-      // (2) anywhere in the task string ("/gmail.send_email"), (3) payload.service
-      let requiredService: string | null = SUPPORTED_TOOLKITS.find(kit => actionLower.startsWith(kit + '_')) ?? null
-      if (!requiredService) {
-        const slashMatch = body.task.match(/\/([a-z][a-z0-9_]*)\.[a-z][a-z0-9_]*/i)
-        if (slashMatch) requiredService = slashMatch[1].toLowerCase()
-      }
-      if (!requiredService && typeof (approvalReq.payload as any)?.service === 'string') {
-        requiredService = ((approvalReq.payload as any).service as string).toLowerCase()
-      }
-
-      if (requiredService && SUPPORTED_TOOLKITS.includes(requiredService)) {
-        const { checkConnectionWithJIT } = await import('@/lib/composio-connection')
-        const { isConnected, error: connError } = await checkConnectionWithJIT(user.id, requiredService)
-        
-        if (!isConnected) {
-          // Reset department status and return a clear error — no stuck approval row
-          await supabase.from('departments').update({ status: 'idle', current_task: null }).eq('id', dept.id)
-          await supabase.from('event_log').insert({
-            department_id: dept.id,
-            department_slug: dept.slug,
-            event_type: 'task_failed',
-            description: `Blocked: ${requiredService} is not connected`,
-            metadata: { missing_connection: requiredService, action: approvalReq.action_type },
-            created_by: user.id,
-          })
-          return NextResponse.json({
-            error: connError || `${requiredService.toUpperCase()} is not connected. Connect it in Settings → Integrations, then retry.`,
-            missing_connection: true,
-            service: requiredService,
-          }, { status: 409 })
-        }
-      }
-
       // Create approval_queue entry. The action_type CHECK constraint only
       // accepts canonical enum values (send_email, post_social, etc.) — if the
       // LLM emitted a raw composio action (e.g. "GMAIL_SEND_EMAIL") we must
@@ -409,7 +372,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       const enrichedPayload = rawToolAction
-        ? { ...approvalReq.payload, __tool_action: rawToolAction, __service: requiredService }
+        ? { ...approvalReq.payload, __tool_action: rawToolAction, __service: rawToolAction.split('_')[0].toLowerCase() }
         : approvalReq.payload
 
       const { data: approval, error: approvalInsertErr } = await supabase
@@ -608,11 +571,13 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Trigger Orc Mission Report for the synthetic goal (best-effort, non-blocking).
     if (goalId) {
-      runOrcReport(goalId)
-        .then(async () => {
-          await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
-        })
-        .catch(e => console.error('[Dept Task] runOrcReport failed:', e))
+      runInBackground(
+        runOrcReport(goalId)
+          .then(async () => {
+            await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
+          })
+          .catch(e => console.error('[Dept Task] runOrcReport failed:', e))
+      )
     }
 
     return NextResponse.json({

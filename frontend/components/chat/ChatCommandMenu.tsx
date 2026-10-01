@@ -6,44 +6,9 @@ import { resolveIcon } from '@/lib/utils'
 
 // ─── Built-in tool catalogue shown for / prefix ───────────────────────────────
 
-const TOOL_CATALOGUE = [
-  {
-    id: 'knowledge_base_search',
-    label: 'Knowledge Base Search',
-    description: 'Search your uploaded documents',
-    icon: '📚',
-  },
-  {
-    id: 'gmail.send_email',
-    label: 'Gmail — Send Email',
-    description: 'Send an email via Gmail',
-    icon: '✉️',
-  },
-  {
-    id: 'gmail.search_emails',
-    label: 'Gmail — Search',
-    description: 'Search emails in Gmail',
-    icon: '🔍',
-  },
-  {
-    id: 'slack.post_message',
-    label: 'Slack — Post Message',
-    description: 'Post a message to a Slack channel',
-    icon: '💬',
-  },
-  {
-    id: 'github.create_pull_request',
-    label: 'GitHub — Create PR',
-    description: 'Open a pull request',
-    icon: '🔀',
-  },
-  {
-    id: 'github.list_pull_requests',
-    label: 'GitHub — List PRs',
-    description: 'List open pull requests',
-    icon: '📋',
-  },
-]
+// Direct tool commands are disabled in the beta; every external action goes
+// through an Orc-planned task and the approval gate.
+const TOOL_CATALOGUE: { id: string; label: string; description: string; icon: string }[] = []
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

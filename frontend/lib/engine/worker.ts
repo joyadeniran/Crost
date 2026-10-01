@@ -17,6 +17,7 @@ import { parseApprovalRequest } from './parse'
 import { logEvent } from './events'
 import { runOrcReport } from './orchestrator'
 import { log } from '@/lib/log'
+import { triggerDispatch } from '@/lib/background'
 
 /**
  * Build the task section of the worker prompt. Exported for unit tests.
@@ -395,11 +396,15 @@ export async function runWorkerTask(
   // Chain Reaction: if all tasks are terminal, synthesize and auto-complete the goal.
   if (goalId) {
     const { data: allTasks } = await supabase.from('goal_tasks').select('status').eq('goal_id', goalId)
-    const terminalStatuses = new Set(['completed', 'failed', 'rejected', 'expired'])
+    const terminalStatuses = new Set(['completed', 'failed', 'failed_permanent', 'rejected', 'expired', 'skipped'])
     const allTerminal = (allTasks || []).every((t: any) => terminalStatuses.has(t.status))
     if (allTerminal) {
       await runOrcReport(goalId)
       await supabase.from('goals').update({ status: 'completed' }).eq('id', goalId)
+    } else {
+      // Release any downstream tasks whose dependencies are now resolved. This is
+      // the event-driven replacement for the old polling worker's unblock pass.
+      triggerDispatch(goalId, 'CHAIN_REACTION')
     }
   }
 

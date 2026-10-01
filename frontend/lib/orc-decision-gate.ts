@@ -180,48 +180,14 @@ export interface KbMatch {
 }
 
 /**
- * Proactively retrieves up to 3 KB documents relevant to the intent.
- * Uses a direct Supabase query (no HTTP overhead) so it can run in parallel
- * with other pre-processing. Skips the search entirely if the KB is empty.
- * Always returns [] on any error — fire-and-forget safe.
+ * Knowledge base enrichment — disabled in the beta (always returns []).
  */
 export async function enrichWithKnowledgeBase(
-  intent: string,
-  userId: string | null
+  _intent: string,
+  _userId: string | null
 ): Promise<KbMatch[]> {
-  if (!userId) return []
-  try {
-    const supabase = createServerSupabaseClient()
-
-    const { count } = await supabase
-      .from('knowledge_base_files')
-      .select('*', { count: 'exact', head: true })
-      .eq('created_by', userId)
-      .eq('processing_status', 'completed')
-
-    if ((count ?? 0) === 0) return []
-
-    const searchTerm = intent.slice(0, 80)
-    const { data: files } = await supabase
-      .from('knowledge_base_files')
-      .select('title, category, extracted_summary')
-      .eq('created_by', userId)
-      .eq('processing_status', 'completed')
-      .or(`title.ilike.%${searchTerm}%,extracted_summary.ilike.%${searchTerm}%`)
-      .order('reference_count', { ascending: false })
-      .limit(3)
-
-    if (!files || files.length === 0) return []
-
-    return files.map((f: any) => ({
-      title: f.title,
-      summary: f.extracted_summary || '',
-      category: f.category || '',
-    }))
-  } catch (err) {
-    console.error('[enrichWithKnowledgeBase] Error (non-fatal):', err)
-    return []
-  }
+  // The knowledge base is not part of the beta loop.
+  return []
 }
 
 /**

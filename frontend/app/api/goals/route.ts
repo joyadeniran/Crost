@@ -7,8 +7,10 @@ import { runOrchestratorTask } from '@/lib/llm-client'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth/guard'
+import { runInBackground } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 const CreateGoalSchema = z.object({
   founder_input: z.string().min(5, 'Goal must be at least 5 characters').max(2000),
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Run orchestrator asynchronously — return immediately so UI can poll
     // We do NOT await this — the client polls /api/goals/[id] for status updates.
-    runOrchestratorTask(founder_input, goal.id).catch(async (err) => {
+    runInBackground(runOrchestratorTask(founder_input, goal.id).catch(async (err) => {
       console.error('[POST /api/goals] Orchestrator failed:', err)
       
       const { logEvent } = await import('@/lib/llm-client')
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
         .update({ status: 'failed', outcome: errorMessage })
         .eq('id', goal.id)
         .eq('created_by', user.id)
-    })
+    }))
 
     const responseBody = {
       success: true,

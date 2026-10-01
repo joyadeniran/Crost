@@ -60,15 +60,15 @@ describe('lib/crypto', () => {
     expect(() => decryptApiKey('not-even-colons')).toThrow('Invalid encrypted key format')
   })
 
-  it('throws when USER_API_ENCRYPTION_KEY is not set', async () => {
+  it('throws when no encryption key is set', async () => {
     delete process.env.USER_API_ENCRYPTION_KEY
     const { encryptApiKey } = await import('@/lib/crypto')
-    expect(() => encryptApiKey('x')).toThrow('USER_API_ENCRYPTION_KEY is not set')
+    expect(() => encryptApiKey('x')).toThrow('TOKEN_ENCRYPTION_KEY is not set')
   })
 
-  it('throws when USER_API_ENCRYPTION_KEY is not 32 bytes', async () => {
+  it('throws when the key is not 32 bytes', async () => {
     process.env.USER_API_ENCRYPTION_KEY = 'deadbeef' // too short
     const { encryptApiKey } = await import('@/lib/crypto')
-    expect(() => encryptApiKey('x')).toThrow('USER_API_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
+    expect(() => encryptApiKey('x')).toThrow('TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
   })
 })

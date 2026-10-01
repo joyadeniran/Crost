@@ -27,8 +27,8 @@ describe('getOAuthConfig', () => {
     expect(cfg?.redirectUri).toBe('https://app.test/api/connect/google/callback')
   })
   it('uses a registered request origin (both-domains support)', () => {
-    expect(getOAuthConfig('https://app.crosthq.com')?.redirectUri)
-      .toBe('https://app.crosthq.com/api/connect/google/callback')
+    expect(getOAuthConfig('https://www.crosthq.com')?.redirectUri)
+      .toBe('https://www.crosthq.com/api/connect/google/callback')
   })
   it('falls back to the canonical URL for an unregistered origin', () => {
     expect(getOAuthConfig('https://evil.example')?.redirectUri)
@@ -93,6 +93,7 @@ describe('getGoogleToken (auto-refresh)', () => {
   }
 
   it('refreshes an expired access token using the stored refresh token', async () => {
+    process.env.TOKEN_ENCRYPTION_KEY = 'c'.repeat(64)
     const { getGoogleToken } = await import('@/lib/google/auth')
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true, status: 200, json: async () => ({ access_token: 'fresh', expires_in: 3600 }),
@@ -108,6 +109,21 @@ describe('getGoogleToken (auto-refresh)', () => {
     expect(status.expired).toBe(false)
     expect(status.durable).toBe(true)
     expect(db._b.upsert).toHaveBeenCalled() // persisted the refreshed token
+    expect(db._b.upsert.mock.calls[0][0].access_token).not.toBe('fresh') // ...sealed, not plaintext
+  })
+
+  it('still returns the fresh token (but never stores it unsealed) when the encryption key is missing', async () => {
+    delete process.env.TOKEN_ENCRYPTION_KEY
+    delete process.env.USER_API_ENCRYPTION_KEY
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { getGoogleToken } = await import('@/lib/google/auth')
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true, status: 200, json: async () => ({ access_token: 'fresh', expires_in: 3600 }),
+    } as Response)
+    const db = dbReturning({ access_token: 'stale', refresh_token: 'rt', token_expires_at: new Date(Date.now() - 3600_000).toISOString() })
+    const status = await getGoogleToken(db, 'user-1')
+    expect(status.accessToken).toBe('fresh')
+    expect(db._b.upsert).not.toHaveBeenCalled()
   })
 
   it('returns the cached token when still valid (no refresh call)', async () => {

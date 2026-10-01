@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 type Params = { params: { id: string } }
 

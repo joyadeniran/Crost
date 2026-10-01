@@ -1,6 +1,8 @@
 // lib/db.ts
 // PostgreSQL client with Supabase-compatible query builder interface.
-// Replaces @supabase/supabase-js for all database operations on Cloud SQL.
+// Talks to Supabase Postgres over a direct pg connection (DATABASE_URL) — use the
+// Supabase pooler URL on Vercel. This role bypasses RLS: ownership scoping
+// (`created_by = user.id`) is enforced in application code.
 // Server-side ONLY.
 
 import { Pool } from 'pg'
@@ -10,20 +12,16 @@ let _pool: Pool | null = null
 export function getPool(): Pool {
   if (!_pool) {
     const connectionString = process.env.DATABASE_URL ?? ''
-    // Cloud SQL connects over a unix socket (host=/cloudsql/INSTANCE), which does
-    // not support SSL — enabling it fails with "server does not support SSL
-    // connections". Only use SSL for real TCP connections in production.
-    const isUnixSocket =
-      connectionString.includes('host=/cloudsql/') ||
-      connectionString.includes('host=%2Fcloudsql%2F') ||
+    // Supabase requires TLS (including through the pooler); local Postgres does not.
+    const isLocal =
+      /@(localhost|127\.0\.0\.1)[:/]/.test(connectionString) ||
+      connectionString.includes('host=/') ||
       /@\/[^/]/.test(connectionString)
     _pool = new Pool({
       connectionString,
-      ssl:
-        process.env.NODE_ENV === 'production' && !isUnixSocket
-          ? { rejectUnauthorized: false }
-          : undefined,
-      max: 10,
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      // Serverless: many short-lived instances — keep each instance's pool small.
+      max: Number(process.env.DB_POOL_MAX ?? 5),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     })

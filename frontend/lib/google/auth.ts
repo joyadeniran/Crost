@@ -4,11 +4,28 @@
 // token (offline flow). Server-side only.
 
 import { getOAuthConfig, refreshAccessToken } from './oauth'
+import { encryptApiKey, decryptApiKey } from '../crypto'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any
 
 const GOOGLE_SERVICE = 'google'
+
+// OAuth tokens are sealed with AES-256-GCM before they touch the database. Rows
+// written before this change hold plaintext; they are read as-is and re-sealed
+// on the next refresh. Storing FAILS CLOSED if TOKEN_ENCRYPTION_KEY is missing —
+// we never fall back to writing a plaintext secret.
+const SEALED_PREFIX = 'enc:v1:'
+
+export function sealToken(plain: string): string {
+  return SEALED_PREFIX + encryptApiKey(plain)
+}
+
+export function openToken(stored: string | null | undefined): string | null {
+  if (!stored) return null
+  if (!stored.startsWith(SEALED_PREFIX)) return stored // legacy plaintext row
+  return decryptApiKey(stored.slice(SEALED_PREFIX.length))
+}
 
 export async function storeGoogleToken(
   supabase: Db,
@@ -22,14 +39,14 @@ export async function storeGoogleToken(
     created_by: userId,
     service_name: GOOGLE_SERVICE,
     connection_id: 'google-oauth',
-    access_token: token.access_token,
+    access_token: sealToken(token.access_token),
     token_expires_at: expiresAt,
     scopes: token.scopes ?? null,
     updated_at: new Date().toISOString(),
   }
   // Only overwrite the refresh token when Google returns a new one — refresh
   // grants frequently omit it, and we must not clobber the stored value.
-  if (token.refresh_token) row.refresh_token = token.refresh_token
+  if (token.refresh_token) row.refresh_token = sealToken(token.refresh_token)
   await supabase.from('connections').upsert(row, { onConflict: 'created_by, service_name' })
 }
 
@@ -58,27 +75,44 @@ export async function getGoogleToken(supabase: Db, userId: string): Promise<Goog
     return { accessToken: null, expired: false, connected: false, durable: false }
   }
 
-  const durable = !!data?.refresh_token
+  let accessToken: string | null = null
+  let refreshToken: string | null = null
+  try {
+    accessToken = openToken(data?.access_token)
+    refreshToken = openToken(data?.refresh_token)
+  } catch (err) {
+    // Wrong/rotated key or corrupt value: treat as "needs reconnect", never crash the caller.
+    console.error('[getGoogleToken] could not decrypt stored token:', (err as Error).message)
+    return { accessToken: null, expired: true, connected: true, durable: false }
+  }
+
+  const durable = !!refreshToken
   const isExpired = data?.token_expires_at
     ? new Date(data.token_expires_at).getTime() < Date.now() - 60_000 // 60s skew
     : false
 
-  if (data?.access_token && !isExpired) {
-    return { accessToken: data.access_token, expired: false, connected: true, durable }
+  if (accessToken && !isExpired) {
+    return { accessToken, expired: false, connected: true, durable }
   }
 
   // Access token missing/expired — refresh if we can.
-  if (data?.refresh_token) {
+  if (refreshToken) {
     const cfg = getOAuthConfig()
     if (cfg) {
       try {
-        const fresh = await refreshAccessToken(cfg, data.refresh_token)
-        await storeGoogleToken(supabase, userId, {
-          access_token: fresh.access_token,
-          refresh_token: fresh.refresh_token, // usually undefined; storeGoogleToken won't clobber
-          expires_in: fresh.expires_in,
-          scopes: fresh.scope,
-        })
+        const fresh = await refreshAccessToken(cfg, refreshToken)
+        try {
+          await storeGoogleToken(supabase, userId, {
+            access_token: fresh.access_token,
+            refresh_token: fresh.refresh_token, // usually undefined; storeGoogleToken won't clobber
+            expires_in: fresh.expires_in,
+            scopes: fresh.scope,
+          })
+        } catch (persistErr) {
+          // The fresh token is valid for this call even if we could not persist it
+          // (e.g. TOKEN_ENCRYPTION_KEY missing) — never write it unsealed.
+          console.error('[getGoogleToken] could not persist refreshed token:', (persistErr as Error).message)
+        }
         return { accessToken: fresh.access_token, expired: false, connected: true, durable: true }
       } catch (err) {
         console.error('[getGoogleToken] refresh failed:', (err as Error).message)
@@ -87,5 +121,5 @@ export async function getGoogleToken(supabase: Db, userId: string): Promise<Goog
     }
   }
 
-  return { accessToken: data?.access_token ?? null, expired: true, connected: true, durable }
+  return { accessToken, expired: true, connected: true, durable }
 }

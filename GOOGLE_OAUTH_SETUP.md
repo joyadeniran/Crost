@@ -1,39 +1,24 @@
-# Google OAuth (offline) — activation runbook
+# Google OAuth (optional) — Sign in with Google + "Connect Gmail"
 
-The offline Google connection (durable refresh tokens for sending + event
-listening) is fully implemented. It needs a real OAuth **Web** client. ~10 min,
-all in the `crost-hq` project. Until done, "Connect Google" returns
-*"not configured"*; the short-lived popup token from login still works.
+Crost works without any Google OAuth client (email code sign-in + approvals). Add one only if
+you want **Sign in with Google** and/or **Gmail send on approval**. Creating the OAuth client
+uses the Google Cloud console, but Crost runs no Google Cloud infrastructure.
 
-## 1. OAuth consent screen
-console.cloud.google.com → **APIs & Services → OAuth consent screen** (project `crost-hq`):
-- User type: External · Publishing status: **Testing**
-- **Add scopes**: `.../auth/gmail.send`, `.../auth/gmail.readonly`, `.../auth/calendar.events`
-- **Add test users**: your Google address (the one you sign into Crost with)
+## 1. Consent screen
+console.cloud.google.com → APIs & Services → OAuth consent screen: External, status *Testing*
+(add your address as a test user). Scopes: `gmail.send`, `gmail.readonly`, `calendar.events`.
 
-## 2. OAuth client (Web application)
-**APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**
-(or reuse the existing "Web client (auto created by Google Service)").
-- **Authorized redirect URIs** — add both:
-  - `https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/connect/google/callback`
-  - `https://app.crosthq.com/api/connect/google/callback`
-- Copy the **Client ID** and **Client secret**.
+## 2. OAuth client (Web application) — redirect URIs
+- `https://crosthq.com/api/connect/google/callback` (Connect Gmail)
+- `https://www.crosthq.com/api/connect/google/callback`
+- `https://<your-supabase-ref>.supabase.co/auth/v1/callback` (Sign in with Google)
 
-## 3. Store the credentials as secrets
-```bash
-printf 'YOUR_CLIENT_ID'     | gcloud secrets versions add GOOGLE_OAUTH_CLIENT_ID     --data-file=- --project=crost-hq
-printf 'YOUR_CLIENT_SECRET' | gcloud secrets versions add GOOGLE_OAUTH_CLIENT_SECRET --data-file=- --project=crost-hq
-```
+## 3. Wire it up
+- Vercel env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+  `TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32` — stored Gmail tokens are AES-256-GCM sealed;
+  connecting fails closed without it).
+- Supabase → Auth → Providers → Google: paste the same client ID/secret.
 
-## 4. Roll a new revision (picks up :latest secret values)
-```bash
-gcloud run services update crost-frontend --region=us-central1 --project=crost-hq
-```
-
-## 5. Verify
-Settings → MCP & Tool Connections → **Connect** on Gmail → Google consent →
-back to Settings with `?google=connected`. The token now refreshes
-automatically; sends work beyond the 1-hour window.
-
-> Note: `NEXT_PUBLIC_APP_URL` (baked at build = the Cloud Run URL) determines the
-> redirect URI the app sends. It must exactly match a URI registered in step 2.
+## 4. Verify
+Sign in → Settings → **Connect Gmail** → Google consent → back at
+`/app/settings?google=connected`. An approved `send_email` action now sends from your Gmail.

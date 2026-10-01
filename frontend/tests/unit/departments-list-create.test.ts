@@ -1,5 +1,5 @@
 /**
- * Unit tests: app/api/departments/route.ts — GET (list) / POST (create/clone) (T7).
+ * Unit tests: app/api/departments/route.ts — GET (list). POST (create/clone) was removed with dynamic departments.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -8,8 +8,6 @@ let mockUser: { id: string } | null = { id: 'user-1' }
 let mockRows: any[] = []
 let mockExisting: any = null
 let mockIdempotencyResponse: any = { kind: 'none' }
-
-vi.mock('@/lib/department-lifecycle', () => ({ RESERVED_SLUGS: ['orchestrator', 'system'] }))
 
 vi.mock('@/lib/idempotency', () => ({
   beginIdempotentRequest: vi.fn(() => Promise.resolve(mockIdempotencyResponse)),
@@ -37,7 +35,7 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }))
 
-import { GET, POST } from '@/app/api/departments/route'
+import { GET } from '@/app/api/departments/route'
 
 beforeEach(() => {
   mockUser = { id: 'user-1' }
@@ -47,11 +45,18 @@ beforeEach(() => {
 })
 
 describe('GET /api/departments', () => {
-  it('allows unauthenticated access for scope=templates', async () => {
+  it('returns 401 for scope=templates when unauthenticated (auth on every route)', async () => {
     mockUser = null
     mockRows = [{ id: 't1', created_by: null }]
     const res = await GET(new NextRequest('http://localhost/api/departments?scope=templates'))
+    expect(res.status).toBe(401)
+  })
+
+  it('serves global templates for scope=templates when authenticated', async () => {
+    mockRows = [{ id: 't1', created_by: null }]
+    const res = await GET(new NextRequest('http://localhost/api/departments?scope=templates'))
     expect(res.status).toBe(200)
+    expect((await res.json()).data).toEqual(mockRows)
   })
 
   it('returns 401 for the default (user) scope when unauthenticated', async () => {
@@ -69,59 +74,9 @@ describe('GET /api/departments', () => {
   })
 })
 
-function makePostReq(body: any) {
-  return new NextRequest('http://localhost/api/departments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
-
-describe('POST /api/departments', () => {
-  it('returns 401 when unauthenticated', async () => {
-    mockUser = null
-    const res = await POST(makePostReq({ template_slug: 'sales' }))
-    expect(res.status).toBe(401)
-  })
-
-  it('returns 400 for an invalid create payload (zod — persona_prompt too short)', async () => {
-    const res = await POST(makePostReq({
-      name: 'Sales', slug: 'sales', persona_prompt: 'short',
-      model_provider: 'groq', model_name: 'x',
-    }))
-    expect(res.status).toBe(400)
-  })
-
-  it('rejects a reserved slug', async () => {
-    const res = await POST(makePostReq({
-      name: 'Orchestrator', slug: 'orchestrator', persona_prompt: 'x'.repeat(60),
-      model_provider: 'groq', model_name: 'x',
-    }))
-    expect(res.status).toBe(400)
-  })
-
-  it('returns 409 when cloning a template the user already has', async () => {
-    mockExisting = { id: 'existing-dept' }
-    const res = await POST(makePostReq({ template_slug: 'sales' }))
-    expect(res.status).toBe(409)
-    const body = await res.json()
-    expect(body.code).toBe('DEPARTMENT_ALREADY_EXISTS')
-  })
-
-  it('creates a valid new department (draft stage)', async () => {
-    const res = await POST(makePostReq({
-      name: 'Sales', slug: 'sales-team', persona_prompt: 'x'.repeat(60),
-      model_provider: 'groq', model_name: 'llama',
-    }))
-    expect(res.status).toBe(201)
-  })
-
-  it('returns 409 on a duplicate slug for a fresh department', async () => {
-    mockExisting = { id: 'existing' } // used for both maybeSingle calls in this mock
-    const res = await POST(makePostReq({
-      name: 'Sales', slug: 'sales-team', persona_prompt: 'x'.repeat(60),
-      model_provider: 'groq', model_name: 'llama',
-    }))
-    expect(res.status).toBe(409)
+describe('departments are fixed in the beta (no create/clone API)', () => {
+  it('does not export POST — dynamic department creation was cut', async () => {
+    const mod = await import('@/app/api/departments/route')
+    expect((mod as any).POST).toBeUndefined()
   })
 })

@@ -4,6 +4,7 @@ import { runOrchestratorTask } from '@/lib/llm-client'
 import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 export async function POST(req: NextRequest) {
   try {

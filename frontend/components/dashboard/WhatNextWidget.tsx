@@ -20,8 +20,6 @@ const ACTION_ICONS: Record<string, string> = {
   add_to_memo: '📝',
   make_changes: '✏️',
   send_to_contact: '👤',
-  save_to_kb: '📚',
-  schedule_recurring: '📅',
   generate_companion: '📄',
   share_with_teammate: '👥',
   draft_followup: '↩️',
@@ -66,7 +64,7 @@ export function WhatNextWidget({ actions }: Props) {
         {actions.map((action) => (
           <Link
             key={action.id}
-            href={`/dashboard/artifacts/${action.source_entity_id}`}
+            href={`/app/artifacts/${action.source_entity_id}`}
             style={{
               display: 'flex',
               alignItems: 'center',

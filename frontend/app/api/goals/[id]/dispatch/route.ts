@@ -19,12 +19,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { runWorkerTask, logEvent } from '@/lib/llm-client'
-import { getModelForTask } from '@/lib/model-routing'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import type { OrchestratorTask, WorkerDept, WorkerTask } from '@/types'
 import { z } from 'zod'
+import { runInBackground, triggerDispatch } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 type Params = { params: { id: string } }
 
@@ -116,14 +117,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         if (blockers.length === 0) {
           // Recursive call to self for this specific task
           console.log(`[Dispatch] Releasing dependency for task ${t.task_id}`)
-          fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${goal.id}/dispatch`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-            },
-            body: JSON.stringify({ task_id: t.task_id })
-          }).catch(e => console.error(`[Dispatch] Recursive dispatch failed for ${t.task_id}:`, e))
+          triggerDispatch(goal.id, t.task_id)
           count++
         }
       }
@@ -318,16 +312,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       metadata: { task_id, goal_id: goal.id, dept: task.dept, env_mode_snapshot: envModeSnapshot, modified: isModified },
     })
 
-    // Resolve model using user's BYOK config, fallback to Orc's assignment
-    let modelForTask = finalTask.model
-    try {
-      const userModelConfig = await getModelForTask(goal.created_by, finalTask.action)
-      if (userModelConfig && userModelConfig.model) {
-        modelForTask = userModelConfig.model
-      }
-    } catch (err) {
-      console.warn('[dispatch] Failed to resolve user model config, using Orc assignment:', err)
-    }
+    const modelForTask = finalTask.model
 
     // Shape the OrchestratorTask into a WorkerTask
     const workerTask: WorkerTask = {
@@ -342,7 +327,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     // Dispatch to worker asynchronously — return immediately, UI polls dept status
-    runWorkerTask(task.dept as WorkerDept, workerTask, goal.id, envModeSnapshot).catch(async (err) => {
+    runInBackground(runWorkerTask(task.dept as WorkerDept, workerTask, goal.id, envModeSnapshot).catch(async (err) => {
       console.error(`[dispatch] Worker "${task.dept}" failed for task "${task_id}":`, err)
       // Mark task as failed in goal_tasks
       await supabase
@@ -358,7 +343,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         description: `Worker task failed: ${task.label}`,
         metadata: { task_id, error: String(err) },
       })
-    })
+    }))
 
     const responseBody = {
       success: true,

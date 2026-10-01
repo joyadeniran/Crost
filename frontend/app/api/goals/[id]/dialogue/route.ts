@@ -8,8 +8,10 @@ import { runOrchestratorTask } from '@/lib/llm-client'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth/guard'
+import { runInBackground } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 const DialogueSchema = z.object({
   message: z.string().optional(),
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // 3. Re-trigger Orchestrator
     // We run it with the current history and the force_plan flag
-    runOrchestratorTask(goal.founder_input, goalId, updatedHistory, !!force_plan).catch(async (err) => {
+    runInBackground(runOrchestratorTask(goal.founder_input, goalId, updatedHistory, !!force_plan).catch(async (err) => {
       console.error('[POST /api/goals/dialogue] Orchestrator failed:', err)
       
       const { logEvent } = await import('@/lib/llm-client')
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         .update({ status: 'failed', outcome: errorMessage })
         .eq('id', goalId)
         .eq('created_by', user.id)
-    })
+    }))
 
     const responseBody = {
       success: true,

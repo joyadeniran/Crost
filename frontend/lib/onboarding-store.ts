@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { BETA_DEPARTMENT_SLUGS } from '@/lib/beta-departments'
 
 export interface OnboardingState {
   // Screen 1: Identity
@@ -44,7 +45,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       businessCategory: '',
       stage: null,
       riskTolerance: 'balanced',
-      selectedDepartments: [],
+      selectedDepartments: [...BETA_DEPARTMENT_SLUGS],
       firstGoal: '',
       orcPlan: null,
 
@@ -71,7 +72,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           businessCategory: '',
           stage: null,
           riskTolerance: 'balanced',
-          selectedDepartments: [],
+          selectedDepartments: [...BETA_DEPARTMENT_SLUGS],
           firstGoal: '',
           orcPlan: null,
         }),

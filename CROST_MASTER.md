@@ -2147,3 +2147,23 @@ Supabase services were restricted (402) due to 7.15 GB egress — 2.15 GB over t
 **Impact**: Added branding consistency across browser tabs.
 
 ... [rest of previous content]
+
+---
+
+## Session v14.0 — Beta rebuild: one Vercel deploy (marketing + app), Supabase, Gemini key
+**Date**: 2026-10-01 **Status**: ✅ CODE COMPLETE — deploy blocked only on a live Supabase project + keys (see `docs/DEPLOY_VERCEL.md`)
+**Impact**: Crost is now one Next.js app (`frontend/`) for both the marketing site (`/`) and the product (`/app`), designed for Vercel + Supabase. All Google Cloud infrastructure is removed.
+
+### What Changed
+1. **Infra swap** — Firebase Auth → Supabase Auth (`@supabase/ssr` cookie session; `middleware.ts` gates `/app`, routes onboarding, keeps the CSRF origin check); GCS → Supabase Storage (`lib/storage.ts`, one private `crost` bucket); Cloud SQL → Supabase Postgres (same pg shim, `DATABASE_URL` = pooler); Vertex/ADK → `GEMINI_API_KEY` (`lib/gemini-client.ts`). New `lib/supabase-admin.ts`.
+2. **Serverless execution** — `scripts/worker.ts` replaced by `lib/background.ts` (`waitUntil`), event-driven chain reaction (`triggerDispatch` after each task) and `lib/engine/supervisor.ts` behind `/api/cron/supervise`; cron auth centralised in `lib/auth/cron.ts` (500 if `CRON_SECRET` unset). `frontend/vercel.json` crons (daily, plan-agnostic).
+3. **Scope cut to one loop** — removed MCP server, BYO keys/model routing, recurring missions, calendar prep/events, knowledge base, dynamic department create/clone/settings, Composio, ADK, Orc learning cron, `/api/tools/*`, direct tool commands. Tool gateway now always routes through the approval queue (no auto-run). Departments fixed to Marketing/Engineering/Sales/Operations (+Orchestrator); onboarding is 3 steps.
+4. **Schema** — new single baseline `supabase/migrations/20261001000000_crost_beta_baseline.sql` (RLS on everywhere with no policies; `anon` may only INSERT into `waitlist`; private storage bucket; department templates seeded). Fixed schema drift the old Cloud SQL port had (see `docs/BASELINE.md`). Old GCP files → `archive/gcp-legacy/`, old Supabase migrations → `supabase/legacy/`.
+5. **Marketing merge** — landing site ported into `app/(marketing)`; new scroll-driven `BridgeScroll` hero (from the Bridge Animation handoff); beta pricing page (free during beta); legal pages brought in line with the beta (**draft — needs counsel review**); `/api/waitlist` (insert-only, rate-limited, optional server-side Brevo; the table is not publicly readable). Old `/dashboard`/`/onboarding` URLs redirect into `/app`.
+6. **Security** — Google OAuth tokens sealed with AES-256-GCM (`TOKEN_ENCRYPTION_KEY`, fail-closed); cross-user approval PATCH → 404; `/api/departments` requires a session; removed the cookie-purge hack.
+
+### Tests
+Unit: 725 passing (removed suites for cut modules; added cron-auth, supervisor, middleware-routing, waitlist-route, storage-adapter, background, beta-departments, google-token-sealing; rewrote execute-tool-call). New `tests/integration/baseline-schema.test.ts` (11 tests) applies the baseline to a real Postgres and exercises the shim, supervisor, immutability trigger, RLS and `anon` grants. `tsc --noEmit` clean; `next build` green with type-checking ON (ESLint is not run at build — pre-existing `.eslintrc` gap).
+
+### Not done (needs the founder)
+Create the Supabase project, apply the migration, set Vercel env vars, point DNS, rotate the old Brevo/Supabase keys exposed in the old landing repo's `.env.local`, counsel review of legal copy. Not browser-verified against a live backend (no Supabase project exists yet).

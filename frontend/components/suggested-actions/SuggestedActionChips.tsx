@@ -34,13 +34,6 @@ function ChipIcon({ slug }: { slug: string }) {
           <polyline points="22,6 12,13 2,6"/>
         </svg>
       )
-    case 'save_to_kb':
-      return (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-        </svg>
-      )
     case 'add_to_memo':
       return (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -143,7 +136,7 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
       if (data.redirect) {
         setChipState('done')
         setMessage('Opening War Room…')
-        const url = data.goal_id ? `/dashboard?goal=${data.goal_id}` : '/dashboard'
+        const url = data.goal_id ? `/app?goal=${data.goal_id}` : '/app'
         router.push(url)
         return
       }

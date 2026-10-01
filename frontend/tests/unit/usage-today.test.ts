@@ -51,18 +51,18 @@ describe('GET /api/usage/today', () => {
     expect(body.tokensUsed).toBe(350)
   })
 
-  it('reports hasUserKey:false when no valid BYOK keys exist', async () => {
+  it('reports hasUserKey:false (BYOK removed)', async () => {
     mockKeys = []
     const res = await GET(new NextRequest('http://localhost/api/usage/today'))
     const body = await res.json()
     expect(body.hasUserKey).toBe(false)
   })
 
-  it('reports hasUserKey:true when at least one valid key exists', async () => {
+  it('never reports a user key — bring-your-own-key was cut from the beta', async () => {
     mockKeys = [{ provider: 'openai' }]
     const res = await GET(new NextRequest('http://localhost/api/usage/today'))
     const body = await res.json()
-    expect(body.hasUserKey).toBe(true)
+    expect(body.hasUserKey).toBe(false)
   })
 
   it('includes limit from FREE_SYSTEM_DAILY_TOKENS and a resetAt timestamp', async () => {

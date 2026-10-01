@@ -24,8 +24,8 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }))
 
-vi.mock('@/lib/gcs', () => ({
-  gcsStorage: { from: vi.fn(() => ({ getObject: getObjectMock })) },
+vi.mock('@/lib/storage', () => ({
+  appStorage: { from: vi.fn(() => ({ getObject: getObjectMock })) },
 }))
 
 import { GET } from '@/app/api/artifacts/[id]/download/route'
@@ -74,13 +74,13 @@ describe('GET /api/artifacts/[id]/download', () => {
     expect(getObjectMock).toHaveBeenCalledWith('goals/g1/report.pdf')
   })
 
-  it('does not choke on legacy double-prefixed URLs — passes the raw remainder through (gcsStorage collapses it)', async () => {
+  it('does not choke on legacy double-prefixed URLs — passes the raw remainder through (appStorage collapses it)', async () => {
     mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/artifacts/goals/g1/report.pdf', title: 'T', created_by: 'user-1' }
     mockGetObjectResult = { data: Buffer.from('pdf bytes'), error: null }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.status).toBe(200)
     // The route itself does NOT strip the double prefix — it hands the raw
-    // remainder to gcsStorage.getObject(), which is documented to collapse it.
+    // remainder to appStorage.getObject(), which is documented to collapse it.
     expect(getObjectMock).toHaveBeenCalledWith('artifacts/goals/g1/report.pdf')
   })
 

@@ -2,13 +2,11 @@
 //
 // POST — records founder thumbs-up / thumbs-down on an Orc decision.
 //   Writes founder_override=true + outcome to the most recent orc_decision_log
-//   row for this goal, and also calls writeOutcomeToDecisionLog so the
-//   learning loop can pick it up on the next weekly sweep.
+//   row for this goal.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { z } from 'zod'
-import { writeOutcomeToDecisionLog } from '@/lib/orc-learning'
 import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
@@ -59,9 +57,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         })
         .eq('id', logRow.id)
         .eq('user_id', user.id)
-    } else {
-      // No decision log row yet (e.g. direct-response path) — write via learning helper
-      await writeOutcomeToDecisionLog(params.id, parsed.outcome, parsed.override_reason)
     }
 
     return NextResponse.json({

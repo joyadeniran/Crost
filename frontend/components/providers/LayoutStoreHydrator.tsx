@@ -32,39 +32,7 @@ export function LayoutStoreHydrator({ pendingCount, artifactCount, envMode }: Pr
   }, [setPendingApprovalCount, setArtifactCount])
 
   // Only run hydrator logic on dashboard paths
-  const isDashboard = pathname?.startsWith('/dashboard') || pathname?.startsWith('/onboarding')
-
-  // ─── 1. Cookie Force Purge (Fixes 431 Errors) ──────────────────────────────
-  // Scans for redundant Supabase cookies set on the wildcard domain (.crosthq.com)
-  // which persist even after we switch to the specific domain (app.crosthq.com).
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const cookies = document.cookie.split('; ')
-    const sbCookies = cookies.filter(c => c.split('=')[0].trim().startsWith('sb-'))
-    
-    // If we have more than 4 auth-related cookies, it's a sign of duplication
-    // (A normal session usually has 2: access_token and refresh_token)
-    if (sbCookies.length > 4) {
-      console.warn('[Hydrator] Duplicated Supabase cookies detected. Purging legacy wildcard cookies...')
-      
-      const domainParts = window.location.hostname.split('.')
-      if (domainParts.length >= 2) {
-        const rootDomain = `.${domainParts.slice(-2).join('.')}` // e.g., ".crosthq.com"
-        
-        sbCookies.forEach(cookie => {
-          const name = cookie.split('=')[0].trim()
-          // Force delete from the wildcard/root domain
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${rootDomain}`
-          // Also try without the leading dot just in case
-          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${rootDomain.substring(1)}`
-        })
-        
-        // After purging, we might need to reload to get a clean state, 
-        // but let's try just letting the next request go through first.
-        console.log('[Hydrator] Purge complete. Request headers should now be smaller.')
-      }
-    }
-  }, [])
+  const isDashboard = pathname?.startsWith('/app') || pathname?.startsWith('/app/onboarding')
 
   // ─── 2. SSR Sync ───────────────────────────────────────────────────────────
   useEffect(() => {

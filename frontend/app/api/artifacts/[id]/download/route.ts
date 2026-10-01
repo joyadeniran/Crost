@@ -1,12 +1,12 @@
 // GET /api/artifacts/[id]/download
 //
-// Streams an artifact's file from the (private) GCS bucket through the service
+// Streams an artifact's file from the (private) GCS bucket through the service role
 // account, after verifying the requester owns the artifact. The bucket is not
 // public, so the stored storage.googleapis.com URL cannot be fetched directly.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { gcsStorage } from '@/lib/gcs'
+import { appStorage } from '@/lib/storage'
 import { requireUser } from '@/lib/auth/guard'
 
 export const dynamic = 'force-dynamic'
@@ -43,15 +43,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Derive the object path relative to the 'artifacts' logical bucket.
     // Handles legacy double-prefixed URLs (.../artifacts/artifacts/...) too —
-    // gcsStorage.getObject() collapses any redundant leading 'artifacts/'.
+    // appStorage.getObject() collapses any redundant leading 'artifacts/'.
     const marker = '/artifacts/'
     const idx = fileUrl.indexOf(marker)
     if (idx === -1) return NextResponse.json({ error: 'Unrecognized artifact URL' }, { status: 422 })
     const objectPath = fileUrl.slice(idx + marker.length)
 
-    const { data: bytes, error: dlErr } = await gcsStorage.from('artifacts').getObject(objectPath)
+    const { data: bytes, error: dlErr } = await appStorage.from('artifacts').getObject(objectPath)
     if (dlErr || !bytes) {
-      console.error('[artifact download] GCS read failed:', dlErr?.message, 'path:', objectPath)
+      console.error('[artifact download] storage read failed:', dlErr?.message, 'path:', objectPath)
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 })
     }
 

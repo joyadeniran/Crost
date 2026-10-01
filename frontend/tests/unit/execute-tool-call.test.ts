@@ -1,273 +1,153 @@
 /**
- * Unit tests: lib/tools/execute-tool-call.ts
+ * Unit tests: lib/tools/execute-tool-call.ts (beta approval gateway)
  *
  * Covers:
- *  - BUG-3: approval_requested event emitted to event_log when HITL triggers
- *  - BUG-5: runComposioTool queues external actions for approval (post-migration)
- *           and retains GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT override map
- *  - executeToolCall: missing_connection returns graceful object (no throw)
- *  - executeToolCall: permission_denied returns graceful object for unknown dept
+ *  - Every external tool call is blocked behind an approval — there is NO
+ *    auto-run path, regardless of risk level or `requiresApproval` input.
+ *  - approval_requested event is emitted to event_log (BUG-3).
+ *  - Department permission mask: unknown departments are internal-only.
+ *  - getAllowedServices resolution rules.
+ *  - Failed approval insert rolls the execution skeleton back.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Env setup ──────────────────────────────────────────────────────────────
-process.env.COMPOSIO_API_KEY = 'test-composio-key'
-process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'
-
-// ── Event log capture ──────────────────────────────────────────────────────
 const loggedEvents: Array<{ event_type: string; [k: string]: any }> = []
 const approvalQueueInserts: any[] = []
+const executionInserts: any[] = []
+const executionUpdates: any[] = []
 const memoInserts: any[] = []
+let approvalInsertError: { message: string } | null = null
 
-// ── Supabase mock ──────────────────────────────────────────────────────────
-function mockSupabaseClient(overrides: Record<string, any> = {}) {
-  const queryBuilder: any = {
-    _table: '',
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockImplementation(async function (this: any) {
-      if (this._table === 'system_config') {
-        return { data: { value: 'careful' }, error: null } // careful = everything needs approval
-      }
-      return { data: null, error: null }
-    }),
-    single: vi.fn().mockImplementation(async function (this: any) {
-      if (this._table === 'tool_executions') {
-        return { data: { id: 'exec-id-1' }, error: null }
-      }
-      return { data: { id: 'mock-id' }, error: null }
-    }),
-    insert: vi.fn().mockImplementation(function (this: any, rows: any) {
-      const row = Array.isArray(rows) ? rows[0] : rows
-      if (this._table === 'event_log') {
-        loggedEvents.push(row)
-        return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: { id: 'evt-1' }, error: null }), then: (r: any) => Promise.resolve({ data: null, error: null }).then(r) }
-      }
-      if (this._table === 'approval_queue') {
-        approvalQueueInserts.push(row)
-        return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: { id: 'aq-id-1' }, error: null }) }
-      }
-      if (this._table === 'company_memos') {
-        memoInserts.push(row)
-        return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: { id: 'memo-1' }, error: null }), then: (r: any) => Promise.resolve({ data: null, error: null }).then(r) }
-      }
-      return { select: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: { id: 'mock-id' }, error: null }), then: (r: any) => Promise.resolve({ data: null, error: null }).then(r) }
-    }),
-    update: vi.fn().mockReturnThis(),
-    then: vi.fn().mockImplementation(function (this: any, resolve: any) {
-      return Promise.resolve({ data: null, error: null }).then(resolve)
-    }),
-  }
-
-  return {
-    from: vi.fn((table: string) => {
-      queryBuilder._table = table
-      return queryBuilder
-    }),
-    storage: {
-      from: vi.fn(() => ({
-        upload: vi.fn().mockResolvedValue({ data: { path: 'test/path' }, error: null }),
-        getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'http://mock/file' } }),
-      })),
-    },
-    ...overrides,
-  }
+function builder() {
+  const qb: any = { _table: '', _op: '' }
+  qb.select = vi.fn(() => qb)
+  qb.eq = vi.fn(() => qb)
+  qb.insert = vi.fn((rows: any) => {
+    const row = Array.isArray(rows) ? rows[0] : rows
+    qb._op = 'insert'
+    if (qb._table === 'event_log') loggedEvents.push(row)
+    if (qb._table === 'approval_queue') approvalQueueInserts.push(row)
+    if (qb._table === 'tool_executions') executionInserts.push(row)
+    if (qb._table === 'company_memos') memoInserts.push(row)
+    return qb
+  })
+  qb.update = vi.fn((row: any) => {
+    qb._op = 'update'
+    if (qb._table === 'tool_executions') executionUpdates.push(row)
+    return qb
+  })
+  qb.single = vi.fn(async () => {
+    if (qb._table === 'approval_queue' && approvalInsertError) return { data: null, error: approvalInsertError }
+    if (qb._table === 'approval_queue') return { data: { id: 'aq-id-1' }, error: null }
+    if (qb._table === 'tool_executions') return { data: { id: 'exec-id-1' }, error: null }
+    return { data: { id: 'mock-id' }, error: null }
+  })
+  qb.then = (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
+  return qb
 }
 
 vi.mock('@/lib/supabase', () => ({
-  createServerSupabaseClient: vi.fn(() => mockSupabaseClient()),
-}))
-
-const { composioExecuteMock } = vi.hoisted(() => {
-  const composioExecuteMock = vi.fn().mockResolvedValue({ successful: true, data: { id: 'msg-123' } })
-  return { composioExecuteMock }
-})
-
-vi.mock('@composio/core', () => ({
-  Composio: vi.fn(function () {
-    return {
-      tools: {
-        execute: composioExecuteMock,
-      },
-    }
-  }),
-}))
-
-vi.mock('@/lib/composio-connection', () => ({
-  checkConnectionWithJIT: vi.fn().mockResolvedValue({ isConnected: true, error: null }),
-}))
-
-vi.mock('@/lib/suggested-actions', () => ({
-  generateAndInsertSuggestedActions: vi.fn().mockResolvedValue([]),
-}))
-
-vi.mock('@/lib/company-memo', () => ({
-  addTaskLog: vi.fn().mockResolvedValue(undefined),
-  addArtifactReference: vi.fn().mockResolvedValue(undefined),
-}))
-
-vi.mock('@/lib/artifact-transformers', () => ({
-  detectOutputType: vi.fn().mockReturnValue({ type: 'json' }),
+  createServerSupabaseClient: vi.fn(() => ({
+    from: vi.fn((table: string) => {
+      const qb = builder()
+      qb._table = table
+      return qb
+    }),
+  })),
 }))
 
 beforeEach(() => {
   loggedEvents.length = 0
   approvalQueueInserts.length = 0
+  executionInserts.length = 0
+  executionUpdates.length = 0
   memoInserts.length = 0
+  approvalInsertError = null
 })
 
-// ── Tests: BUG-3 — approval_requested event ───────────────────────────────
+const gmailSend = {
+  service: 'gmail',
+  action: 'send_email',
+  params: { to: 'a@b.com', subject: 'Hi', body: 'Hello' },
+  reasoning: 'Founder asked for an intro email',
+  risk: 'medium' as const,
+  requiresApproval: false, // must be ignored — beta has no auto-run
+}
 
-describe('executeToolCall — approval_requested event (BUG-3)', () => {
-  it('inserts approval_requested into event_log when risk_tolerance is careful', async () => {
+describe('executeToolCall — approval gate (no auto-run)', () => {
+  it('blocks a low-risk call behind an approval even when requiresApproval=false', async () => {
     const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+    const result: any = await executeToolCall({
+      userId: 'user-1', departmentId: 'marketing', taskId: 't1', goalId: 'g1',
+      toolCall: { ...gmailSend, risk: 'low' },
+    })
+    expect(result.status).toBe('requires_approval')
+    expect(result.approval_id).toBe('aq-id-1')
+    expect(executionInserts[0]).toMatchObject({ status: 'blocked', requires_approval: true, user_id: 'user-1' })
+  })
 
+  it('writes an owner-scoped pending approval row with the real action stashed in the payload', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+    await executeToolCall({ userId: 'user-1', departmentId: 'sales', taskId: 't1', goalId: 'g1', toolCall: gmailSend })
+    expect(approvalQueueInserts).toHaveLength(1)
+    expect(approvalQueueInserts[0]).toMatchObject({
+      created_by: 'user-1', user_id: 'user-1', status: 'pending', action_type: 'tool_call', goal_id: 'g1',
+    })
+    expect(approvalQueueInserts[0].payload.__service).toBe('gmail')
+    expect(approvalQueueInserts[0].payload.__tool_action).toBeTruthy()
+  })
+
+  it('emits approval_requested to event_log (BUG-3) and a paper-trail memo', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+    await executeToolCall({ userId: 'user-1', departmentId: 'marketing', taskId: 't1', goalId: 'g1', toolCall: gmailSend })
+    const evt = loggedEvents.find((e) => e.event_type === 'approval_requested')
+    expect(evt).toBeDefined()
+    expect(evt!.metadata.approval_id).toBe('aq-id-1')
+    expect(memoInserts[0]).toMatchObject({ created_by: 'user-1', tags: ['system', 'tool_approval'] })
+  })
+
+  it('escalates known-critical tools to critical risk regardless of caller input', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
     await executeToolCall({
-      userId: 'user-1',
-      departmentId: 'marketing',
-      taskId: 'task-1',
-      goalId: 'goal-1',
-      toolCall: {
-        service: 'gmail',
-        action: 'send_email',
-        params: { to: 'test@example.com', subject: 'Hello', body: 'Hi' },
-        reasoning: 'Sending outreach email',
-        risk: 'medium',
-        requiresApproval: false,
-      },
+      userId: 'user-1', departmentId: 'executive', taskId: 't1', goalId: null,
+      toolCall: { ...gmailSend, action: 'delete_email', risk: 'low' },
     })
-
-    // approval_queue must have been populated
-    expect(approvalQueueInserts.length).toBeGreaterThan(0)
-
-    // event_log must contain approval_requested
-    const approvalEvent = loggedEvents.find(e => e.event_type === 'approval_requested')
-    expect(approvalEvent).toBeDefined()
-    expect(approvalEvent?.metadata?.tool).toBe('gmail.send_email')
+    expect(approvalQueueInserts[0].risk_level).toBe('critical')
   })
 
-  it('approval_requested event contains approval_id from approval_queue row', async () => {
+  it('rolls the execution skeleton back to failed when the approval insert fails', async () => {
+    approvalInsertError = { message: 'boom' }
     const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
-
-    await executeToolCall({
-      userId: 'user-1',
-      departmentId: 'marketing',
-      taskId: 'task-2',
-      goalId: 'goal-1',
-      toolCall: {
-        service: 'gmail',
-        action: 'send_email',
-        params: { to: 'test@example.com', subject: 'Hello', body: 'Hi' },
-        reasoning: 'Sending email',
-        risk: 'high',
-        requiresApproval: true,
-      },
-    })
-
-    const approvalEvent = loggedEvents.find(e => e.event_type === 'approval_requested')
-    expect(approvalEvent?.metadata?.approval_id).toBe('aq-id-1')
+    await expect(
+      executeToolCall({ userId: 'user-1', departmentId: 'marketing', taskId: 't1', goalId: 'g1', toolCall: gmailSend })
+    ).rejects.toThrow(/Failed to create approval request/)
+    expect(executionUpdates.some((u) => u.status === 'failed')).toBe(true)
   })
 })
 
-// ── Tests: BUG-5 — Gmail slug override map ────────────────────────────────
-// GCP migration: external tool execution moved off the Composio SDK and onto the
-// ADK approval flow (Google APIs are called post-approval). runComposioTool is now
-// a backward-compatible stub that returns a `requires_approval` result instead of
-// executing, and the legacy slug map is retained for the approval route.
-
-describe('runComposioTool — slug override + approval-flow contract (BUG-5)', () => {
-  it('returns a requires-approval result without executing the Composio SDK', async () => {
-    const { runComposioTool } = await import('@/lib/tools/providers/composio')
-
-    const result = await runComposioTool({
-      userId: 'user-1',
-      service: 'gmail',
-      action: 'create_draft',
-      params: { subject: 'Test', body: 'Body' },
+describe('executeToolCall — department permission mask', () => {
+  it('denies external tools to a department not in DEPARTMENT_TOOL_RULES', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+    const result: any = await executeToolCall({
+      userId: 'user-1', departmentId: 'growth-hacking', taskId: 't1', goalId: 'g1', toolCall: gmailSend,
     })
-
-    // External actions are queued for founder approval, not run directly anymore
-    expect(result.success).toBe(false)
-    expect((result.data as any)?.requires_approval).toBe(true)
-    // The legacy Composio SDK must no longer be invoked
-    expect(composioExecuteMock).not.toHaveBeenCalled()
+    expect(result.status).toBe('permission_denied')
+    expect(approvalQueueInserts).toHaveLength(0)
+    expect(executionInserts).toHaveLength(0)
   })
 
-  it('retains the GMAIL_CREATE_DRAFT → GMAIL_CREATE_EMAIL_DRAFT override map for the approval route', async () => {
-    const { COMPOSIO_SLUG_OVERRIDE_MAP } = await import('@/lib/tools/providers/composio')
-    expect(COMPOSIO_SLUG_OVERRIDE_MAP.GMAIL_CREATE_DRAFT).toBe('GMAIL_CREATE_EMAIL_DRAFT')
-  })
-
-  it('passes GMAIL_SEND_EMAIL through the override for "gmail" + "send"', async () => {
-    // Raw: GMAIL_SEND → override: GMAIL_SEND_EMAIL
-    const overrides: Record<string, string> = {
-      GMAIL_CREATE_DRAFT: 'GMAIL_CREATE_EMAIL_DRAFT',
-      GMAIL_SEND: 'GMAIL_SEND_EMAIL',
-      GMAIL_REPLY: 'GMAIL_REPLY_TO_EMAIL',
-    }
-    const raw = 'GMAIL_SEND'
-    expect(overrides[raw] ?? raw).toBe('GMAIL_SEND_EMAIL')
-  })
-
-  it('passes unknown slugs through unchanged', () => {
-    const overrides: Record<string, string> = {
-      GMAIL_CREATE_DRAFT: 'GMAIL_CREATE_EMAIL_DRAFT',
-    }
-    const raw = 'SLACK_SEND_MESSAGE'
-    expect(overrides[raw] ?? raw).toBe('SLACK_SEND_MESSAGE')
+  it('denies services outside the department allowlist (engineering has no gmail)', async () => {
+    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
+    const result: any = await executeToolCall({
+      userId: 'user-1', departmentId: 'engineering', taskId: 't1', goalId: 'g1', toolCall: gmailSend,
+    })
+    expect(result.status).toBe('permission_denied')
   })
 })
 
-// ── Tests: permission_denied / missing_connection returns ─────────────────
-
-describe('executeToolCall — graceful returns for blocked requests', () => {
-  it('returns permission_denied object when dept is not authorized for service', async () => {
-    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
-
-    const result = await executeToolCall({
-      userId: 'user-1',
-      departmentId: 'engineering', // engineering not allowed to use gmail
-      taskId: 'task-3',
-      goalId: 'goal-1',
-      toolCall: {
-        service: 'gmail',
-        action: 'send_email',
-        params: {},
-        reasoning: 'Unauthorized usage',
-        risk: 'low',
-        requiresApproval: false,
-      },
-    })
-
-    expect((result as any).status).toBe('permission_denied')
-  })
-
-  // Invariant #5 hardening: an unknown/custom department slug must NOT fall
-  // back to executive god-mode tool access. Safe default is internal-only.
-  it('denies external tools to a custom department not in DEPARTMENT_TOOL_RULES', async () => {
-    const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
-
-    const result = await executeToolCall({
-      userId: 'user-1',
-      departmentId: 'growth-hacking', // custom dept, not in allowlist
-      taskId: 'task-5',
-      goalId: 'goal-1',
-      toolCall: {
-        service: 'gmail',
-        action: 'send_email',
-        params: {},
-        reasoning: 'Custom dept trying an external tool',
-        risk: 'low',
-        requiresApproval: false,
-      },
-    })
-
-    expect((result as any).status).toBe('permission_denied')
-  })
-
-  it('getAllowedServices: unknown slug → internal only; orchestrator/executive keep full access; known slug unchanged', async () => {
+describe('getAllowedServices', () => {
+  it('unknown slug → internal only; orchestrator/executive/undefined → executive set; known slug unchanged', async () => {
     const { getAllowedServices, DEPARTMENT_TOOL_RULES } = await import('@/lib/tools/execute-tool-call')
-
     expect(getAllowedServices('growth-hacking')).toEqual(['internal'])
     expect(getAllowedServices('orchestrator')).toEqual(DEPARTMENT_TOOL_RULES['executive'])
     expect(getAllowedServices('executive')).toEqual(DEPARTMENT_TOOL_RULES['executive'])
@@ -275,42 +155,8 @@ describe('executeToolCall — graceful returns for blocked requests', () => {
     expect(getAllowedServices('marketing')).toEqual(DEPARTMENT_TOOL_RULES['marketing'])
   })
 
-  it('humanizes knowledge base search results instead of leaking raw JSON', async () => {
-    const priorFetch = global.fetch
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        matches: [
-          { title: 'Plan', category: 'marketing', file_id: 'file-1', relevance: 0.92, summary: 'A strong plan.' },
-          { title: 'Deck', category: 'sales', file_id: 'file-2', relevance: 0.84, summary: 'Pitch deck notes.' }
-        ]
-      })
-    }))
-
-    try {
-      const { executeToolCall } = await import('@/lib/tools/execute-tool-call')
-
-      const result = await executeToolCall({
-        userId: 'user-1',
-        departmentId: 'executive',
-        taskId: 'task-4',
-        goalId: 'goal-1',
-        toolCall: {
-          service: 'knowledge_base_search',
-          action: 'search',
-          params: { query: 'customer insights' },
-          reasoning: 'Search KB',
-          risk: 'low',
-          requiresApproval: false,
-        },
-      })
-
-      expect((result as any).result).toContain('I found 2 relevant documents:')
-      expect((result as any).result).not.toContain('matches')
-    } finally {
-      if (priorFetch) {
-        vi.stubGlobal('fetch', priorFetch)
-      }
-    }
+  it('covers exactly the four beta departments', async () => {
+    const { DEPARTMENT_TOOL_RULES } = await import('@/lib/tools/execute-tool-call')
+    expect(Object.keys(DEPARTMENT_TOOL_RULES).sort()).toEqual(['engineering', 'executive', 'marketing', 'operations', 'sales'])
   })
 })

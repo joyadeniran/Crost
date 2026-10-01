@@ -187,7 +187,7 @@ export function DepartmentChat({ department: dept }: Props) {
                 {msg.approvalRequested && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,179,71,0.3)' }}>
                     <a
-                      href="/dashboard/approvals"
+                      href="/app/approvals"
                       style={{
                         fontFamily: 'var(--font-dm-mono, monospace)',
                         fontSize: 10,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { updateCompanyProfile } from '@/lib/company-memo'
 import { requireUser } from '@/lib/auth/guard'
+import { normalizeSelectedDepartments } from '@/lib/beta-departments'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     const supabase = createServerSupabaseClient()
     const body = await req.json().catch(() => ({}))
     const identity = body.identity ?? {}
-    const selectedDepartments = Array.isArray(body.selectedDepartments) ? body.selectedDepartments : []
+    const selectedDepartments = normalizeSelectedDepartments(body.selectedDepartments)
     const riskTolerance = body.riskTolerance ?? null
     const step = typeof body.step === 'string' ? body.step : 'complete'
 
