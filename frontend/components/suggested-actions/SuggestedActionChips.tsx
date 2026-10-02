@@ -166,8 +166,8 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
 
   // Colour scheme per risk level
   const riskColour = action.risk_level === 'medium' ? '#facc15' : 'var(--accent)'
-  const riskBg = action.risk_level === 'medium' ? 'rgba(250,204,21,0.08)' : 'rgba(0,212,170,0.08)'
-  const riskBorder = action.risk_level === 'medium' ? 'rgba(250,204,21,0.2)' : 'rgba(0,212,170,0.2)'
+  const riskBg = action.risk_level === 'medium' ? 'rgba(250,204,21,0.08)' : 'rgba(15,143,118,0.08)'
+  const riskBorder = action.risk_level === 'medium' ? 'rgba(250,204,21,0.2)' : 'rgba(15,143,118,0.2)'
 
   const baseStyle: React.CSSProperties = {
     padding: '6px 12px',
@@ -230,7 +230,7 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
           style={{
             padding: '4px 10px',
             borderRadius: 14,
-            background: inputs[field]?.trim() ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+            background: inputs[field]?.trim() ? 'var(--accent)' : 'rgba(28,25,23,0.06)',
             border: 'none',
             color: inputs[field]?.trim() ? 'var(--bg)' : 'var(--text-4)',
             fontSize: 11,
@@ -272,7 +272,7 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
         if (!isDone && chipState !== 'loading') {
           e.currentTarget.style.background = action.risk_level === 'medium'
             ? 'rgba(250,204,21,0.15)'
-            : 'rgba(0,212,170,0.15)'
+            : 'rgba(15,143,118,0.15)'
         }
       }}
       onMouseLeave={e => {

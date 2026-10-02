@@ -35,11 +35,26 @@ export async function GET(req: NextRequest, { params }: Params) {
       )
       const r = rows[0]
       if (!r) return notFound()
+      // Compact progress for the chat's mission card (labels are short; bodies never included).
+      const [tasks, extra] = await Promise.all([
+        getPool().query(
+          `SELECT task_id, label, dept_slug, status FROM goal_tasks WHERE goal_id = $1 ORDER BY created_at LIMIT 20`,
+          [params.id]
+        ),
+        getPool().query(
+          `SELECT (SELECT count(*)::int FROM approval_queue WHERE goal_id = $1 AND status = 'pending') AS approvals,
+                  (SELECT count(*)::int FROM artifacts WHERE goal_id = $1 AND status <> 'discarded') AS artifacts`,
+          [params.id]
+        ),
+      ])
       const body = {
         success: true,
         data: {
           status: r.status as string,
           version: `${new Date(r.goal_updated).getTime()}|${r.task_count}|${r.task_updated ? new Date(r.task_updated).getTime() : 0}`,
+          tasks: tasks.rows,
+          approvals_pending: extra.rows[0]?.approvals ?? 0,
+          artifacts: extra.rows[0]?.artifacts ?? 0,
         },
       }
       recordEgress({ label: 'goal-status', table: 'goals', op: 'select', bytes: approxBytes(rows), rows: 1, ms: 0 })

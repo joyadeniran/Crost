@@ -60,7 +60,7 @@ export function ProfileSummary({ state }: { state: Partial<OnboardingState> }) {
           font-size: 14px;
           text-transform: uppercase;
           letter-spacing: 0.1em;
-          color: rgba(255,255,255,0.4);
+          color: rgba(28,25,23,0.4);
           margin: 0;
         }
         .status-dot {
@@ -85,7 +85,7 @@ export function ProfileSummary({ state }: { state: Partial<OnboardingState> }) {
         .summary-item label {
           display: block;
           font-size: 11px;
-          color: rgba(255,255,255,0.4);
+          color: rgba(28,25,23,0.4);
           margin-bottom: 4px;
           font-family: var(--font-dm-mono), monospace;
         }

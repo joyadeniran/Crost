@@ -1,3 +1,6 @@
+'use client'
+
+import { usePathname } from 'next/navigation'
 import type { EventLogEntry } from '@/types'
 
 interface Props {
@@ -6,11 +9,13 @@ interface Props {
   initialEvents?: EventLogEntry[]
 }
 
-// Beta: one calm column. Chat is the home screen; Approvals / Artifacts / Settings are the only other places.
+// Chat pages fill the column themselves; every other page sits in a calm reading column.
 export function ContentWrapper({ children }: Props) {
+  const pathname = usePathname()
+  const isChat = pathname === '/app' || pathname.startsWith('/app/c/')
   return (
     <div className="crost-content">
-      <div className="crost-page">{children}</div>
+      <div className={isChat ? 'crost-page' : 'crost-page page-col'}>{children}</div>
     </div>
   )
 }

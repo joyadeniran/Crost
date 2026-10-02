@@ -13,7 +13,7 @@ export function Logo({ size = 32, className = '' }: { size?: number, className?:
       <path 
         fillRule="evenodd" 
         clipRule="evenodd" 
-        fill="#00D4AA" 
+        fill="#0f8f76" 
         d="M199.1 0h600.9C910.457 0 1000 89.543 1000 199.1v600.9c0 110.457-89.543 200-199.1 200H199.1C89.543 1000 0 910.457 0 800V199.1C0 89.543 89.543 0 199.1 0z"
       />
       <path 

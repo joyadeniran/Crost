@@ -6,7 +6,7 @@ import { createServerSupabaseClient, createSupabaseServerComponentClient } from 
 import { ArtifactsGrid } from '@/components/artifacts/ArtifactsGrid'
 import { Artifact } from '@/types'
 
-export default async function ArtifactsPage() {
+export default async function ArtifactsPage({ searchParams }: { searchParams?: { goal?: string } }) {
   const authClient = await createSupabaseServerComponentClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) redirect('/login')
@@ -15,12 +15,17 @@ export default async function ArtifactsPage() {
 
   // Fetch artifacts + goals + departments in parallel.
   // Fetch all non-discarded artifacts so the grid can split them into Gallery / Sandbox tabs.
+  // ?goal=<id> (from a chat mission card) narrows the list to that mission's deliverables.
+  const goalFilter = searchParams?.goal && /^[0-9a-f-]{36}$/i.test(searchParams.goal) ? searchParams.goal : null
+  let artifactsQuery = supabase
+    .from('artifacts')
+    .select(ARTIFACT_LIST_COLUMNS)
+    .eq('created_by', user.id)
+    .not('status', 'eq', 'discarded')
+  if (goalFilter) artifactsQuery = artifactsQuery.eq('goal_id', goalFilter)
+
   const [{ data: artifactsData }, { data: goalsData }, { data: deptsData }] = await Promise.all([
-    supabase
-      .from('artifacts')
-      .select(ARTIFACT_LIST_COLUMNS)
-      .eq('created_by', user.id)
-      .not('status', 'eq', 'discarded')
+    artifactsQuery
       .order('created_at', { ascending: false })
       .limit(100),
     supabase
@@ -73,9 +78,9 @@ export default async function ArtifactsPage() {
           color: 'var(--text-3)',
           fontFamily: 'var(--font-dm-mono)',
           fontSize: 13,
-          background: 'rgba(255,255,255,0.02)',
+          background: 'rgba(28,25,23,0.02)',
           borderRadius: 16,
-          border: '1px dashed rgba(255,255,255,0.08)',
+          border: '1px dashed rgba(28,25,23,0.08)',
         }}>
           <svg width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1" viewBox="0 0 24 24"
             style={{ margin: '0 auto 16px', opacity: 0.3 }}>

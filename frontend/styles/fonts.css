@@ -1,10 +1,11 @@
-/* Type system: Fraunces (serif, headings) + Inter (sans, everything else), both from Google Fonts —
+/* Type system: Fraunces (serif, headings) + Inter (sans, body) + IBM Plex Mono (small tracked labels), both from Google Fonts —
    loaded by <link> in app/layout.tsx. The old --font-syne / --font-dm-* names are kept as aliases so
    existing components pick up the new pairing without per-file edits. */
 :root {
   --font-serif: 'Fraunces', Georgia, serif;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --font-syne: var(--font-serif);
   --font-dm-sans: var(--font-sans);
-  --font-dm-mono: var(--font-sans);
+  --font-dm-mono: var(--font-mono); /* small tracked labels, as on The Bridge */
 }

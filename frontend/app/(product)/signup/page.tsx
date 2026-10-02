@@ -163,7 +163,7 @@ export default function SignUpPage() {
               <div className="mode-switch">
                 <p className="switch-text">
                   Already have an account?{' '}
-                  <Link href="/login" style={{ color: '#00D4AA', textDecoration: 'none', fontWeight: 600 }}>Sign in</Link>
+                  <Link href="/login" style={{ color: '#0f8f76', textDecoration: 'none', fontWeight: 600 }}>Sign in</Link>
                 </p>
               </div>
             </div>
@@ -172,7 +172,7 @@ export default function SignUpPage() {
               <div className="sent-icon">🚀</div>
               <h2 className="sent-title">Verification Sent</h2>
               <p className="sent-desc">
-                We&apos;ve sent a verification code to <strong style={{ color: 'var(--accent, #00D4AA)' }}>{email}</strong>.
+                We&apos;ve sent a verification code to <strong style={{ color: 'var(--accent, #0f8f76)' }}>{email}</strong>.
               </p>
               
               <form onSubmit={handleVerifyOtp} className="otp-form">

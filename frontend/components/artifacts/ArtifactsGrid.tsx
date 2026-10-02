@@ -102,7 +102,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
         flexDirection: 'column',
         gap: 16,
         padding: '16px',
-        background: 'rgba(255,255,255,0.02)',
+        background: 'rgba(28,25,23,0.02)',
         borderRadius: 12,
         border: '1px solid var(--border)'
       }}>
@@ -159,9 +159,9 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
           color: 'var(--text-3)',
           fontFamily: 'var(--font-dm-mono)',
           fontSize: 13,
-          background: 'rgba(255,255,255,0.01)',
+          background: 'rgba(28,25,23,0.01)',
           borderRadius: 16,
-          border: '1px dashed rgba(255,255,255,0.05)',
+          border: '1px dashed rgba(28,25,23,0.05)',
         }}>
           No results found matching your search and filter.
         </div>

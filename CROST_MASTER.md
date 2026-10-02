@@ -2212,3 +2212,19 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - **Orc is chat-first:** greetings / "what can you do?" answer directly (no classifier call); when the classifier is unavailable the fallback is `assistant` for questions and `quick_plan` otherwise (was `full_plan`, which turned a chat message into a mission brief).
 - **Bugs found in the same logs:** `buildOrcContext` read other founders' memos (no `created_by` scope — fixed) and crashed on non-array jsonb; `available_tools` was queried with columns that don't exist in the beta schema.
 - **UI:** type pairing is Fraunces (serif headings) + Inter (everything else) via Google Fonts (`styles/fonts.css` aliases keep old `--font-dm-*`/`--font-syne` names working); self-hosted Syne/DM fonts removed. Sidebar is Chat / Approvals / Artifacts / Settings; home is a greeting + the chat; live-events panel and dashboard stats removed (also trims egress). Marketing copy no longer names the model provider (privacy policy still discloses it).
+
+---
+
+## Session v15.0 — Chat-first Crost (Orc as a Claude-style assistant)
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE
+**Why:** "What can you do?" took many seconds because every message created a goal, ran a heavy planning prompt + context load, and the UI polled for the answer. The interface was also dark, dense and hard to read.
+
+### What changed
+1. **One fast path:** `POST /api/chat` streams Orc's reply token-by-token (Gemini `generateContentStream`, fallback to the next model only before the first token). Small system prompt: company facts + the four departments' capabilities + rules (chat first, delegate only for substantial work, never claim an external action, ask one question when ambiguous). Pre-reply reads run in parallel; Vercel functions pinned to `dub1` next to the eu-west-1 database.
+2. **Departments as capabilities:** when work is needed Orc appends `<plan>{title,tasks[{dept,label,deliverable,depends_on}]}</plan>`; validated server-side (known depts, ≤5 tasks, backward-only deps) and shown as a plan card. "Run this plan" → `POST /api/chats/[id]/run` (atomic claim, idempotent) → `startMission` creates the goal + planned tasks and fires CHAIN_REACTION on the existing engine. A mission card polls `/api/goals/[id]/status` (now returns task labels/statuses, pending approvals, deliverable count) and links to Approvals / Deliverables (`/app/artifacts?goal=`).
+3. **Persistence:** `chats` + `chat_messages` (RLS on, Data API revoked). Sidebar lists recent chats; delete supported.
+4. **UI:** Claude-style layout, The Bridge's look — cream background, ink text, regular-weight serif headings with italic emphasis, small tracked mono labels, pill buttons. Sidebar: New chat, Recent, Approvals, Deliverables, Settings. Mobile: one-row nav. Theme applied app-wide via tokens; hard-coded dark colours remapped.
+5. **Removed (unused by the new flow):** WarRoom, dashboard widgets, live events panel, Topbar, notification dropdown, department grid, realtime provider, command menu.
+
+### Tests
+`chat-orc.test.ts` (prompt, plan protocol, streaming fallback, markdown escaping, plan→task mapping) and `chat-routes.test.ts` (auth, ownership 404, budget 429, stream + trailer + persistence, model failure, run idempotency + claim release). 807 unit tests pass; `tsc` and `next build` clean.
