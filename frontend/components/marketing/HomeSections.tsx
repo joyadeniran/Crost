@@ -1,46 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { useMarketing } from './MarketingShell'
 
 export function HomeSections() {
-  const { navigate, showToast, count, setCount } = useMarketing()
-  const [email, setEmail] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    // Public waitlist counter — served by the API (the table itself is not readable by the public).
-    fetch('/api/waitlist')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j && typeof j.count === 'number') setCount(j.count) })
-      .catch(() => {})
-  }, [setCount])
-
-  const handleSubmit = useCallback(async () => {
-    if (loading || !email.includes('@')) return
-    setLoading(true)
-    try {
-      const res = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, source: 'landing_page' }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'failed')
-      setSubmitted(true)
-      if (json.alreadyJoined) {
-        showToast("You're already on the list! We'll be in touch.")
-      } else {
-        showToast("You're on the list. We'll be in touch.")
-        setCount((c: number) => c + 1)
-      }
-    } catch {
-      showToast('Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }, [email, loading, showToast, setCount])
+  const { navigate } = useMarketing()
 
   return (
     <>
@@ -238,40 +201,15 @@ export function HomeSections() {
           Your office is<br /><em>waiting for you.</em>
         </h2>
         <p className="cta-sub reveal delay-2">
-          The beta is open. Start now, or leave your email and we'll tell you when new capacity and features land.
+          The beta is open and free. Create your account and hand Orc your first goal in minutes.
         </p>
 
-        {!submitted ? (
-          <div className="reveal delay-3">
-            <div className="email-form">
-              <input
-                className="email-input"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSubmit()}
-              />
-              <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
-                Notify me
-              </button>
-            </div>
-            <div className="cta-note mono">By continuing, you agree to our <span className="nav-link" style={{ fontSize: 11 }} onClick={() => navigate('terms')}>Terms of Service</span> and <span className="nav-link" style={{ fontSize: 11 }} onClick={() => navigate('privacy')}>Privacy Policy</span>.</div>
-          </div>
-
-        ) : (
-          <div className="reveal-scale active" style={{ padding: "20px 32px", background: "var(--accent2)", border: "1px solid var(--accent3)", borderRadius: 10, display: "inline-block", marginBottom: 16 }}>
-            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, marginBottom: 4 }}>You're on the list. ✓</div>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: "var(--text2)" }}>We'll reach out before your batch opens.</div>
-          </div>
-        )}
-
-        {count > 0 && <div className="reveal delay-4">
-          <div className="cta-count">
-            <div className="count-dot" />
-            <span><span className="count-num">{count.toLocaleString()}</span> founders waiting</span>
-          </div>
-        </div>}
+        <div className="reveal delay-3">
+          <a className="btn-primary" href="/signup?source=landing" style={{ display: 'inline-block', textDecoration: 'none' }}>
+            Try the beta
+          </a>
+          <div className="cta-note mono">By continuing, you agree to our <span className="nav-link" style={{ fontSize: 11 }} onClick={() => navigate('terms')}>Terms of Service</span> and <span className="nav-link" style={{ fontSize: 11 }} onClick={() => navigate('privacy')}>Privacy Policy</span>.</div>
+        </div>
       </section>
     </>
   )
