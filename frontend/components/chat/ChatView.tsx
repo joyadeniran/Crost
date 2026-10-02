@@ -9,11 +9,12 @@ import { renderMarkdown } from '@/lib/chat/markdown'
 import { startPolling, retryAfterMs, type PollResult } from '@/lib/polling'
 
 type Plan = { title: string; tasks: Array<{ dept: string; label: string; deliverable: string; depends_on: number[] }> }
+type Fact = { key: string; value: string; as_of: string | null; source: string | null; volatile: boolean; prohibited: boolean }
 type Msg = {
   id: string
   role: 'user' | 'assistant'
   content: string
-  meta?: { plan?: Plan; goal_id?: string }
+  meta?: { plan?: Plan; goal_id?: string; facts?: Fact[]; facts_saved?: boolean }
   pending?: boolean
   error?: boolean
 }
@@ -26,9 +27,9 @@ const SUGGESTIONS = [
   'Research three competitors and compare them',
 ]
 
-/** Hide a (partial) <plan> block while streaming. */
+/** Hide a (partial) <plan> or <facts> block while streaming. */
 function visible(partial: string): string {
-  const i = partial.search(/<p(l(a(n>?)?)?)?$|<plan>/i)
+  const i = partial.search(/<p(l(a(n>?)?)?)?$|<plan>|<f(a(c(t(s>?)?)?)?)?$|<facts>/i)
   return (i === -1 ? partial : partial.slice(0, i)).trimEnd()
 }
 
@@ -106,7 +107,10 @@ export function ChatView({ chatId: initialChatId, greetingName }: { chatId: stri
       } else {
         const text = visible(raw.slice(0, cut))
         setMessages((m) => m.map((x) => (x.id === tempId
-          ? { id: trailer.message_id, role: 'assistant', content: text, meta: trailer.plan ? { plan: trailer.plan } : {} }
+          ? { id: trailer.message_id, role: 'assistant', content: text, meta: {
+              ...(trailer.plan ? { plan: trailer.plan } : {}),
+              ...(trailer.facts?.length ? { facts: trailer.facts } : {}),
+            } }
           : x)))
       }
       window.dispatchEvent(new Event('crost:chats-changed'))
@@ -205,6 +209,9 @@ function MessageRow({ msg, chatId, onRetry }: { msg: Msg; chatId: string | null;
           ? <MissionCard goalId={msg.meta.goal_id} title={msg.meta.plan.title} />
           : <PlanCard plan={msg.meta.plan} chatId={chatId} messageId={msg.id} />
       )}
+      {msg.meta?.facts?.length && chatId && !msg.id.startsWith('tmp-') ? (
+        <FactsCard facts={msg.meta.facts} saved={!!msg.meta.facts_saved} chatId={chatId} messageId={msg.id} />
+      ) : null}
     </div>
   )
 }
@@ -252,6 +259,51 @@ function PlanCard({ plan, chatId, messageId }: { plan: Plan; chatId: string; mes
         </button>
         <span className="card-hint">{state === 'error' ? 'Could not start — try again.' : 'Or reply to change it.'}</span>
       </div>
+    </div>
+  )
+}
+
+/** Facts Orc offers to remember. Nothing is saved until the founder clicks. */
+function FactsCard({ facts, saved, chatId, messageId }: { facts: Fact[]; saved: boolean; chatId: string; messageId: string }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'dismissed' | 'error'>(saved ? 'saved' : 'idle')
+  if (state === 'dismissed') return null
+
+  const save = async () => {
+    setState('saving')
+    try {
+      const r = await fetch('/api/facts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facts, chat_id: chatId, message_id: messageId }),
+      })
+      const j = await r.json().catch(() => null)
+      setState(j?.success ? 'saved' : 'error')
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="card plan-card">
+      <div className="eyebrow">{state === 'saved' ? 'Saved to company facts' : 'Remember this?'}</div>
+      <ul className="plan-steps">
+        {facts.map((f) => (
+          <li key={f.key}>
+            <span className="dept-tag">{f.prohibited ? 'Never claim' : f.key.replace(/_/g, ' ')}</span>
+            <span className="step-label">{f.value}</span>
+            {f.as_of && <span className="step-out">as of {f.as_of}</span>}
+          </li>
+        ))}
+      </ul>
+      {state !== 'saved' && (
+        <div className="card-actions">
+          <button className="pill-btn solid" onClick={save} disabled={state === 'saving'}>
+            {state === 'saving' ? 'Saving…' : 'Save to company facts'}
+          </button>
+          <button className="link-btn" onClick={() => setState('dismissed')}>Not now</button>
+          <span className="card-hint">{state === 'error' ? 'Could not save — try again.' : 'Orc and the departments use only saved facts for figures.'}</span>
+        </div>
+      )}
     </div>
   )
 }

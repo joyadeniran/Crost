@@ -18,6 +18,9 @@ import { logEvent } from './events'
 import { runOrcReport } from './orchestrator'
 import { log } from '@/lib/log'
 import { triggerDispatch } from '@/lib/background'
+import { listFacts } from '@/lib/facts/store'
+import { formatFactsForPrompt, type CompanyFact } from '@/lib/facts/facts'
+import { checkFigures } from '@/lib/facts/guard'
 
 /**
  * Build the task section of the worker prompt. Exported for unit tests.
@@ -28,8 +31,8 @@ import { triggerDispatch } from '@/lib/background'
  * from `needs_more_data` / `status` fields the model was previously never
  * told about.
  */
-export function buildWorkerTaskPrompt(task: WorkerTask): string {
-  return `Execute the task below. Respond with EXACTLY ONE JSON object — no prose before or after it, no markdown fences.
+export function buildWorkerTaskPrompt(task: WorkerTask, factsBlock = ''): string {
+  return `${factsBlock ? `${factsBlock}\n\nUse ONLY the figures above for numbers about the company. A figure that is not there goes in as a [placeholder]; a STALE one is marked "(to confirm)". Never state anything under DO NOT CLAIM.\n\n` : ''}Execute the task below. Respond with EXACTLY ONE JSON object — no prose before or after it, no markdown fences.
 
 TASK:
 ID: ${task.id}
@@ -150,6 +153,17 @@ async function uploadArtifact(
   }
 }
 
+/** The fact check stored on a deliverable: counts plus the first few flagged figures. */
+export function summariseFactCheck(text: string, facts: CompanyFact[]) {
+  const r = checkFigures(text, facts)
+  return {
+    checked: r.checked,
+    facts_on_file: facts.filter((f) => !f.prohibited).length,
+    unverified: r.unverified.slice(0, 8).map((u) => u.token),
+    prohibited: r.prohibited.slice(0, 8).map((p) => ({ token: p.token, rule: p.rule })),
+  }
+}
+
 // ─── Worker task execution ────────────────────────────────────────────────────
 
 export async function runWorkerTask(
@@ -179,7 +193,11 @@ export async function runWorkerTask(
     task.params
   )
 
-  const taskPrompt = buildWorkerTaskPrompt(task)
+  // Founder-confirmed facts: the only source for company figures. Never blocks the task.
+  const facts: CompanyFact[] = userId
+    ? await listFacts(userId).catch((err) => { log.warn('[runWorkerTask] facts unavailable', { module: 'engine/worker', goalId, taskId: task.id, error: String(err) }); return [] })
+    : []
+  const taskPrompt = buildWorkerTaskPrompt(task, formatFactsForPrompt(facts))
 
   const finalPrompt = await buildFinalPrompt(
     deptRow.persona_prompt,
@@ -299,6 +317,9 @@ export async function runWorkerTask(
           extension: uploaded.extension,
           sizeBytes: uploaded.fileSize,
           source: 'worker_task',
+          // Figures in the deliverable that are not in the founder's company facts (set at insert
+          // time only — artifact immutability untouched). Flags, never blocks.
+          fact_check: summariseFactCheck(strippedContent, facts),
         }
       }).select('id').single()
 

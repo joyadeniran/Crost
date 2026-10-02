@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { HealthWidget } from '@/components/settings/HealthWidget'
 import { IdentityEditor } from '@/components/settings/IdentityEditor'
+import { FactsEditor } from '@/components/settings/FactsEditor'
 
 const GOOGLE_STATUS: Record<string, string> = {
   connected: 'Gmail connected.',
@@ -76,6 +77,10 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             initialCompanyIdentity={companyIdentityStr}
             initialAssistantIdentity={assistantIdentityStr}
           />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-4)', letterSpacing: '0.1em', marginBottom: -8 }}>
+            COMPANY FACTS
+          </div>
+          <FactsEditor />
         </div>
 
         {/* Column 3: Operational Control */}

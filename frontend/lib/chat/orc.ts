@@ -7,6 +7,7 @@
 
 import { BETA_DEPARTMENT_SLUGS, type BetaDepartmentSlug } from '@/lib/beta-departments'
 import { GEMINI_FALLBACK_CHAIN } from '@/lib/gemini-client'
+import { validateFacts, type ProposedFact } from '@/lib/facts/facts'
 
 export const DEPARTMENT_CAPABILITIES: Record<BetaDepartmentSlug, string> = {
   marketing: 'positioning, campaigns, social posts, landing-page and email copy, content calendars',
@@ -23,6 +24,8 @@ export interface CompanyContext {
   stage?: string | null
   targetCustomer?: string | null
   location?: string | null
+  /** formatFactsForPrompt(listFacts(user)) — the founder-confirmed facts and the do-not-claim list. */
+  factsBlock?: string
 }
 
 export function buildOrcSystemPrompt(ctx: CompanyContext, now: Date = new Date()): string {
@@ -36,7 +39,7 @@ export function buildOrcSystemPrompt(ctx: CompanyContext, now: Date = new Date()
   ].filter(Boolean)
 
   return `You are Orc, chief of staff at ${company}${ctx.founderName ? `, working for ${ctx.founderName}` : ''}. Today is ${now.toISOString().slice(0, 10)}.
-${facts.length ? `\nCompany facts:\n${facts.map((f) => `- ${f}`).join('\n')}\n` : ''}
+${facts.length ? `\nCompany facts:\n${facts.map((f) => `- ${f}`).join('\n')}\n` : ''}${ctx.factsBlock ? `\n${ctx.factsBlock}\n` : ''}
 You lead four departments:
 ${BETA_DEPARTMENT_SLUGS.map((s) => `- ${s}: ${DEPARTMENT_CAPABILITIES[s]}`).join('\n')}
 
@@ -48,7 +51,10 @@ How you work:
   Use 1-5 tasks, dept must be one of: ${BETA_DEPARTMENT_SLUGS.join(', ')}. depends_on lists earlier task numbers (1-based) whose output a task needs. The founder reviews and runs the plan; never claim work has started.
 - If a request is ambiguous in a way that changes the work, ask one short question instead of planning.
 - Nothing leaves the company without the founder's approval: never claim you sent, posted, paid or booked anything. Departments prepare drafts and request approval for external actions.
-- Never invent facts about ${company}; say what you'd need to know.`
+- Never invent facts about ${company}; say what you'd need to know. Figures (revenue, users, prices, dates, percentages) come only from COMPANY FACTS above; a STALE one needs the founder to confirm it first.
+- When the founder states a durable fact about the company in their message (a figure, a date, a price, a name, something that is no longer true), offer to remember it: end your reply with exactly one block
+<facts>[{"key":"monthly_revenue_usd","value":"12,000","as_of":"2026-09-30","source":"founder, in chat","volatile":true}]</facts>
+  Only what the founder actually said, copied exactly — never your estimates or a department's output. as_of only if they gave a date. Use "prohibited":true (value = the claim) when they say something must never be claimed again. The founder confirms before anything is saved; never say it is saved.`
 }
 
 // ─── Plan parsing ────────────────────────────────────────────────────────────
@@ -67,17 +73,26 @@ export interface ChatPlan {
 
 const PLAN_RE = /<plan>([\s\S]*?)(<\/plan>|$)/i
 
+const FACTS_RE = /<facts>([\s\S]*?)(<\/facts>|$)/i
+
 /** Splits a finished Orc reply into the visible text and a validated plan (or null). */
 export function extractPlan(raw: string): { reply: string; plan: ChatPlan | null } {
-  const m = raw.match(PLAN_RE)
-  if (!m) return { reply: raw.trim(), plan: null }
-  const reply = raw.slice(0, m.index).trim()
-  return { reply, plan: validatePlan(m[1]) }
+  const { reply, plan } = extractBlocks(raw)
+  return { reply, plan }
 }
 
-/** Text safe to show while streaming: everything before a (possibly partial) <plan> tag. */
+/** Splits a finished reply into visible text, a validated plan and proposed facts (either may be absent). */
+export function extractBlocks(raw: string): { reply: string; plan: ChatPlan | null; facts: ProposedFact[] } {
+  const p = raw.match(PLAN_RE)
+  const f = raw.match(FACTS_RE)
+  const cuts = [p?.index, f?.index].filter((i): i is number => typeof i === 'number')
+  const reply = (cuts.length ? raw.slice(0, Math.min(...cuts)) : raw).trim()
+  return { reply, plan: p ? validatePlan(p[1]) : null, facts: f ? validateFacts(f[1]) : [] }
+}
+
+/** Text safe to show while streaming: everything before a (possibly partial) <plan> or <facts> tag. */
 export function visibleText(partial: string): string {
-  const i = partial.search(/<p(l(a(n>?)?)?)?$|<plan>/i)
+  const i = partial.search(/<p(l(a(n>?)?)?)?$|<plan>|<f(a(c(t(s>?)?)?)?)?$|<facts>/i)
   return (i === -1 ? partial : partial.slice(0, i)).trimEnd()
 }
 

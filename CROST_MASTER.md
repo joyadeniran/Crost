@@ -2239,3 +2239,16 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - Mission card now fetches progress immediately (`startPolling({ immediate: true })`).
 - Tests: `task-answer.test.ts` (auth, 404, 409, plan+row write, assume, last-step close), worker-prompt founder-input test, polling immediate test. 820 unit tests green.
 - Ops note: the four old Render services (`crost-frontend`, `crost-worker`, `crost-litellm`, `crost-approval-expiry`) were failing builds on every merge (their root `package.json` / `litellm/` no longer exist). Founder suspended them; they can be deleted — Vercel replaces all four.
+
+---
+
+## Session v15.2 — Company facts (pattern from Timbus)
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE (migration applied to `vgktzhlfpaetgiqjpnbu`)
+**Why:** Orc's prompt said "never invent facts" but it had nothing to check against except the company name. Departments put figures in deliverables with nothing to check them against.
+
+- **`company_facts`** (`20261003000000_company_facts.sql`): key, value, `as_of`, `source`, `volatile`, `prohibited` (a "do not claim" line). Rows are never edited — a new value for a key retires the old row (`active=false`, `superseded_at`), so history stays. One live value per key (partial unique index). RLS on, revoked from the Data API roles.
+- **Only the founder writes facts.** Orc proposes facts the founder *stated* in chat with a `<facts>[…]</facts>` block → a "Remember this?" card → `POST /api/facts` on the click (checks the message is the caller's own; marks `meta.facts_saved`). Settings → Company facts adds / retires facts and do-not-claim lines. Department output never becomes a fact.
+- **Orc and departments read them:** `formatFactsForPrompt` adds the facts (stale volatile figures marked "STALE — confirm") and the DO NOT CLAIM list to Orc's chat prompt and to the worker task prompt (figures not on file → `[placeholder]`). Loading facts never blocks a reply or a task.
+- **Figure guard** (`lib/facts/guard.ts`, ported from Timbus): every number / % / ISO date in a deliverable is matched against the facts after unit normalisation (`$2.4m` = `2,400,000`); years and counts ≤ 10 are skipped. The result is stored at insert time in `artifacts.metadata.fact_check` and shown as one line on the deliverable card. It flags; it never blocks.
+- Code: `lib/facts/{facts,guard,store}.ts`, `app/api/facts/route.ts`, `app/api/facts/[id]/route.ts`, `components/settings/FactsEditor.tsx`, FactsCard in `ChatView.tsx`, `lib/chat/orc.ts` (`extractBlocks`), `lib/engine/worker.ts` (`summariseFactCheck`).
+- Tests: `company-facts.test.ts` (22: parsing, staleness, prompt block, guard, `<facts>` protocol, worker prompt + check, routes: auth, ownership, transaction + rollback, chat-message ownership), `chat-routes.test.ts` (+2). 843 unit tests green; `tsc`, lint, `next build` clean. Migration and store SQL also exercised against Postgres (PGlite).

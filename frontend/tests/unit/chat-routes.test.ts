@@ -105,6 +105,26 @@ describe('POST /api/chat', () => {
     }))
   })
 
+  it('stores proposed facts unsaved in the message meta and returns them in the trailer', async () => {
+    store.getOwnedChat.mockResolvedValueOnce({ id: CHAT })
+    streamChunks = ['Great month.', '<facts>[{"key":"mrr_usd","value":"12,000","as_of":"2026-09-30"}]</facts>']
+    const { reply, trailer } = await readAll(await chatPOST(req('http://x/api/chat', { chat_id: CHAT, message: 'we hit $12k MRR in September' })))
+    expect(reply).toContain('Great month.')
+    expect(trailer.facts).toEqual([expect.objectContaining({ key: 'mrr_usd', value: '12,000', as_of: '2026-09-30' })])
+    expect(store.addMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      role: 'assistant', content: 'Great month.', meta: { facts: [expect.objectContaining({ key: 'mrr_usd' })] },
+    }))
+    // Nothing is written to company_facts by the chat route: only the founder's click saves.
+    expect(query.mock.calls.some((c) => /INSERT INTO company_facts/.test(String(c[0])))).toBe(false)
+  })
+
+  it('still answers when the facts cannot be loaded', async () => {
+    query.mockRejectedValueOnce(new Error('db down'))
+    const res = await chatPOST(req('http://x/api/chat', { message: 'hi' }))
+    const { trailer } = await readAll(res)
+    expect(trailer.message_id).toBe('msg-assistant')
+  })
+
   it('ends the stream with an error trailer (and saves no reply) when the model fails', async () => {
     streamFails = true
     const { trailer } = await readAll(await chatPOST(req('http://x/api/chat', { message: 'hi' })))

@@ -16,6 +16,28 @@ interface Props {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+type FactCheck = { checked: number; facts_on_file: number; unverified: string[]; prohibited: Array<{ token: string; rule: string }> }
+
+/** One line under the title: figures in this deliverable that are not in the founder's company facts. */
+function FactCheckLine({ check }: { check?: FactCheck }) {
+  if (!check || (!check.unverified?.length && !check.prohibited?.length)) return null
+  const banned = check.prohibited?.length ?? 0
+  const text = banned
+    ? `Contains ${banned === 1 ? 'a claim' : `${banned} claims`} you marked never to make: ${check.prohibited.map((p) => p.token).join(', ')}`
+    : check.facts_on_file === 0
+      ? `${check.unverified.length} figure${check.unverified.length === 1 ? '' : 's'} to check — no company facts on file yet (Settings)`
+      : `${check.unverified.length} figure${check.unverified.length === 1 ? '' : 's'} not in your company facts: ${check.unverified.slice(0, 4).join(', ')}`
+  return (
+    <div title="Figures are checked against Settings → Company facts" style={{
+      fontSize: 11, lineHeight: 1.4, color: banned ? '#b42318' : '#b7791f',
+      background: banned ? 'rgba(180,35,24,0.06)' : 'rgba(245,166,35,0.08)',
+      border: `1px solid ${banned ? 'rgba(180,35,24,0.2)' : 'rgba(245,166,35,0.25)'}`, borderRadius: 6, padding: '4px 8px',
+    }}>
+      {text}
+    </div>
+  )
+}
+
 function inferFilename(artifact: Artifact): { name: string; ext: string } {
   if (artifact.file_url) {
     const raw = artifact.file_url.split('/').pop()?.split('?')[0] ?? ''
@@ -596,6 +618,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             </span>
           )}
         </div>
+
+        <FactCheckLine check={(artifact.metadata as any)?.fact_check} />
 
         {/* Meta row */}
         <div style={{
