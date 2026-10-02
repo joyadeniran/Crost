@@ -45,7 +45,7 @@ function snippet(view: ReadableView): string {
 
 const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   draft:      { label: 'Draft',     color: 'var(--amber)',  bg: 'rgba(183,121,31,0.10)' },
-  review:     { label: 'In review', color: 'var(--blue)',   bg: 'rgba(47,111,214,0.10)' },
+  review:     { label: 'Draft',     color: 'var(--amber)',  bg: 'rgba(183,121,31,0.10)' }, // legacy status, shown as Draft
   active:     { label: 'Approved',  color: 'var(--accent)', bg: 'var(--accent-dim)' },
   paused:     { label: 'Paused',    color: 'var(--text-3)', bg: 'var(--bg-3)' },
   deprecated: { label: 'Archived',  color: 'var(--text-3)', bg: 'var(--bg-3)' },
@@ -95,6 +95,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
   const ext = fileExtension(artifact.file_url)
   const size = formatBytes(artifact.file_size)
   const status = artifact.status ?? 'draft'
+  const isDraft = status === 'draft' || status === 'review'
 
   const listView = useMemo(() => toReadableView(artifact.body), [artifact.body])
   const view = useMemo(() => (fullBody !== null ? toReadableView(fullBody) : listView), [fullBody, listView])
@@ -361,17 +362,15 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   {downloading ? 'Downloading…' : `Download${ext ? ` .${ext}` : ''}`}
                 </button>
               )}
-              {status === 'draft' && (
-                <button type="button" disabled={busy} onClick={() => setStatus('review', 'Sent for review')} style={btnBase}>
-                  Send for review
-                </button>
-              )}
-              {status === 'review' && (
+              {/* One step: you are the reviewer, so a draft is approved directly
+                  (draft -> active is a legal transition; 'review' is legacy and
+                  treated as a draft). */}
+              {isDraft && (
                 <button type="button" disabled={busy} onClick={() => setStatus('active', 'Approved')} style={btnBase}>
                   Approve
                 </button>
               )}
-              {['review', 'active', 'paused'].includes(status) && (
+              {(isDraft || ['active', 'paused'].includes(status)) && (
                 <button type="button" disabled={busy} onClick={makeChanges} style={btnBase}>
                   Make changes
                 </button>
@@ -381,7 +380,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   Archive
                 </button>
               )}
-              {['draft', 'review'].includes(status) && (
+              {isDraft && (
                 <button
                   type="button"
                   disabled={busy}
