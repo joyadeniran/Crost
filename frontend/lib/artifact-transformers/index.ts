@@ -2,7 +2,7 @@ import { transformToEmail } from './email-transformer';
 import { transformToMarkdownPlan, transformToMarkdownResearch } from './markdown-transformer';
 import { transformToDocument } from './document-transformer';
 import { transformToExcel } from './excel-transformer';
-import { transformToCode } from './code-transformer';
+import { transformToCode, hasCodeFiles } from './code-transformer';
 import { transformToPresentation } from './pptx-transformer';
 import { transformToImage } from './image-transformer';
 
@@ -73,8 +73,10 @@ export function detectOutputType(content: unknown, isJson: boolean, taskHint?: s
     return { sourceFormat: 'json', contentType: 'document', targetFormat: 'docx', transformer: transformToDocument };
   }
   if (hintDemandsCode) {
-    // Technical departments producing JSON should often be using the 'code' transformer
-    return { sourceFormat: 'json', contentType: 'code', targetFormat: 'txt', transformer: transformToCode };
+    // Technical departments producing JSON should often be using the 'code' transformer.
+    // A multi-file bundle ({ files: [...] }) becomes one readable .md file.
+    const bundle = hasCodeFiles(tryParseJson(content));
+    return { sourceFormat: 'json', contentType: 'code', targetFormat: bundle ? 'md' : 'txt', transformer: transformToCode };
   }
   if (hintDemandsImage) {
     return { sourceFormat: 'json', contentType: 'image', targetFormat: 'jpg', transformer: transformToImage };
@@ -103,6 +105,9 @@ export function detectOutputType(content: unknown, isJson: boolean, taskHint?: s
   }
   if (parsed?.skill === 'pptx') {
     return { sourceFormat: 'json', contentType: 'generic', targetFormat: 'docx', transformer: transformToPresentation };
+  }
+  if (parsed?.skill === 'code' && hasCodeFiles(parsed)) {
+    return { sourceFormat: 'json', contentType: 'code', targetFormat: 'md', transformer: transformToCode };
   }
   if (parsed?.skill === 'code') {
     // For code, derive extension from file_name if possible
@@ -213,6 +218,27 @@ export function detectOutputType(content: unknown, isJson: boolean, taskHint?: s
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function tryParseJson(content: unknown): any {
+  if (typeof content !== 'string') return content;
+  const stripped = content.trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+  try { return JSON.parse(stripped); } catch { return null; }
+}
+
+/**
+ * Prose sections ({ heading, content }) are a document, not a table. Without this,
+ * landing-page copy with 4+ sections was exported as an .xlsx with the whole
+ * sections array dumped into one cell as raw JSON.
+ */
+function isProseItem(item: any): boolean {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const textKeys = ['content', 'body', 'text', 'copy', 'description', 'details'];
+  return textKeys.some(k => typeof item[k] === 'string' && item[k].length >= 40);
+}
+
+function isProseArray(arr: any[]): boolean {
+  return arr.length > 0 && arr.every(isProseItem);
+}
+
 /** Search nested JSON for content_for_excel / content_for_word markers */
 function findContentMarker(obj: any, depth: number = 0): 'xlsx' | 'docx' | null {
   if (depth > 3 || !obj || typeof obj !== 'object') return null;
@@ -228,10 +254,10 @@ function findContentMarker(obj: any, depth: number = 0): 'xlsx' | 'docx' | null 
 /** True if data looks like a table: array of uniform objects, or nested numeric tables */
 function containsTableLikeData(obj: any): boolean {
   if (Array.isArray(obj)) {
-    return obj.length > 3 && obj.every(item => typeof item === 'object' && item !== null);
+    return obj.length > 3 && obj.every(item => typeof item === 'object' && item !== null) && !isProseArray(obj);
   }
   return Object.values(obj).some(v =>
-    (Array.isArray(v) && (v as any[]).length > 3 && (v as any[]).every((i: any) => typeof i === 'object')) ||
+    (Array.isArray(v) && (v as any[]).length > 3 && (v as any[]).every((i: any) => typeof i === 'object') && !isProseArray(v as any[])) ||
     (typeof v === 'object' && v !== null && Object.keys(v).length > 5 &&
       Object.values(v).some(val => typeof val === 'number'))
   );

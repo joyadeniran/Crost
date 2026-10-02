@@ -459,3 +459,49 @@ describe('heal-payload', () => {
     expect(result === null || typeof result === 'object').toBe(true)
   })
 })
+
+// ── Regression: deliverables format divergences (Oct 2026) ──────────────────
+
+describe('detectOutputType — prose sections and code bundles', () => {
+  const copyOutput = {
+    status: 'completed',
+    title: 'Test Corp Landing Page Copy and Structure',
+    summary: 'Drafted the landing page copy and content hierarchy for Test Corp.',
+    sections: [
+      { heading: 'Hero Section', content: 'Headline: Bring Your Engineering and Product Teams Together Without the Noise.' },
+      { heading: 'Social Proof Bar', content: 'Trusted by fast-growing engineering teams at [Insert Company A] and others.' },
+      { heading: 'Core Features', content: '1. Real-Time Alignment: Keep sprint planning, documentation, and chat together.' },
+      { heading: 'How It Works', content: 'Step 1: Connect your existing developer tools (GitHub, Slack, Jira) in minutes.' },
+      { heading: 'Final CTA', content: 'Ready to transform how your team collaborates? Get started in minutes today.' },
+    ],
+  }
+
+  it('landing-page copy sections → docx, not xlsx', () => {
+    expect(detectOutputType(JSON.stringify(copyOutput), true, 'draft-landing-page-copy-and-structure').targetFormat).toBe('docx')
+  })
+
+  it('a bare array of prose sections is not treated as a table', () => {
+    expect(detectOutputType(copyOutput.sections, true).targetFormat).not.toBe('xlsx')
+  })
+
+  it('multi-file code bundle under a code hint → md', () => {
+    const code = { title: 'Landing Page Code', files: [{ filename: 'index.html', language: 'html', code: '<h1>Hi</h1>' }, { filename: 'styles.css', code: 'h1{}' }] }
+    expect(detectOutputType(JSON.stringify(code), true, 'develop-frontend-code-and-layout-based-on-copy').targetFormat).toBe('md')
+  })
+})
+
+describe('transformToCode — files bundle', () => {
+  it('includes every file name and its code (previously only header comments)', async () => {
+    const { transformToCode } = await import('@/lib/artifact-transformers/code-transformer')
+    const out = await transformToCode({
+      title: 'Landing Page Code',
+      summary: 'Responsive page.',
+      files: [{ filename: 'index.html', language: 'html', code: '<h1>Hi</h1>' }, { filename: 'app.js', code: 'console.log(1)' }],
+    })
+    expect(out).toContain('# Landing Page Code')
+    expect(out).toContain('## index.html')
+    expect(out).toContain('<h1>Hi</h1>')
+    expect(out).toContain('```js')
+    expect(out).toContain('console.log(1)')
+  })
+})

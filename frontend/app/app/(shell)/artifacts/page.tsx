@@ -65,7 +65,7 @@ export default async function ArtifactsPage({ searchParams }: { searchParams?: {
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
           {artifacts.length > 0
-            ? 'Everything your departments have produced. Open, approve or download any of it.'
+            ? 'Everything your departments have produced. Open one to read, approve or download it.'
             : 'Run a plan from the chat and what your departments produce shows up here.'
           }
         </p>
@@ -86,10 +86,7 @@ export default async function ArtifactsPage({ searchParams }: { searchParams?: {
             style={{ margin: '0 auto 16px', opacity: 0.3 }}>
             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
           </svg>
-          <div style={{ marginBottom: 8 }}>No artifacts generated yet.</div>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>
-            Approve tasks to see your departments create work files here.
-          </div>
+          <div>No deliverables yet.</div>
         </div>
       ) : (
         <ArtifactsGrid 
