@@ -44,7 +44,7 @@ function OrcModeBadge({ mode, confidence }: { mode: string; confidence?: number 
         border: `1px solid ${meta.border}`,
         borderRadius: 4,
         padding: '2px 7px',
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
         fontSize: 9,
         letterSpacing: '0.07em',
         fontWeight: 600,
@@ -54,7 +54,7 @@ function OrcModeBadge({ mode, confidence }: { mode: string; confidence?: number 
         {meta.label}
       </span>
       {typeof confidence === 'number' && confidence < 0.75 && (
-        <span style={{ fontSize: 9, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+        <span style={{ fontSize: 9, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)' }}>
           {Math.round(confidence * 100)}%
         </span>
       )}
@@ -76,7 +76,7 @@ function OrcReasoningPanel({ decision }: {
           border: 'none',
           padding: 0,
           cursor: 'pointer',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           color: 'var(--text-4)',
           letterSpacing: '0.06em',
@@ -101,8 +101,8 @@ function OrcReasoningPanel({ decision }: {
           lineHeight: 1.5,
         }}>
           <div style={{ marginBottom: 6 }}>
-            <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-4)', letterSpacing: '0.07em' }}>CLASSIFICATION · </span>
-            <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.07em' }}>{decision.mode.toUpperCase()} ({Math.round(decision.confidence * 100)}% confidence)</span>
+            <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--text-4)', letterSpacing: '0.07em' }}>CLASSIFICATION · </span>
+            <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.07em' }}>{decision.mode.toUpperCase()} ({Math.round(decision.confidence * 100)}% confidence)</span>
           </div>
           <div style={{ marginBottom: decision.risk_notes?.length > 0 ? 8 : 0 }}>{decision.reasoning}</div>
           {decision.risk_notes?.length > 0 && (
@@ -266,7 +266,7 @@ function GoalInput({
             gap: 12
           }}>
             <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: 'var(--text-4)',
               letterSpacing: '0.02em',
@@ -278,7 +278,7 @@ function GoalInput({
               <span style={{ color: 'var(--accent)', fontWeight: 700 }}>@</span> dept
             </span>
             <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: 'var(--text-4)',
               letterSpacing: '0.02em',
@@ -290,7 +290,7 @@ function GoalInput({
               <span style={{ color: 'var(--accent)', fontWeight: 700 }}>/</span> tool
             </span>
             <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: 'var(--text-3)',
               opacity: 0.8
@@ -458,7 +458,7 @@ function ApprovalCard({
     return (
       <div style={{ marginTop: 8 }}>
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 11,
           fontWeight: 700,
           color: msg.approvalDecision === 'approved'
@@ -491,7 +491,7 @@ function ApprovalCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 14 }}>⏸</span>
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: '#facc15',
           letterSpacing: '0.08em',
@@ -502,7 +502,7 @@ function ApprovalCard({
         {msg.approvalRiskLevel && (
           <span style={{
             marginLeft: 'auto',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 9,
             color: riskColour,
             background: `${riskColour}18`,
@@ -533,7 +533,7 @@ function ApprovalCard({
           <button
             onClick={() => setExpanded(e => !e)}
             style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: 'var(--text-3)',
               background: 'none',
@@ -555,7 +555,7 @@ function ApprovalCard({
               marginBottom: 10,
               overflow: 'auto',
               maxHeight: 120,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               border: '1px solid rgba(255,255,255,0.05)',
             }}>
               {Object.entries(msg.approvalPayload).map(([key, val]) => (
@@ -598,7 +598,7 @@ function ApprovalCard({
             border: '1px solid rgba(74,222,128,0.35)',
             borderRadius: 6,
             padding: '7px 0',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 11,
             cursor: deciding ? 'not-allowed' : 'pointer',
             letterSpacing: '0.04em',
@@ -617,7 +617,7 @@ function ApprovalCard({
             border: '1px solid rgba(248,113,113,0.3)',
             borderRadius: 6,
             padding: '7px 0',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 11,
             cursor: deciding ? 'not-allowed' : 'pointer',
             letterSpacing: '0.04em',
@@ -638,7 +638,7 @@ function ApprovalCard({
             background: 'transparent',
             color: 'var(--text-3)',
             border: 'none',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             cursor: deciding ? 'not-allowed' : 'pointer',
             padding: 0,
@@ -682,7 +682,7 @@ function CommandThread({
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{
-                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontFamily: 'var(--font-dm-mono)',
                 fontSize: 10,
                 fontWeight: 700,
                 color: accentColor,
@@ -691,7 +691,7 @@ function CommandThread({
                 {msg.type === 'dept' ? '@' : '/'}{msg.label}
               </span>
               {msg.isLoading && (
-                <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)' }}>
                   working…
                 </span>
               )}
@@ -710,7 +710,7 @@ function CommandThread({
               <div style={{
                 fontSize: 11,
                 color: 'var(--text-3)',
-                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontFamily: 'var(--font-dm-mono)',
                 marginBottom: 6,
                 opacity: 0.7,
                 whiteSpace: 'pre-wrap',
@@ -791,7 +791,7 @@ function PlanningIndicator({ mode }: { mode?: string | null }) {
         margin: '0 auto 12px',
       }} />
       <div style={{
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
         fontSize: 11,
         color: modeMeta?.color ?? '#facc15',
         letterSpacing: '0.08em',
@@ -896,7 +896,7 @@ function TaskApprovalItem({
           border: `1px solid ${deptColour}44`,
           borderRadius: 4,
           padding: '2px 7px',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           letterSpacing: '0.08em',
           whiteSpace: 'nowrap',
@@ -947,7 +947,7 @@ function TaskApprovalItem({
           border: `1px solid ${risk.border}`,
           borderRadius: 4,
           padding: '2px 7px',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           letterSpacing: '0.06em',
           flexShrink: 0,
@@ -993,7 +993,7 @@ function TaskApprovalItem({
       {isActioned ? (
         <div>
           <div style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             color: resolvedStatus === 'completed' ? '#4ade80' :
                    resolvedStatus === 'failed' ? '#f87171' :
@@ -1118,7 +1118,7 @@ function btnStyle(color: string, bg: string): React.CSSProperties {
     border: `1px solid ${color}44`,
     borderRadius: 4,
     padding: '4px 12px',
-    fontFamily: 'var(--font-dm-mono, monospace)',
+    fontFamily: 'var(--font-dm-mono)',
     fontSize: 10,
     letterSpacing: '0.04em',
     cursor: 'pointer',
@@ -1187,7 +1187,7 @@ function PlanCard({
             flexWrap: 'wrap',
           }}>
             <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 9,
               color: 'var(--text-3)',
               letterSpacing: '0.08em',
@@ -1217,7 +1217,7 @@ function PlanCard({
               border: '1px solid rgba(99,102,241,0.3)',
               borderRadius: 4,
               padding: '5px 12px',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               cursor: 'pointer',
               letterSpacing: '0.04em',
@@ -1233,7 +1233,7 @@ function PlanCard({
               border: '1px solid rgba(239,68,68,0.25)',
               borderRadius: 4,
               padding: '5px 12px',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               cursor: 'pointer',
               letterSpacing: '0.04em',
@@ -1297,7 +1297,7 @@ function PlanCard({
           justifyContent: 'space-between',
         }}>
           <div style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             color: '#4ade80',
             letterSpacing: '0.06em',
@@ -1313,7 +1313,7 @@ function PlanCard({
               color: 'var(--text-3)',
               fontSize: 9,
               padding: '3px 8px',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               cursor: 'pointer'
             }}>
             DISMISS
@@ -1475,7 +1475,7 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
               color: 'var(--accent)',
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
             }}>
               {isDirectResponseReport ? 'Orc Assistant' : 'Strategic Output'}
             </span>
@@ -1548,7 +1548,7 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
               {isDirectResponseReport ? 'Orc Assistant' : 'Orchestrator'}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)' }}>
               {isDirectResponseReport ? 'Direct Chat Response' : 'Chief of Staff Pass'}
             </div>
           </div>
@@ -1557,7 +1557,7 @@ function SynthesisReportCard({ goalId, onDismiss, goal }: { goalId: string, onDi
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Founder feedback: thumbs up / down */}
           {feedbackState === 'up' || feedbackState === 'down' ? (
-            <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+            <div style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono)' }}>
               {feedbackState === 'up' ? '👍 Thanks!' : '👎 Noted'}
             </div>
           ) : (
@@ -2463,7 +2463,7 @@ export function WarRoom() {
           </div>
           {activeGoal.outcome && (
             <div style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: '#f87171',
               opacity: 0.7,
@@ -2486,7 +2486,7 @@ export function WarRoom() {
               marginBottom: 10,
             }}>
               <div style={{
-                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontFamily: 'var(--font-dm-mono)',
                 fontSize: 9,
                 color: '#f87171',
                 letterSpacing: '0.08em',
@@ -2504,7 +2504,7 @@ export function WarRoom() {
                   borderBottom: i < goalErrorEvents.length - 1 ? '1px solid rgba(239,68,68,0.1)' : 'none',
                 }}>
                   <span style={{
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 9,
                     color: 'rgba(248,113,113,0.6)',
                     whiteSpace: 'nowrap',
@@ -2513,7 +2513,7 @@ export function WarRoom() {
                     {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <span style={{
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 10,
                     color: '#f87171',
                     lineHeight: 1.5,

@@ -34,7 +34,7 @@ export function ForceResetButton({ slug }: Props) {
         disabled={loading}
         title="Force reset this department — clears the stuck 'running' state"
         style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 11,
           padding: '7px 14px',
           borderRadius: 8,
@@ -51,7 +51,7 @@ export function ForceResetButton({ slug }: Props) {
         {loading ? 'Resetting…' : '⚡ Force Reset'}
       </button>
       {error && (
-        <span style={{ fontSize: 10, color: 'var(--red)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+        <span style={{ fontSize: 10, color: 'var(--red)', fontFamily: 'var(--font-dm-mono)' }}>
           {error}
         </span>
       )}

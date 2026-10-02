@@ -4,18 +4,20 @@
 
 const API_KEY = () => process.env.GEMINI_API_KEY ?? ''
 
-export const WORKING_GEMINI_MODEL = 'gemini-2.5-flash'
+import { WORKING_GEMINI_MODEL, LITE_GEMINI_MODEL, PRO_GEMINI_MODEL } from './gemini-models'
+export { WORKING_GEMINI_MODEL, LITE_GEMINI_MODEL, PRO_GEMINI_MODEL }
 
 // Normalize model names: strip provider prefix and remap retired / non-Gemini
 // IDs to the model we actually serve.
-// e.g. 'gemini/gemini-2.0-flash' → 'gemini-2.5-flash'
+// e.g. 'gemini/gemini-2.5-flash' → WORKING_GEMINI_MODEL
 export function normalizeModel(model: string): string {
   let m = model
   if (m.startsWith('gemini/')) m = m.slice('gemini/'.length)
   else if (m.startsWith('google/')) m = m.slice('google/'.length)
 
   if (!m.startsWith('gemini-') && !m.startsWith('models/')) return WORKING_GEMINI_MODEL
-  if (/^gemini-(1\.5|2\.0)/.test(m) || /preview/i.test(m)) return WORKING_GEMINI_MODEL
+  // Retired families (1.x, 2.x) are remapped to the current primary model.
+  if (/^gemini-(1\.|2\.)/.test(m)) return WORKING_GEMINI_MODEL
   return m
 }
 
@@ -43,4 +45,4 @@ export async function callGemini(params: {
   }
 }
 
-export const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']
+export const GEMINI_FALLBACK_CHAIN = [WORKING_GEMINI_MODEL, LITE_GEMINI_MODEL, PRO_GEMINI_MODEL]

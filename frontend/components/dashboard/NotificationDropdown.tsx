@@ -69,7 +69,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
         <span style={{ fontFamily: 'var(--font-syne, Syne)', fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
           Notifications
         </span>
-        <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)' }}>
+        <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--text-3)' }}>
           {items.length} PENDING
         </span>
       </div>
@@ -80,7 +80,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
         ) : items.length === 0 ? (
           <div style={{ padding: "32px 20px", textAlign: 'center' }}>
              <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
-             <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+             <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)' }}>
                 ALL CAUGHT UP
              </div>
           </div>
@@ -105,7 +105,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                    <span style={{ 
-                     fontFamily: 'var(--font-dm-mono, monospace)', 
+                     fontFamily: 'var(--font-dm-mono)', 
                      fontSize: 8, 
                      color: 'var(--amber)',
                      textTransform: 'uppercase',
@@ -113,7 +113,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
                     }}>
                      {item.department_slug} · {item.risk_level.toUpperCase()}
                    </span>
-                   <span style={{ fontSize: 8, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                   <span style={{ fontSize: 8, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)' }}>
                       {new Date(item.requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                    </span>
                 </div>
@@ -134,7 +134,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
           padding: '10px',
           textAlign: 'center',
           fontSize: 10,
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           color: 'var(--accent)',
           textDecoration: 'none',
           borderTop: '1px solid var(--border)',

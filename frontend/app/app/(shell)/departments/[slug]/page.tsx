@@ -88,7 +88,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
               {dept.activation_stage === 'active' && <SyncFailedBadge personaId={dept.orc_persona_id} slug={dept.slug} />}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 11, color: 'var(--text-3)' }}>
+              <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 11, color: 'var(--text-3)' }}>
                 /{dept.slug}
               </span>
               <ActivationBadge stage={dept.activation_stage} />
@@ -129,7 +129,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
                     color: 'var(--accent)',
                     border: '1px solid rgba(0,212,170,0.2)',
                     borderRadius: 8,
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 10,
                     padding: '3px 8px',
                   }}>
@@ -148,7 +148,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
                     color: 'var(--red)',
                     border: '1px solid rgba(255,77,109,0.2)',
                     borderRadius: 8,
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 10,
                     padding: '3px 8px',
                   }}>
@@ -168,7 +168,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {events.map(ev => (
                   <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12 }}>
-                    <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)', flexShrink: 0, marginTop: 1 }}>
+                    <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)', flexShrink: 0, marginTop: 1 }}>
                       {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <span style={{ color: 'var(--text-2)' }}>{ev.description}</span>
@@ -183,10 +183,10 @@ export default async function DepartmentDetailPage({ params }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <section style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 14 }}>
             <div className="crost-section-label" style={{ marginBottom: 6 }}>Model</div>
-            <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 11, color: 'var(--accent)' }}>
+            <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 11, color: 'var(--accent)' }}>
               {dept.model_name}
             </p>
-            <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
+            <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
               {dept.model_provider}
             </p>
           </section>
@@ -196,13 +196,13 @@ export default async function DepartmentDetailPage({ params }: Props) {
             {(dept.tools as string[]).length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {(dept.tools as string[]).map(t => (
-                  <p key={t} style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-2)' }}>
+                  <p key={t} style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-2)' }}>
                     {t.replace(/_/g, ' ')}
                   </p>
                 ))}
               </div>
             ) : (
-              <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)' }}>
+              <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)' }}>
                 No tools
               </p>
             )}
@@ -211,7 +211,7 @@ export default async function DepartmentDetailPage({ params }: Props) {
           {dept.last_active_at && (
             <section style={{ background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 14 }}>
               <div className="crost-section-label" style={{ marginBottom: 4 }}>Last Active</div>
-              <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-2)' }}>
+              <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-2)' }}>
                 {new Date(dept.last_active_at).toLocaleDateString()}
               </p>
             </section>

@@ -71,7 +71,7 @@ export default async function ArtifactsPage() {
           textAlign: 'center',
           padding: '100px 20px',
           color: 'var(--text-3)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 13,
           background: 'rgba(255,255,255,0.02)',
           borderRadius: 16,

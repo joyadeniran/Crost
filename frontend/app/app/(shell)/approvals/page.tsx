@@ -41,7 +41,7 @@ export default async function ApprovalsPage() {
             background: 'rgba(255,179,71,0.12)',
             color: 'var(--amber)',
             border: '1px solid rgba(255,179,71,0.2)',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 11,
             fontWeight: 500,
             padding: '4px 10px',
@@ -70,7 +70,7 @@ export default async function ApprovalsPage() {
           textAlign: 'center',
           padding: '60px 20px',
           color: 'var(--text-3)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 12,
         }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>OK</div>

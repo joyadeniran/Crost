@@ -80,7 +80,7 @@ export function HealthWidget() {
           onClick={check}
           disabled={loading}
           style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             padding: '3px 10px',
             borderRadius: 6,
@@ -116,7 +116,7 @@ export function HealthWidget() {
                   <div>
                     <div style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>{svc.name}</div>
                     {svc.detail && (
-                      <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)', marginTop: 2 }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)', marginTop: 2 }}>
                         {svc.detail}
                       </div>
                     )}
@@ -124,12 +124,12 @@ export function HealthWidget() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   {svc.latencyMs !== null && (
-                    <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)' }}>
                       {svc.latencyMs}ms
                     </span>
                   )}
                   <span style={{
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 9,
                     padding: '2px 7px',
                     borderRadius: 4,
@@ -143,7 +143,7 @@ export function HealthWidget() {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)' }}>
             Last checked {new Date(data.checkedAt).toLocaleTimeString()}
           </div>
         </>

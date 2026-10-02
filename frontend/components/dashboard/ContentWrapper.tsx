@@ -1,35 +1,16 @@
-'use client'
-
-import { usePathname } from 'next/navigation'
-import { LiveEventsPanel } from './LiveEventsPanel'
 import type { EventLogEntry } from '@/types'
 
 interface Props {
   children: React.ReactNode
-  initialEvents: EventLogEntry[]
+  /** @deprecated the live events side panel was removed (beta simplification); kept so callers compile. */
+  initialEvents?: EventLogEntry[]
 }
 
-export function ContentWrapper({ children, initialEvents }: Props) {
-  const pathname = usePathname()
-  
-  // Define pages where the Live Events sidebar should be HIDDEN
-  // These are focus-heavy or space-intensive pages.
-  const hideSidebarOn = [
-    '/app/settings',
-    '/app/memos',
-    '/app/approvals',
-    '/app/artifacts'
-  ]
-
-  // Check if current path starts with any of the hidden paths
-  const isHidden = hideSidebarOn.some(path => pathname.startsWith(path))
-
+// Beta: one calm column. Chat is the home screen; Approvals / Artifacts / Settings are the only other places.
+export function ContentWrapper({ children }: Props) {
   return (
     <div className="crost-content">
-      <div className="crost-page">
-        {children}
-      </div>
-      <LiveEventsPanel initial={initialEvents} isHidden={isHidden} />
+      <div className="crost-page">{children}</div>
     </div>
   )
 }

@@ -44,7 +44,7 @@ export function WhatNextWidget({ actions }: Props) {
         marginBottom: 12,
       }}>
         <div style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: 'var(--accent)',
           letterSpacing: '0.08em',
@@ -52,7 +52,7 @@ export function WhatNextWidget({ actions }: Props) {
           WHAT NEXT?
         </div>
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           color: 'var(--text-4)',
         }}>
@@ -113,7 +113,7 @@ export function WhatNextWidget({ actions }: Props) {
             </div>
             <span style={{
               fontSize: 9,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               color: action.risk_level === 'low' ? '#4ade80'
                 : action.risk_level === 'medium' ? '#facc15'
                 : action.risk_level === 'high' ? '#fb923c'

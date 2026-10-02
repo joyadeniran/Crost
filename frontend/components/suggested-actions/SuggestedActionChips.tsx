@@ -236,7 +236,7 @@ function ActionChip({ action, onDone }: { action: SuggestedActionRow; onDone: ()
             fontSize: 11,
             fontWeight: 600,
             cursor: inputs[field]?.trim() ? 'pointer' : 'default',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             flexShrink: 0,
           }}
         >
@@ -359,7 +359,7 @@ export function SuggestedActionChips({ entityType, entityId }: Props) {
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
         marginBottom: 8,
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
       }}>
         Suggested Next Steps
       </div>

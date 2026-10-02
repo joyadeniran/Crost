@@ -17,7 +17,7 @@ export function DepartmentGrid({ departments }: Props) {
       </div>
 
       {departments.length === 0 && (
-        <div style={{ marginTop: 40, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 12 }}>
+        <div style={{ marginTop: 40, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-dm-mono)', fontSize: 12 }}>
           <p>Your departments appear here once onboarding is complete.</p>
         </div>
       )}

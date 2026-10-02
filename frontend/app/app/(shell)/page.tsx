@@ -2,9 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider'
-import { LiveDepartmentGrid } from '@/components/departments/LiveDepartmentGrid'
 import { WarRoom } from '@/components/war-room/WarRoom'
-import { WhatNextWidget } from '@/components/dashboard/WhatNextWidget'
 import { Department } from '@/types'
 import { redirect } from 'next/navigation'
 
@@ -163,24 +161,16 @@ export default async function DashboardPage() {
     }
   }
 
-  const [approvalResult, identityResult, suggestedActionsResult] = await Promise.all([
-    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', currentUser.id),
+  const [approvalResult, identityResult] = await Promise.all([
+    supabase.from('approval_queue').select('id').eq('status', 'pending').eq('created_by', currentUser.id).limit(100),
     supabase
       .from('system_config')
       .select('key, value')
       .in('key', ['company_name', 'company_identity'])
       .eq('created_by', currentUser.id),
-    supabase
-      .from('suggested_actions')
-      .select('id, action_slug, label, reasoning, risk_level, source_entity_type, source_entity_id, created_at')
-      .eq('created_by', currentUser.id)
-      .eq('status', 'generated')
-      .order('created_at', { ascending: false })
-      .limit(3),
   ])
 
   const departments = (deptResult.data ?? []) as Department[]
-  const suggestedActions = suggestedActionsResult.data ?? []
   const pendingCount = approvalResult.data?.length ?? 0
   const companyName = identityResult.data?.find((row: any) => row.key === 'company_name')?.value
   const companyIdentity = identityResult.data?.find((row: any) => row.key === 'company_identity')?.value
@@ -190,148 +180,47 @@ export default async function DashboardPage() {
       ? String(companyIdentity).replace(/"/g, '').split('.')[0]
       : null
 
-  const activeCount  = departments.filter((d) => d.activation_stage === 'active').length
-  const runningCount = departments.filter((d) => d.status === 'running').length
-  const unsyncedCount = departments.filter((d) => {
-    if (d.activation_stage !== 'active') return false
-    const id = d.orc_persona_id
-    if (id === 'SYNC_FAILED') return true
-    // null and direct_llm are considered synced in modern mode
-    if (id && id.startsWith('direct_llm:') && id !== `direct_llm:${d.slug}`) return true
-    return false
-  }).length
-
   return (
     <RealtimeProvider
       initialDepartments={departments}
       initialPendingCount={pendingCount}
     >
-      {/* Page header */}
-      <div style={{ marginBottom: 24 }}>
+      {/* Chat-first home: a calm greeting, then Orc. Everything else lives behind the sidebar. */}
+      <div style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
         {onboardingIncomplete && (
-          <div style={{
-            marginBottom: 18,
-            padding: '14px 16px',
-            borderRadius: 'var(--radius)',
-            border: '1px solid rgba(0,212,170,0.25)',
-            background: 'rgba(0,212,170,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}>
-            <div>
-              <div style={{
-                fontFamily: 'var(--font-dm-mono, monospace)',
-                fontSize: 10,
-                color: 'var(--accent)',
-                letterSpacing: '0.08em',
-                marginBottom: 4,
-              }}>
-                RESUME SETUP
-              </div>
-              <div style={{ color: 'var(--text)', fontSize: 14 }}>
-                Your office is usable now. Finish setup whenever you&apos;re ready.
-              </div>
-            </div>
-            <a
-              href={getResumeRoute(onboardingStep)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 14px',
-                borderRadius: 999,
-                border: '1px solid rgba(0,212,170,0.35)',
-                color: 'var(--accent)',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-dm-mono, monospace)',
-                fontSize: 11,
-                letterSpacing: '0.06em',
-              }}
-            >
-              Continue onboarding →
-            </a>
-          </div>
+          <a
+            href={getResumeRoute(onboardingStep)}
+            style={{
+              display: 'block',
+              marginBottom: 20,
+              padding: '10px 14px',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--border-bright)',
+              color: 'var(--text-2)',
+              fontSize: 13,
+              textDecoration: 'none',
+            }}
+          >
+            Finish setting up your office <span style={{ color: 'var(--accent)' }}>→</span>
+          </a>
         )}
         <h1 style={{
-          fontFamily: 'var(--font-syne, Syne)',
-          fontWeight: 700,
-          fontSize: 20,
+          fontFamily: 'var(--font-serif)',
+          fontWeight: 400,
+          fontSize: 34,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.15,
           color: 'var(--text)',
-          marginBottom: 2,
+          margin: '8px 0 6px',
         }}>
-          {identityLabel ? `${identityLabel} HQ` : 'Agent Office'}
+          {identityLabel ? `${identityLabel}, what are we working on?` : 'What are we working on?'}
         </h1>
-        <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Your AI operating system</p>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', marginBottom: 28 }}>
+          Ask Orc anything, or hand over a goal. Nothing goes out without your approval.
+        </p>
+
+        <WarRoom />
       </div>
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
-        {[
-          { label: 'DEPARTMENTS',      value: departments.length },
-          { label: 'ACTIVE',           value: activeCount },
-          { label: 'RUNNING NOW',      value: runningCount },
-        ].map((stat) => (
-          <div key={stat.label} style={{
-            background: 'var(--bg-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '12px 14px',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-syne, Syne)',
-              fontWeight: 700,
-              fontSize: 22,
-              color: stat.value > 0 ? 'var(--text)' : 'var(--text-3)',
-            }}>
-              {stat.value}
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
-              fontSize: 10,
-              color: 'var(--text-3)',
-              letterSpacing: '0.06em',
-              marginTop: 2,
-            }}>
-              {stat.label}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* What Next? — top unresolved suggestions */}
-      <WhatNextWidget actions={suggestedActions} />
-
-      {/* War Room — goal input + plan card */}
-      <WarRoom />
-
-      {/* Departments grid header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
-            fontSize: 11,
-            color: 'var(--text-3)',
-            letterSpacing: '0.08em',
-          }}>
-            {departments.length} DEPARTMENTS
-          </span>
-          {unsyncedCount > 0 && (
-            <span style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
-              fontSize: 10,
-              color: 'var(--red)',
-              letterSpacing: '0.06em',
-            }}>
-              ⚠ {unsyncedCount} unsynced
-            </span>
-          )}
-        </div>
-      </div>
-
-      <LiveDepartmentGrid />
     </RealtimeProvider>
   )
 }

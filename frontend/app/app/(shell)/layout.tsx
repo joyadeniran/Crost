@@ -7,7 +7,6 @@ import { Topbar } from '@/components/dashboard/Topbar'
 import { ContentWrapper } from '@/components/dashboard/ContentWrapper'
 import { LayoutStoreHydrator } from '@/components/providers/LayoutStoreHydrator'
 import { Logo } from '@/components/ui/Logo'
-import type { EventLogEntry } from '@/types'
 
 import { redirect } from 'next/navigation'
 
@@ -23,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Use service role client for DB reads (bypasses RLS, faster)
   const supabase = createServerSupabaseClient()
 
-  const [pendingResult, eventsResult, configResult, artifactListResult] = await Promise.all([
+  const [pendingResult, configResult, artifactListResult] = await Promise.all([
     // Check both user_id and created_by for robustness
     // EGRESS: COUNT in SQL — never ship row ids/bodies just to count them (this layout runs on every navigation)
     getPool().query(
@@ -31,8 +30,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       [user.id]
     ).then(r => ({ data: r.rows[0]?.n ?? 0, error: null as { message: string } | null }))
      .catch((e: Error) => ({ data: 0, error: { message: e.message } })),
-    // PRUNED: Fetch only what LiveEventsPanel needs for display
-    supabase.from('event_log').select('id, description, event_type, created_at, department_slug').eq('created_by', user.id).order('created_at', { ascending: false }).limit(20),
     supabase.from('system_config').select('key, value').in('key', ['company_name', 'company_identity']).eq('created_by', user.id),
     // EGRESS: SQL count; excludes failed tool-execution artifacts (matches artifacts/page.tsx) without fetching bodies
     getPool().query(
@@ -52,7 +49,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const pendingCount = pendingResult.data ?? 0
   // Match the client-side filter in artifacts/page.tsx: exclude failed tool execution artifacts
   const artifactCount = artifactListResult.data ?? 0
-  const events = (eventsResult.data ?? []) as EventLogEntry[]
   const companyName = configResult.data?.find((row: any) => row.key === 'company_name')?.value
   const companyIdentity = configResult.data?.find((row: any) => row.key === 'company_identity')?.value
   const identity = companyName
@@ -74,7 +70,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <span className="logo-text">Crost</span>
           <span style={{
             marginLeft: 'auto',
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 9,
             color: 'var(--text-3)',
             background: 'var(--bg-3)',
@@ -98,7 +94,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Topbar />
 
         {/* Content wrapper handles context-aware sidebar */}
-        <ContentWrapper initialEvents={events}>
+        <ContentWrapper>
           {children}
         </ContentWrapper>
       </div>

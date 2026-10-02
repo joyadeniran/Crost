@@ -62,7 +62,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
               borderRadius: 8,
               fontSize: 12,
               fontWeight: 600,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               textTransform: 'uppercase',
               letterSpacing: '0.04em',
               cursor: 'pointer',
@@ -90,7 +90,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
           </button>
         ))}
         {activeView === 'sandbox' && (
-          <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', marginLeft: 4 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', marginLeft: 4 }}>
             Drafts awaiting your review — approve or discard before they appear in Gallery
           </span>
         )}
@@ -135,7 +135,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
                 borderRadius: 6,
                 fontSize: 11,
                 fontWeight: 600,
-                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontFamily: 'var(--font-dm-mono)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
                 cursor: 'pointer',
@@ -157,7 +157,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
           textAlign: 'center',
           padding: '60px 20px',
           color: 'var(--text-3)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 13,
           background: 'rgba(255,255,255,0.01)',
           borderRadius: 16,

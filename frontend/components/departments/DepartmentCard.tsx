@@ -59,7 +59,7 @@ export function DepartmentCard({ department: dept }: Props) {
           <div className="token-bar-wrap">
             <div className="token-bar" style={{ width: `${tokenPct}%`, background: tokenColor }} />
           </div>
-          <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)' }}>
+          <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)' }}>
             {tokenPct}%
           </span>
         </div>

@@ -99,8 +99,8 @@ export async function buildFinalPrompt(
         const p = memo.company_profile as any
         parts.push(`COMPANY PROFILE: ${p.name || ''} ${p.industry ? `(${p.industry})` : ''} - ${p.description || ''}`)
       }
-      if (memo.decisions && memo.decisions.length > 0) {
-        const d = (memo.decisions as any[]).slice(-3).map(dec => `- [${dec.made_by}] ${dec.title}: ${dec.decision}`).join('\n')
+      if (asArray(memo.decisions).length > 0) {
+        const d = asArray(memo.decisions).slice(-3).map(dec => `- [${dec.made_by}] ${dec.title}: ${dec.decision}`).join('\n')
         parts.push(`RECENT DECISIONS:\n${d}`)
       }
       strategicContext = parts.join('\n\n')
@@ -117,19 +117,11 @@ export async function buildFinalPrompt(
   // Tool definitions filtered by department-specific permission rules (Spec §11)
   const allowedServices = getAllowedServices(departmentSlug)
 
-  const toolsQuery = supabase
+  // Beta schema: available_tools is a global catalog (no user_id / is_action columns).
+  const { data: allTools } = await supabase
     .from('available_tools')
     .select('id, label, description')
-    .eq('is_configured', true)
-
-  if (userId) {
-    toolsQuery.eq('user_id', userId)
-  } else {
-    toolsQuery.is('user_id', null)
-  }
-
-  // Filter tools to only those the department is authorized to use
-  const { data: allTools } = await toolsQuery.or('is_action.eq.true,requires_config.eq.false,id.eq.supabase_query')
+    .or('requires_config.eq.false,id.eq.supabase_query')
   const permittedTools = (allTools ?? []).filter((t: any) => {
     const service = t.id.split('_')[0].toLowerCase()
     return allowedServices.includes(service) || t.id === 'supabase_query'
@@ -223,8 +215,16 @@ Rules:
 
 // ─── Context Compiler ─────────────────────────────────────────────────────────
 
+/** jsonb columns can hold anything (legacy rows especially) — only trust real arrays. */
+function asArray(v: unknown): any[] {
+  return Array.isArray(v) ? v : []
+}
+
 export async function buildOrcContext(userId: string | null): Promise<string> {
   try {
+    // Ownership scoping: memos belong to a founder; with no user there is no context to load.
+    if (!userId) return ''
+    const ownerId = userId
     const supabase = createServerSupabaseClient()
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -232,11 +232,13 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
       supabase
         .from('company_memos')
         .select('title, body, from_department, priority, is_foundational, is_current_context')
+        .eq('created_by', ownerId)
         .or('is_foundational.eq.true,is_current_context.eq.true')
         .order('created_at', { ascending: true }),
       supabase
         .from('company_memos')
         .select('title, body, from_department, priority, confidence, source_type')
+        .eq('created_by', ownerId)
         .eq('priority', 'urgent')
         .eq('is_foundational', false)
         .eq('is_current_context', false)
@@ -245,6 +247,7 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
       supabase
         .from('company_memos')
         .select('title, body, from_department, priority, confidence, source_type')
+        .eq('created_by', ownerId)
         .eq('priority', 'high')
         .eq('is_foundational', false)
         .eq('is_current_context', false)
@@ -254,6 +257,7 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
       supabase
         .from('company_memos')
         .select('title, from_department, priority')
+        .eq('created_by', ownerId)
         .in('priority', ['normal', 'low'])
         .eq('is_foundational', false)
         .eq('is_current_context', false)
@@ -284,16 +288,19 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
         parts.push(`COMPANY PROFILE: ${p.name || ''} ${p.industry ? `(${p.industry})` : ''} - ${p.description || ''}`)
       }
 
-      if (structuredMemo.decisions && structuredMemo.decisions.length > 0) {
-        const d = (structuredMemo.decisions as any[])
+      const decisionsArr = asArray(structuredMemo.decisions)
+      const taskLogsArr = asArray(structuredMemo.task_logs)
+
+      if (decisionsArr.length > 0) {
+        const d = decisionsArr
           .slice(-10)
           .map(dec => `- [${dec.made_by}] ${dec.title}: ${dec.decision}`)
           .join('\n')
         parts.push(`### STRATEGIC DECISIONS\n${d}`)
       }
 
-      if (structuredMemo.task_logs && structuredMemo.task_logs.length > 0) {
-        const t = (structuredMemo.task_logs as any[])
+      if (taskLogsArr.length > 0) {
+        const t = taskLogsArr
           .slice(-10)
           .map(log => `- [${log.dept_slug}] ${log.title}: ${log.status}${log.result ? ` (${log.result})` : ''}`)
           .join('\n')
@@ -321,14 +328,14 @@ export async function buildOrcContext(userId: string | null): Promise<string> {
 
     if (highMemos && highMemos.length > 0) {
       const tier3 = highMemos
-        .map((m: any) => `[HIGH] ${m.title} (from: ${m.from_department})\n${m.body.slice(0, 500)}`)
+        .map((m: any) => `[HIGH] ${m.title} (from: ${m.from_department})\n${String(m.body ?? '').slice(0, 500)}`)
         .join('\n\n')
       sections.push(`### HIGH-PRIORITY MEMOS\n${tier3}`)
     }
 
     if (optionalMemos && optionalMemos.length > 0) {
       const tier4 = optionalMemos
-        .map((m: any) => `- [${m.priority.toUpperCase()}] ${m.title} (from: ${m.from_department})\n  Summary: ${m.body.slice(0, 100)}${m.body.length > 100 ? '...' : ''}`)
+        .map((m: any) => `- [${String(m.priority ?? 'normal').toUpperCase()}] ${m.title} (from: ${m.from_department})\n  Summary: ${String(m.body ?? '').slice(0, 100)}${String(m.body ?? '').length > 100 ? '...' : ''}`)
         .join('\n')
       sections.push(`### RECENT MEMOS\n${tier4}`)
     }

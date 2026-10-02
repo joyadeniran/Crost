@@ -107,7 +107,7 @@ export function ChatCommandMenu({
           borderBottom: '1px solid rgba(255,255,255,0.05)',
           fontSize: 10,
           color: 'var(--text-4)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           letterSpacing: '0.08em',
           display: 'flex',
           alignItems: 'center',
@@ -184,7 +184,7 @@ export function ChatCommandMenu({
                       style={{
                         fontSize: 11,
                         color: 'var(--text-4)',
-                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontFamily: 'var(--font-dm-mono)',
                       }}
                     >
                       @{entry.slug}
@@ -197,7 +197,7 @@ export function ChatCommandMenu({
                       background: `${entry.color}20`,
                       padding: '2px 7px',
                       borderRadius: 4,
-                      fontFamily: 'var(--font-dm-mono, monospace)',
+                      fontFamily: 'var(--font-dm-mono)',
                       flexShrink: 0,
                     }}
                   >
@@ -212,7 +212,7 @@ export function ChatCommandMenu({
                         fontSize: 12,
                         color: 'var(--text)',
                         fontWeight: 600,
-                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontFamily: 'var(--font-dm-mono)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -231,7 +231,7 @@ export function ChatCommandMenu({
                       background: 'rgba(167,139,250,0.12)',
                       padding: '2px 7px',
                       borderRadius: 4,
-                      fontFamily: 'var(--font-dm-mono, monospace)',
+                      fontFamily: 'var(--font-dm-mono)',
                       flexShrink: 0,
                     }}
                   >

@@ -75,3 +75,10 @@ npm run type-check && npm run test:unit
 # real-Postgres integration test (applies the baseline migration to a scratch DB):
 createdb crost_test && TEST_DATABASE_URL=postgres://localhost/crost_test npm run test:integration
 ```
+
+## Gemini model ids
+Google retires model ids for new API users (the 2.x family now returns 404). Ids live in
+`frontend/lib/gemini-models.ts` and can be overridden without a deploy of code changes via env:
+`GEMINI_MODEL` (primary, default `gemini-3.8-flash`), `GEMINI_MODEL_LITE` (`gemini-3.5-flash-lite`),
+`GEMINI_MODEL_PRO` (`gemini-3.1-pro-preview`). If a call 404s with "no longer available", set the id the
+error message recommends.
