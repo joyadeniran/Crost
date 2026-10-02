@@ -9,6 +9,8 @@ export interface PollOptions {
   baseMs?: number
   maxMs?: number
   maxDurationMs?: number
+  /** Run the first tick right away instead of after baseMs (for views that show progress). */
+  immediate?: boolean
 }
 
 export const POLL_DEFAULTS = { baseMs: 4000, maxMs: 30000, maxDurationMs: 30 * 60 * 1000 }
@@ -69,7 +71,7 @@ export function startPolling(tick: () => Promise<PollResult>, opts: PollOptions 
     schedule(0)
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
-  schedule(base)
+  schedule(opts.immediate ? 0 : base)
 
   return () => {
     stopped = true

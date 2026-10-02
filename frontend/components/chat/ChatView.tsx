@@ -258,7 +258,7 @@ function PlanCard({ plan, chatId, messageId }: { plan: Plan; chatId: string; mes
 
 type Progress = {
   status: string
-  tasks: Array<{ task_id: string; label: string; dept_slug: string; status: string }>
+  tasks: Array<{ task_id: string; label: string; dept_slug: string; status: string; question?: string | null }>
   approvals_pending: number
   artifacts: number
 }
@@ -272,6 +272,7 @@ const TASK_TEXT: Record<string, string> = {
 
 function MissionCard({ goalId, title }: { goalId: string; title: string }) {
   const [p, setP] = useState<Progress | null>(null)
+  const [restart, setRestart] = useState(0) // bump to resume fast polling after the founder answers
 
   useEffect(() => {
     return startPolling(async (): Promise<PollResult> => {
@@ -282,8 +283,8 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
       if (!j?.success) return 'unchanged'
       setP((prev) => (prev && JSON.stringify(prev) === JSON.stringify(j.data) ? prev : j.data))
       return DONE.has(j.data.status) ? 'stop' : 'changed'
-    }, { baseMs: 3000, maxMs: 15000 })
-  }, [goalId])
+    }, { baseMs: 3000, maxMs: 15000, immediate: true })
+  }, [goalId, restart])
 
   const finished = p && DONE.has(p.status)
   const doneCount = p?.tasks.filter((t) => t.status === 'completed').length ?? 0
@@ -300,6 +301,12 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
               <span className="dept-tag">{DEPT_LABEL[t.dept_slug] ?? t.dept_slug}</span>
               <span className="step-label">{t.label}</span>
               <span className="step-state">{TASK_TEXT[t.status] ?? t.status}</span>
+              {t.status === 'needs_data' && (
+                <StepQuestion goalId={goalId} taskId={t.task_id} question={t.question} onResumed={() => {
+                  setP((prev) => prev && { ...prev, tasks: prev.tasks.map((x) => (x.task_id === t.task_id ? { ...x, status: 'planned', question: null } : x)) })
+                  setRestart((n) => n + 1)
+                }} />
+              )}
             </li>
           ))}
         </ul>
@@ -314,6 +321,43 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
           <Link className="pill-btn" href={`/app/artifacts?goal=${goalId}`}>Open {p.artifacts} deliverable{p.artifacts > 1 ? 's' : ''}</Link>
         )}
         {p && <span className="card-hint">{doneCount}/{p.tasks.length} steps done</span>}
+      </div>
+    </div>
+  )
+}
+
+/** A department is blocked on something only the founder knows: answer it, let them assume, or skip. */
+function StepQuestion({ goalId, taskId, question, onResumed }: {
+  goalId: string; taskId: string; question?: string | null; onResumed: () => void
+}) {
+  const [answer, setAnswer] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const submit = async (body: Record<string, unknown>, url = `/api/goals/${goalId}/tasks/${taskId}/answer`, method = 'POST') => {
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!r.ok) throw new Error()
+      onResumed()
+    } catch {
+      setErr('Could not send that — try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="step-question">
+      <div className="step-q-text">{question || 'This step needs a bit more information from you.'}</div>
+      <form onSubmit={(e) => { e.preventDefault(); if (answer.trim()) submit({ answer }) }} className="step-q-form">
+        <input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer…" disabled={busy} />
+        <button className="pill-btn solid" disabled={busy || !answer.trim()}>Send</button>
+      </form>
+      <div className="step-q-alt">
+        <button className="link-btn" disabled={busy} onClick={() => submit({ assume: true })}>Use your best assumptions</button>
+        <button className="link-btn" disabled={busy} onClick={() => submit({ status: 'skipped' }, `/api/goals/${goalId}/tasks/${taskId}`, 'PATCH')}>Skip this step</button>
+        {err && <span className="card-hint">{err}</span>}
       </div>
     </div>
   )

@@ -38,7 +38,7 @@ Label: ${task.label}
 Reasoning: ${task.reasoning}
 Expected Deliverable: ${task.expected_deliverable}
 Params: ${JSON.stringify(task.params)}
-
+${typeof (task.params as any)?.founder_input === 'string' && (task.params as any).founder_input ? `\nFOUNDER INPUT (the founder's answer to your earlier question — use it, do not ask again): ${(task.params as any).founder_input}\n` : ''}
 OUTPUT FORMAT — your response must be one of these three JSON shapes:
 
 1. Task done (the normal case):
@@ -54,12 +54,14 @@ OUTPUT FORMAT — your response must be one of these three JSON shapes:
 2. Task attempted but cannot succeed:
 { "status": "failed", "summary": "<one sentence: what failed and why>" }
 
-3. Required data is genuinely missing — BEFORE using this shape you MUST check,
-in order: the PRIOR TASK OUTPUTS section, the COMPANY MEMOS section, and the
-KNOWLEDGE_BASE_SEARCH tool. Only if the data is absent from all three:
+3. LAST RESORT — the deliverable is impossible without facts only the founder has
+(e.g. their real revenue numbers, a password, a choice between two incompatible
+directions). Prefer shape 1: draft the deliverable with clearly marked assumptions
+and [placeholders] the founder can fill in. Check PRIOR TASK OUTPUTS, COMPANY MEMOS
+and the FOUNDER INPUT param first. If you truly must ask, ask ONE short question:
 {
   "needs_more_data": true,
-  "missing_data": ["<specific, founder-actionable item, e.g. 'Q1 revenue figures'>"],
+  "missing_data": ["<one specific question for the founder, e.g. 'What was Q1 revenue?'>"],
   "summary": "<what you need and what you will do once you have it>"
 }
 

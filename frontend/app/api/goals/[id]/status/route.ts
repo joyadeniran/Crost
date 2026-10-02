@@ -38,7 +38,9 @@ export async function GET(req: NextRequest, { params }: Params) {
       // Compact progress for the chat's mission card (labels are short; bodies never included).
       const [tasks, extra] = await Promise.all([
         getPool().query(
-          `SELECT task_id, label, dept_slug, status FROM goal_tasks WHERE goal_id = $1 ORDER BY created_at LIMIT 20`,
+          `SELECT task_id, label, dept_slug, status,
+                  CASE WHEN status = 'needs_data' THEN left(orc_notes->-1->>'note', 600) END AS question
+             FROM goal_tasks WHERE goal_id = $1 ORDER BY created_at LIMIT 20`,
           [params.id]
         ),
         getPool().query(
