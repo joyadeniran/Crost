@@ -2187,3 +2187,9 @@ Added egress, egress-ledger, db-egress, polling, egress-static unit suites; inte
 
 ### Still needs the founder
 Suspend/delete the old Render services (`crost-worker`, `crost-frontend`, `crost-approval-expiry`, `crost-litellm`); they are the live leak.
+
+---
+
+## Session v14.2 — Waitlist retired from the landing page
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE
+The beta is open signup, so the landing CTA is now a single "Try the beta" button to `/signup?source=landing`; the email form, "founders waiting" counter and Brevo mention are gone. `/api/waitlist` and the `waitlist` table are kept dormant (insert-only, rate-limited) — remove with their test if confirmed unneeded.

@@ -65,7 +65,7 @@ export function PrivacyPage() {
         </section>
         <section id="third" className="legal-section">
           <h3>5. Third-Party Services</h3>
-          <p>We use Supabase (authentication, database, file storage), Vercel (hosting), Google (Gemini API; Gmail if you connect it), PostHog (product analytics) and, if enabled, Brevo (waitlist email). Each has its own privacy policy which we encourage you to review.</p>
+          <p>We use Supabase (authentication, database, file storage), Vercel (hosting), Google (Gemini API; Gmail if you connect it), PostHog (product analytics). Each has its own privacy policy which we encourage you to review.</p>
         </section>
         <section id="google" className="legal-section">
           <h3>6. Google Sign-In and Gmail</h3>
