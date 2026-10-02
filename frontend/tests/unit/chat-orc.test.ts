@@ -62,13 +62,19 @@ describe('plan protocol', () => {
 })
 
 describe('streamOrcReply', () => {
-  function mockGemini(behaviour: Record<string, 'fail' | string[]>) {
+  const configsSeen: any[] = []
+  function mockGemini(behaviour: Record<string, 'fail' | 'no-thinking' | string[]>) {
     vi.doMock('@google/generative-ai', () => ({
       GoogleGenerativeAI: class {
-        getGenerativeModel({ model }: { model: string }) {
+        getGenerativeModel({ model, generationConfig }: { model: string; generationConfig: any }) {
+          configsSeen.push({ model, ...generationConfig })
           return {
             async generateContentStream() {
-              const b = behaviour[model]
+              let b = behaviour[model]
+              if (b === 'no-thinking') {
+                if (generationConfig.thinkingConfig) throw new Error('[400 Bad Request] Invalid JSON payload: unknown field thinkingConfig')
+                b = ['ok']
+              }
               if (b === 'fail' || !b) throw new Error(`404 ${model}`)
               return {
                 stream: (async function* () { for (const t of b) yield { text: () => t } })(),
@@ -91,6 +97,30 @@ describe('streamOrcReply', () => {
     while (!step.done) { out += step.value; step = await gen.next() }
     expect(out).toBe('Hello')
     expect(step.value).toEqual({ model: 'b', tokens: 42 })
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('asks for low thinking first, and retries the same model without it if rejected', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: 'no-thinking' })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'] })
+    expect((await gen.next()).value).toBe('ok')
+    expect(configsSeen[0]).toMatchObject({ model: 'a', thinkingConfig: { thinkingLevel: 'low' } })
+    expect(configsSeen[1]).toMatchObject({ model: 'a' })
+    expect(configsSeen[1].thinkingConfig).toBeUndefined()
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('moves to the next model (not a config retry) on a 404', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: 'fail', b: ['hi'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'] })
+    expect((await gen.next()).value).toBe('hi')
+    expect(configsSeen.map((c) => c.model)).toEqual(['a', 'b'])
     vi.doUnmock('@google/generative-ai')
   })
 

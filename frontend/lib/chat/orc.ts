@@ -133,25 +133,32 @@ export async function* streamOrcReply(params: {
     parts: [{ text: t.content }],
   }))
 
+  // Chat wants the first word fast: ask for minimal "thinking". If a model rejects that setting,
+  // retry the same model without it (all before anything is shown to the founder).
+  const variants: Array<Record<string, unknown>> = [{ thinkingConfig: { thinkingLevel: 'low' } }, {}]
   let lastErr: unknown
   for (const modelName of params.models ?? GEMINI_FALLBACK_CHAIN) {
-    let emitted = false
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction: params.system,
-        generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
-      })
-      const result = await model.generateContentStream({ contents })
-      for await (const chunk of result.stream) {
-        const text = chunk.text()
-        if (text) { emitted = true; yield text }
+    for (const extra of variants) {
+      let emitted = false
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: params.system,
+          generationConfig: { temperature: 0.6, maxOutputTokens: 2048, ...extra } as any,
+        })
+        const result = await model.generateContentStream({ contents })
+        for await (const chunk of result.stream) {
+          const text = chunk.text()
+          if (text) { emitted = true; yield text }
+        }
+        const final = await result.response
+        return { model: modelName, tokens: final.usageMetadata?.totalTokenCount ?? 0 }
+      } catch (err) {
+        if (emitted) throw err
+        lastErr = err
+        // Only a config rejection is worth retrying on the same model; anything else → next model.
+        if (!(Object.keys(extra).length > 0 && /400|invalid|unknown|thinking/i.test(String((err as Error)?.message ?? err)))) break
       }
-      const final = await result.response
-      return { model: modelName, tokens: final.usageMetadata?.totalTokenCount ?? 0 }
-    } catch (err) {
-      if (emitted) throw err
-      lastErr = err
     }
   }
   throw lastErr ?? new Error('No Gemini model available')
