@@ -262,7 +262,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
 // ─── Sandbox Status Badge ─────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  draft:       { label: 'In Sandbox',  color: '#f5a623', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.3)' },
+  draft:       { label: 'Draft',  color: '#b7791f', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.3)' },
   review:      { label: 'In Review',   color: '#50c8ff', bg: 'rgba(80,200,255,0.12)', border: 'rgba(80,200,255,0.3)' },
   active:      { label: 'Published',   color: '#00c866', bg: 'rgba(0,200,100,0.12)',  border: 'rgba(0,200,100,0.3)' },
   paused:      { label: 'Paused',      color: '#aaa',    bg: 'rgba(170,170,170,0.1)', border: 'rgba(170,170,170,0.25)' },
@@ -470,7 +470,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
       <ConfirmationModal
         isOpen={showDeleteConfirm}
         title="Discard Artifact"
-        message={`Discard "${displayFilename}"? It will be permanently removed from your sandbox. This cannot be undone.`}
+        message={`Discard "${displayFilename}"? It will be permanently removed. This cannot be undone.`}
         confirmLabel={isDeleting ? 'Discarding...' : 'Yes, Discard'}
         onConfirm={deleteArtifact}
         onCancel={() => setShowDeleteConfirm(false)}

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { getPool } from '@/lib/db'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ChatSidebar } from '@/components/chat/ChatSidebar'
+import { MobileTopBar } from '@/components/chat/MobileTopBar'
 import { ContentWrapper } from '@/components/dashboard/ContentWrapper'
 import { LayoutStoreHydrator } from '@/components/providers/LayoutStoreHydrator'
 
@@ -60,14 +61,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="crost-shell">
-      {/* Phones: the sidebar collapses into one row of links. */}
-      <nav className="mobile-bar">
-        <a href="/app" className="side-brand">Crost</a>
-        <a href="/app">New chat</a>
-        <a href="/app/notifications">Approvals{pendingCount > 0 ? ` (${pendingCount})` : ''}</a>
-        <a href="/app/artifacts">Deliverables</a>
-        <a href="/app/settings">Settings</a>
-      </nav>
+      {/* Phones: top bar with a menu button; the sidebar below becomes a slide-in drawer. */}
+      <MobileTopBar pendingCount={pendingCount} />
       {/* ── SIDEBAR ── */}
       <aside className="crost-sidebar">
         <ChatSidebar pendingCount={pendingCount} identity={identity} />

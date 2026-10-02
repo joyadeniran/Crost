@@ -14,7 +14,7 @@ export default async function ArtifactsPage({ searchParams }: { searchParams?: {
   const supabase = createServerSupabaseClient()
 
   // Fetch artifacts + goals + departments in parallel.
-  // Fetch all non-discarded artifacts so the grid can split them into Gallery / Sandbox tabs.
+  // Fetch all non-discarded artifacts (drafts included — they show inline with a Draft badge).
   // ?goal=<id> (from a chat mission card) narrows the list to that mission's deliverables.
   const goalFilter = searchParams?.goal && /^[0-9a-f-]{36}$/i.test(searchParams.goal) ? searchParams.goal : null
   let artifactsQuery = supabase
@@ -61,12 +61,12 @@ export default async function ArtifactsPage({ searchParams }: { searchParams?: {
           marginBottom: 4,
           letterSpacing: '-0.02em',
         }}>
-          Company Artifacts
+          Deliverables
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-3)', fontFamily: 'Inter, sans-serif' }}>
           {artifacts.length > 0
-            ? `Browse, approve, and download your company's deliverables. New artifacts start in the Sandbox.`
-            : 'Your generated files will appear here once approved from the Sandbox.'
+            ? 'Everything your departments have produced. Open, approve or download any of it.'
+            : 'Run a plan from the chat and what your departments produce shows up here.'
           }
         </p>
       </div>

@@ -2228,3 +2228,14 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 
 ### Tests
 `chat-orc.test.ts` (prompt, plan protocol, streaming fallback, markdown escaping, plan→task mapping) and `chat-routes.test.ts` (auth, ownership 404, budget 429, stream + trailer + persistence, model failure, run idempotency + claim release). 807 unit tests pass; `tsc` and `next build` clean.
+
+---
+
+## Session v15.1 — Unstick "needs input", mobile menu, no sandbox
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE
+- **"Needs your input" dead-ended missions:** `needs_data` isn't terminal and nothing asked the founder. Now the mission card shows the department's question (status probe returns `question` = latest `orc_notes` note) with Send / "Use your best assumptions" / "Skip this step". New `POST /api/goals/[id]/tasks/[taskId]/answer` writes `founder_input` into the task row **and the saved plan** (dispatch reads the plan), re-queues the step (`planned`) and fires CHAIN_REACTION. The worker prompt shows `FOUNDER INPUT` and now treats asking as a last resort (draft with marked assumptions instead). Skipping the last open step closes the mission (it previously sat at `executing` until the daily supervisor).
+- **Mobile:** top bar with a menu button; the full sidebar (recent chats, Approvals, Deliverables, Settings) slides in as a drawer; red dot when approvals wait.
+- **No sandbox:** Deliverables is one list; drafts show inline with a "Draft" badge (approve/discard still on the card; approved artifacts stay immutable).
+- Mission card now fetches progress immediately (`startPolling({ immediate: true })`).
+- Tests: `task-answer.test.ts` (auth, 404, 409, plan+row write, assume, last-step close), worker-prompt founder-input test, polling immediate test. 820 unit tests green.
+- Ops note: the four old Render services (`crost-frontend`, `crost-worker`, `crost-litellm`, `crost-approval-expiry`) were failing builds on every merge (their root `package.json` / `litellm/` no longer exist). Founder suspended them; they can be deleted — Vercel replaces all four.

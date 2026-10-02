@@ -764,9 +764,23 @@ describe('buildWorkerTaskPrompt — explicit output contract', () => {
     expect(prompt).toContain('"missing_data"')
     // Must steer the model to prior outputs before blocking
     expect(prompt).toContain('PRIOR TASK OUTPUTS')
-    expect(prompt).toContain('KNOWLEDGE_BASE_SEARCH')
+    expect(prompt).toContain('COMPANY MEMOS')
+    // Beta: asking the founder is a last resort — draft with marked assumptions first
+    expect(prompt).toContain('LAST RESORT')
+    expect(prompt).toMatch(/assumptions/i)
+    expect(prompt).not.toContain('FOUNDER INPUT (')
     // External actions route through the approval protocol, not JSON
     expect(prompt).toContain('REQUEST_APPROVAL')
+  })
+
+  it('includes the founder\'s answer when a blocked step is resumed', async () => {
+    const { buildWorkerTaskPrompt } = await import('@/lib/engine/worker')
+    const prompt = buildWorkerTaskPrompt({
+      id: 'task-2', action: 'forecast', label: 'Revenue forecast', reasoning: 'r', expected_deliverable: 'sheet',
+      params: { founder_input: 'Q1 revenue was $40k' }, risk_level: 'low', model: 'cloud',
+    } as any)
+    expect(prompt).toContain("FOUNDER INPUT (the founder's answer to your earlier question")
+    expect(prompt).toContain('Q1 revenue was $40k')
   })
 })
 

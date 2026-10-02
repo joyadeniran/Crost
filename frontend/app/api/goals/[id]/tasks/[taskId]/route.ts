@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth/guard'
-import { triggerDispatch } from '@/lib/background'
+import { runInBackground, triggerDispatch } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,8 +49,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Trigger chain reaction so downstream tasks can proceed (Option D)
-    triggerDispatch(params.id, 'CHAIN_REACTION')
+    // If that was the last open step, close the mission now (otherwise it would sit at 'executing'
+    // until the daily supervisor); else let downstream tasks proceed.
+    const { data: allTasks } = await supabase.from('goal_tasks').select('status').eq('goal_id', params.id)
+    const TERMINAL = new Set(['completed', 'failed', 'failed_permanent', 'rejected', 'expired', 'skipped'])
+    if ((allTasks ?? []).length > 0 && (allTasks ?? []).every((t: any) => TERMINAL.has(t.status))) {
+      await supabase.from('goals').update({ status: 'completed' }).eq('id', params.id).eq('created_by', user.id)
+      runInBackground(import('@/lib/engine/orchestrator').then((m) => m.runOrcReport(params.id)))
+    } else {
+      triggerDispatch(params.id, 'CHAIN_REACTION')
+    }
 
     await supabase.from('event_log').insert({
       goal_id: params.id,

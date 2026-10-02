@@ -48,6 +48,13 @@ describe('startPolling', () => {
     await vi.advanceTimersByTimeAsync(5000)
     expect(tick.mock.calls.length).toBeLessThanOrEqual(6)
   })
+  it('runs the first tick immediately when asked', async () => {
+    const tick = vi.fn().mockResolvedValue('stop')
+    startPolling(tick, { baseMs: 5000, immediate: true })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(tick).toHaveBeenCalledTimes(1)
+  })
+
   it('stop() cancels', async () => {
     const tick = vi.fn().mockResolvedValue('changed')
     const stop = startPolling(tick, { baseMs: 100 })
