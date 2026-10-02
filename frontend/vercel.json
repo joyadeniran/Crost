@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "crons": [
+    { "path": "/api/cron/supervise", "schedule": "0 6 * * *" },
+    { "path": "/api/approvals/expire", "schedule": "30 6 * * *" },
+    { "path": "/api/suggested-actions/expire", "schedule": "45 6 * * *" }
+  ]
+}

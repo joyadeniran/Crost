@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth/guard'
+import { triggerDispatch } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,14 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     // Trigger chain reaction so downstream tasks can proceed (Option D)
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${params.id}/dispatch`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-      },
-      body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
-    }).catch(e => console.error('[Task Patch] Chain reaction failed:', e))
+    triggerDispatch(params.id, 'CHAIN_REACTION')
 
     await supabase.from('event_log').insert({
       goal_id: params.id,

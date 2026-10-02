@@ -58,11 +58,19 @@ describe('next.config.js — Next 14 compatibility', () => {
   it('sets serverComponentsExternalPackages under experimental instead (Next 14 key)', () => {
     expect(Array.isArray(nextConfig.experimental?.serverComponentsExternalPackages)).toBe(true)
     expect(nextConfig.experimental.serverComponentsExternalPackages).toContain('pg')
-    expect(nextConfig.experimental.serverComponentsExternalPackages).toContain('firebase-admin')
   })
 
-  it('preserves the existing serverActions allowedOrigins config', () => {
-    expect(nextConfig.experimental?.serverActions?.allowedOrigins).toContain('app.crosthq.com')
+  it('redirects the pre-merge /dashboard and /onboarding URLs into /app', async () => {
+    const redirects = await nextConfig.redirects()
+    const bySource = Object.fromEntries(redirects.map((r: any) => [r.source, r.destination]))
+    expect(bySource['/dashboard']).toBe('/app')
+    expect(bySource['/dashboard/:path*']).toBe('/app/:path*')
+    expect(bySource['/onboarding/:path*']).toBe('/app/onboarding/:path*')
+  })
+
+  it('does not ship the Cloud Run standalone output or hide type errors', () => {
+    expect(nextConfig.output).toBeUndefined()
+    expect(nextConfig.typescript?.ignoreBuildErrors).toBeFalsy()
   })
 
   it('does not define experimental twice (object key collision would silently drop the first)', () => {

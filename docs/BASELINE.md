@@ -52,3 +52,22 @@ Given `next.config.js` sets `typescript.ignoreBuildErrors: true` and `eslint.ign
 - [x] `docs/BASELINE.md` exists (this file).
 - [x] Type-check and unit-test baseline recorded, both green.
 - [ ] `npm run build` confirmed green — **deferred**, sandbox cannot run a >45s foreground command; see note above. Not blocking Phase 1 start.
+
+
+## Beta migration (Vercel + Supabase) — notes
+
+- **Schema drift found while building the baseline** (`supabase/migrations/20261001000000_crost_beta_baseline.sql`):
+  the Cloud SQL schema was an incomplete port. Columns the code writes/reads but the old schema never
+  had are now in the baseline: `departments.is_orchestrator/orc_persona_id`, `goals.orc_conversation/orc_notes`,
+  `company_memos.task_id/is_current_context/is_foundational/valid_until/version_tag`,
+  `suggested_actions.completed_at/dispatched_at/failed_reason/result_summary`,
+  `connections.access_token/refresh_token/token_expires_at/scopes`,
+  `capability_inventory.availability_status/skill_tags/notes`. Also widened: `event_log.event_type` (CHECK dropped —
+  code emits `tool_executed`, `provider_fallback`, `goal_completed`, …) and `artifacts.artifact_type`
+  (`presentation`, `pdf`).
+- **Latent bug (fixed by the baseline):** `lib/capability-checker.ts` selected `availability_status`, `skill_tags`, `notes`
+  which did not exist, so capability-gap detection silently returned nothing in production.
+- **Behaviour changes:** cross-user `PATCH /api/approvals/[id]` now returns 404 (was 403); `GET /api/departments?scope=templates`
+  now requires a session; the executor now sends canonical `send_email` approvals through Gmail (previously only `gmail_*`).
+- **Known follow-ups:** the `createDbClient()` shim is still hand-rolled (a typed `lib/data/` layer remains the 10x goal);
+  `ignoreDuringBuilds` for ESLint is on because `.eslintrc` has no `@typescript-eslint` plugin — run `npm run lint` separately.

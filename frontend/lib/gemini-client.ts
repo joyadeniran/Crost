@@ -1,97 +1,38 @@
 // lib/gemini-client.ts
-// Google Generative AI (Gemini) client.
-// On Cloud Run: uses Vertex AI with service account IAM (no API key needed).
-// Locally: uses GOOGLE_AI_STUDIO_API_KEY.
+// Gemini via the Google AI (Generative Language) API — GEMINI_API_KEY only.
 // Server-side ONLY.
 
-import { Gemini } from '@google/adk'
+const API_KEY = () => process.env.GEMINI_API_KEY ?? ''
 
-const GCP_PROJECT = process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT ?? ''
-const IS_GCP = !!GCP_PROJECT
-const API_KEY = process.env.GOOGLE_AI_STUDIO_API_KEY ?? process.env.GEMINI_API_KEY ?? ''
-
-// The Gemini model that is actually served by Vertex AI in our region.
-// As of 2026, gemini-2.0-flash / 1.5-flash and the AI-Studio-only preview IDs
-// (e.g. gemini-2.5-flash-preview-05-20) return 404 from the Vertex publisher
-// endpoint in us-central1 — only gemini-2.5-flash resolves. This is the single
-// source of truth so retired names in env vars or the DB still work.
 export const WORKING_GEMINI_MODEL = 'gemini-2.5-flash'
 
-// Normalize model names: strip provider prefix and remap retired/unavailable
-// model IDs to the model Vertex AI actually serves.
+// Normalize model names: strip provider prefix and remap retired / non-Gemini
+// IDs to the model we actually serve.
 // e.g. 'gemini/gemini-2.0-flash' → 'gemini-2.5-flash'
 export function normalizeModel(model: string): string {
   let m = model
   if (m.startsWith('gemini/')) m = m.slice('gemini/'.length)
   else if (m.startsWith('google/')) m = m.slice('google/'.length)
 
-  // Non-Gemini providers (groq/llama, anthropic/..., local/...) → working Gemini
-  if (!m.startsWith('gemini-') && !m.startsWith('models/')) {
-    return WORKING_GEMINI_MODEL
-  }
-
-  // Retired Gemini families and AI-Studio-only preview IDs → working Vertex model
-  if (/^gemini-(1\.5|2\.0)/.test(m) || /preview/i.test(m)) {
-    return WORKING_GEMINI_MODEL
-  }
-
+  if (!m.startsWith('gemini-') && !m.startsWith('models/')) return WORKING_GEMINI_MODEL
+  if (/^gemini-(1\.5|2\.0)/.test(m) || /preview/i.test(m)) return WORKING_GEMINI_MODEL
   return m
 }
 
-export function makeGeminiModel(model = WORKING_GEMINI_MODEL): Gemini {
-  const normalized = normalizeModel(model)
-  if (IS_GCP) {
-    // On Cloud Run: Vertex AI uses the service account IAM automatically
-    return new Gemini({ model: normalized, vertexai: true, project: GCP_PROJECT, location: 'us-central1' })
-  }
-  // Local dev: Google AI Studio API key
-  return new Gemini({ model: normalized, apiKey: API_KEY })
-}
-
-// Simple text generation for non-ADK callers (llm-client.ts)
+// Simple text generation for the engine (lib/engine/model.ts).
 export async function callGemini(params: {
   model: string
   prompt: string
   systemNote?: string
   temperature?: number
 }): Promise<{ content: string; tokensUsed: number }> {
-  // Use @google/generative-ai for simple calls outside ADK runner
-  if (!IS_GCP && !API_KEY) throw new Error('[gemini-client] GOOGLE_AI_STUDIO_API_KEY not set')
+  const apiKey = API_KEY()
+  if (!apiKey) throw new Error('[gemini-client] GEMINI_API_KEY not set')
 
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
-  const modelName = normalizeModel(params.model)
-
-  // On GCP, use Vertex AI REST via google-auth-library
-  if (IS_GCP) {
-    const { GoogleAuth } = await import('google-auth-library')
-    const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' })
-    const client = await auth.getClient()
-    const token = await client.getAccessToken()
-
-    const res = await fetch(
-      `https://us-central1-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT}/locations/us-central1/publishers/google/models/${modelName}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.token}` },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: params.prompt }] }],
-          ...(params.systemNote && { systemInstruction: { parts: [{ text: params.systemNote }] } }),
-          generationConfig: { temperature: params.temperature ?? 0.3, maxOutputTokens: 8192 },
-        }),
-        signal: AbortSignal.timeout(90_000),
-      }
-    )
-    if (!res.ok) throw new Error(`Vertex AI error ${res.status}: ${await res.text()}`)
-    const data = await res.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    const tokens = data.usageMetadata?.totalTokenCount ?? 0
-    return { content: text, tokensUsed: tokens }
-  }
-
-  // Local: Google AI Studio
-  const genAI = new GoogleGenerativeAI(API_KEY)
+  const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: modelName,
+    model: normalizeModel(params.model),
     ...(params.systemNote && { systemInstruction: params.systemNote }),
     generationConfig: { temperature: params.temperature ?? 0.3, maxOutputTokens: 8192 },
   })
@@ -100,33 +41,6 @@ export async function callGemini(params: {
     content: result.response.text(),
     tokensUsed: result.response.usageMetadata?.totalTokenCount ?? 0,
   }
-}
-
-export async function getGeminiEmbedding(text: string): Promise<number[]> {
-  if (!IS_GCP && !API_KEY) return new Array(768).fill(0) // stub when no key
-
-  if (IS_GCP) {
-    const { GoogleAuth } = await import('google-auth-library')
-    const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' })
-    const client = await auth.getClient()
-    const token = await client.getAccessToken()
-    const res = await fetch(
-      `https://us-central1-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT}/locations/us-central1/publishers/google/models/text-embedding-004:predict`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.token}` },
-        body: JSON.stringify({ instances: [{ content: text }] }),
-      }
-    )
-    const data = await res.json()
-    return data.predictions?.[0]?.embeddings?.values ?? new Array(768).fill(0)
-  }
-
-  const { GoogleGenerativeAI } = await import('@google/generative-ai')
-  const genAI = new GoogleGenerativeAI(API_KEY)
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' })
-  const result = await model.embedContent(text)
-  return result.embedding.values
 }
 
 export const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']

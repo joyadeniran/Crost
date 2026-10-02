@@ -2147,3 +2147,43 @@ Supabase services were restricted (402) due to 7.15 GB egress — 2.15 GB over t
 **Impact**: Added branding consistency across browser tabs.
 
 ... [rest of previous content]
+
+---
+
+## Session v14.0 — Beta rebuild: one Vercel deploy (marketing + app), Supabase, Gemini key
+**Date**: 2026-10-01 **Status**: ✅ CODE COMPLETE — deploy blocked only on a live Supabase project + keys (see `docs/DEPLOY_VERCEL.md`)
+**Impact**: Crost is now one Next.js app (`frontend/`) for both the marketing site (`/`) and the product (`/app`), designed for Vercel + Supabase. All Google Cloud infrastructure is removed.
+
+### What Changed
+1. **Infra swap** — Firebase Auth → Supabase Auth (`@supabase/ssr` cookie session; `middleware.ts` gates `/app`, routes onboarding, keeps the CSRF origin check); GCS → Supabase Storage (`lib/storage.ts`, one private `crost` bucket); Cloud SQL → Supabase Postgres (same pg shim, `DATABASE_URL` = pooler); Vertex/ADK → `GEMINI_API_KEY` (`lib/gemini-client.ts`). New `lib/supabase-admin.ts`.
+2. **Serverless execution** — `scripts/worker.ts` replaced by `lib/background.ts` (`waitUntil`), event-driven chain reaction (`triggerDispatch` after each task) and `lib/engine/supervisor.ts` behind `/api/cron/supervise`; cron auth centralised in `lib/auth/cron.ts` (500 if `CRON_SECRET` unset). `frontend/vercel.json` crons (daily, plan-agnostic).
+3. **Scope cut to one loop** — removed MCP server, BYO keys/model routing, recurring missions, calendar prep/events, knowledge base, dynamic department create/clone/settings, Composio, ADK, Orc learning cron, `/api/tools/*`, direct tool commands. Tool gateway now always routes through the approval queue (no auto-run). Departments fixed to Marketing/Engineering/Sales/Operations (+Orchestrator); onboarding is 3 steps.
+4. **Schema** — new single baseline `supabase/migrations/20261001000000_crost_beta_baseline.sql` (RLS on everywhere with no policies; `anon` may only INSERT into `waitlist`; private storage bucket; department templates seeded). Fixed schema drift the old Cloud SQL port had (see `docs/BASELINE.md`). Old GCP files → `archive/gcp-legacy/`, old Supabase migrations → `supabase/legacy/`.
+5. **Marketing merge** — landing site ported into `app/(marketing)`; new scroll-driven `BridgeScroll` hero (from the Bridge Animation handoff); beta pricing page (free during beta); legal pages brought in line with the beta (**draft — needs counsel review**); `/api/waitlist` (insert-only, rate-limited, optional server-side Brevo; the table is not publicly readable). Old `/dashboard`/`/onboarding` URLs redirect into `/app`.
+6. **Security** — Google OAuth tokens sealed with AES-256-GCM (`TOKEN_ENCRYPTION_KEY`, fail-closed); cross-user approval PATCH → 404; `/api/departments` requires a session; removed the cookie-purge hack.
+
+### Tests
+Unit: 725 passing (removed suites for cut modules; added cron-auth, supervisor, middleware-routing, waitlist-route, storage-adapter, background, beta-departments, google-token-sealing; rewrote execute-tool-call). New `tests/integration/baseline-schema.test.ts` (11 tests) applies the baseline to a real Postgres and exercises the shim, supervisor, immutability trigger, RLS and `anon` grants. `tsc --noEmit` clean; `next build` green with type-checking ON (ESLint is not run at build — pre-existing `.eslintrc` gap).
+
+### Not done (needs the founder)
+Create the Supabase project, apply the migration, set Vercel env vars, point DNS, rotate the old Brevo/Supabase keys exposed in the old landing repo's `.env.local`, counsel review of legal copy. Not browser-verified against a live backend (no Supabase project exists yet).
+
+---
+
+## Session v14.1 — Egress Guard (Supabase egress can no longer overshoot)
+**Date**: 2026-10-02 **Status**: ✅ CODE COMPLETE
+**Impact**: The previous project was abandoned because Supabase egress always overshot. Root cause was the Render `crost-worker` polling PostgREST (~4 req/s, 16 zombie `executing` goals × `select *`); containment (Data API grants revoked) is applied on the Supabase project. This session makes the new app structurally unable to repeat it. Full write-up: `docs/EGRESS.md`.
+
+### What Changed
+1. **Metering** — `lib/egress.ts` (per-query bytes, route labels via AsyncLocalStorage, row cap 500, `single()`=LIMIT 1, 5 MB per-query cap), wired into the pg shim `lib/db.ts`.
+2. **Budget** — `lib/egress-ledger.ts` + `egress_ledger` table (baseline migration), daily budget `EGRESS_DAILY_BUDGET_MB` (default 100; ok/warn 70%/shed 90%/block 100%; fail-open); `lib/egress-guard.ts` `guardRead()` returns 429 + Retry-After; writes never blocked.
+3. **Polling** — `lib/polling.ts` (backoff, hidden-tab pause, Retry-After, max duration); War Room polls new `GET /api/goals/[id]/status` (~100 B version probe) and refetches the goal only on change.
+4. **Pruning** — layout counts in SQL instead of fetching up to 500 artifact bodies on every navigation; artifact lists use `left(body,1500)` (`lib/egress-columns.ts`); artifacts/approvals list APIs `limit` (50/200); download route ETag/304 + `max-age`.
+5. **Schema** — baseline revokes `service_role` table/sequence privileges (no PostgREST reads at all), creates `egress_ledger`, bucket cap 10 MB.
+6. **Visibility** — `GET /api/usage/egress`; `egress-static.test.ts` blocks new `select('*')` (baseline JSON may only shrink).
+
+### Tests
+Added egress, egress-ledger, db-egress, polling, egress-static unit suites; integration test covers ledger table + service_role lockout + bucket cap. `tsc` clean.
+
+### Still needs the founder
+Suspend/delete the old Render services (`crost-worker`, `crost-frontend`, `crost-approval-expiry`, `crost-litellm`); they are the live leak.

@@ -1,9 +1,10 @@
 // lib/crypto.ts
-// AES-256-GCM encryption for user API keys at rest.
+// AES-256-GCM encryption for secrets at rest (Google OAuth tokens).
 // Server-side only — never import from a client component.
 //
 // Storage format: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
-// Key source: USER_API_ENCRYPTION_KEY env var (64-char hex = 32 bytes)
+// Key source: TOKEN_ENCRYPTION_KEY env var (64-char hex = 32 bytes);
+// USER_API_ENCRYPTION_KEY is still honoured as a legacy alias.
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 
@@ -12,13 +13,13 @@ const IV_LENGTH = 12   // 96-bit IV recommended for GCM
 const TAG_LENGTH = 16  // 128-bit auth tag
 
 function getKey(): Buffer {
-  const raw = process.env.USER_API_ENCRYPTION_KEY
+  const raw = process.env.TOKEN_ENCRYPTION_KEY ?? process.env.USER_API_ENCRYPTION_KEY
   if (!raw) {
-    throw new Error('USER_API_ENCRYPTION_KEY is not set')
+    throw new Error('TOKEN_ENCRYPTION_KEY is not set')
   }
   const key = Buffer.from(raw, 'hex')
   if (key.length !== 32) {
-    throw new Error('USER_API_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
+    throw new Error('TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
   }
   return key
 }

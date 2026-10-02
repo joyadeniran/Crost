@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { updateCompanyProfile } from '@/lib/company-memo'
 import { requireUser } from '@/lib/auth/guard'
+import { normalizeSelectedDepartments } from '@/lib/beta-departments'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,10 +20,11 @@ export async function POST(req: NextRequest) {
     const { 
       identity, 
       riskTolerance, 
-      selectedDepartments,
+      selectedDepartments: requestedDepartments,
       termsVersion = '1.0',
       privacyVersion = '1.0'
     } = body
+    const selectedDepartments = normalizeSelectedDepartments(requestedDepartments)
 
     // DUAL-WRITE: Populate structured company_memo (Spec §8)
     await updateCompanyProfile(supabase, user.id, {

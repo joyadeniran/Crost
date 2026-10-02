@@ -1,79 +1,83 @@
 // lib/supabase.ts
-// GCP migration compatibility shim.
-// Provides the same export interface as the old @supabase/supabase-js server client.
-// Database → Cloud SQL via lib/db.ts
-// Storage  → GCS via lib/gcs.ts
-// Auth     → Firebase Admin via lib/firebase-admin.ts
+// Server-side data/auth facade.
+// Database → Supabase Postgres via lib/db.ts (pg over DATABASE_URL)
+// Storage  → Supabase Storage via lib/storage.ts
+// Auth     → Supabase Auth (cookie session via @supabase/ssr)
 // Server-side ONLY.
 
+import { createServerClient } from '@supabase/ssr'
 import { createDbClient } from './db'
-import { gcsStorage } from './gcs'
-import { getFirebaseUser, setUserClaims, admin } from './firebase-admin'
+import { appStorage } from './storage'
+import { getSupabaseAdmin } from './supabase-admin'
 
-// Service-role equivalent: full DB + GCS access (no auth check).
-// Drop-in replacement for createServerSupabaseClient().
+const authAdmin = {
+  async updateUserById(uid: string, updates: { user_metadata?: Record<string, unknown> }) {
+    const admin = getSupabaseAdmin()
+    if (!updates.user_metadata) return { data: { user: { id: uid } }, error: null }
+    // user_metadata is replaced wholesale by Supabase — merge with existing.
+    const existing = await admin.auth.admin.getUserById(uid)
+    const merged = { ...(existing.data.user?.user_metadata ?? {}), ...updates.user_metadata }
+    const { data, error } = await admin.auth.admin.updateUserById(uid, { user_metadata: merged })
+    return { data: { user: data?.user ?? { id: uid } }, error }
+  },
+  async createUser(params: { email: string; password: string }) {
+    const { data, error } = await getSupabaseAdmin().auth.admin.createUser({
+      email: params.email,
+      password: params.password,
+      email_confirm: false,
+    })
+    return { data: { user: data?.user ? { id: data.user.id, email: data.user.email } : null }, error }
+  },
+}
+
+// Service-role equivalent: full DB + storage access (no auth check).
 export function createServerSupabaseClient() {
-  const db = createDbClient()
   return {
-    ...db,
-    storage: gcsStorage,
-    auth: {
-      admin: {
-        async updateUserById(uid: string, updates: { user_metadata?: Record<string, unknown> }) {
-          if (updates.user_metadata) {
-            await setUserClaims(uid, updates.user_metadata)
-          }
-          return { data: { user: { id: uid } }, error: null }
-        },
-        async createUser(params: { email: string; password: string }) {
-          const { createFirebaseUser } = await import('./firebase-admin')
-          const user = await createFirebaseUser(params.email, params.password)
-          return { data: { user: { id: user.uid, email: user.email } }, error: null }
-        },
-      },
-    },
+    ...createDbClient(),
+    storage: appStorage,
+    auth: { admin: authAdmin },
   }
 }
 
-// Cookie-based auth client: reads firebase-token cookie and verifies it.
-// Drop-in replacement for createSupabaseServerComponentClient().
+// Cookie-based auth client: validates the Supabase session cookie.
 export async function createSupabaseServerComponentClient() {
   const { cookies } = await import('next/headers')
-  const cookieStore = await cookies()
-  const token = cookieStore.get('firebase-token')?.value ?? null
+  const cookieStore = cookies()
 
-  const db = createDbClient()
+  const sb = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (toSet) => {
+          try {
+            toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch {
+            // Called from a Server Component — middleware refreshes the session.
+          }
+        },
+      },
+    }
+  )
 
   return {
-    ...db,
-    storage: gcsStorage,
+    ...createDbClient(),
+    storage: appStorage,
     auth: {
       async getUser() {
-        if (!token) return { data: { user: null }, error: null }
         try {
-          const user = await getFirebaseUser(token)
-          return { data: { user }, error: null }
+          const { data, error } = await sb.auth.getUser()
+          if (error || !data.user) return { data: { user: null }, error: null }
+          return { data: { user: data.user }, error: null }
         } catch {
           return { data: { user: null }, error: null }
         }
       },
       async signOut() {
-        return { error: null }
+        return sb.auth.signOut()
       },
-      admin: {
-        async updateUserById(uid: string, updates: { user_metadata?: Record<string, unknown> }) {
-          if (updates.user_metadata) {
-            await setUserClaims(uid, updates.user_metadata)
-          }
-          return { data: { user: { id: uid } }, error: null }
-        },
-      },
+      admin: { updateUserById: authAdmin.updateUserById },
     },
   }
-}
-
-// No-op — middleware now uses Firebase JWT verification directly.
-export async function updateSession(_request: unknown) {
-  const { NextResponse } = await import('next/server')
-  return NextResponse.next()
 }

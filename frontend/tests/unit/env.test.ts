@@ -1,54 +1,38 @@
 /**
- * Unit tests: lib/env.ts (Phase 2.4 — zod env validation).
+ * Unit tests: lib/env.ts (zod env validation).
  */
 import { describe, it, expect } from 'vitest'
 import { validateEnv } from '@/lib/env'
 
 const VALID_ENV = {
   DATABASE_URL: 'postgres://user:pass@host/db',
-  GCS_BUCKET: 'crost-artifacts',
-  FIREBASE_PROJECT_ID: 'crost-prod',
-  FIREBASE_CLIENT_EMAIL: 'sa@crost-prod.iam.gserviceaccount.com',
-  FIREBASE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----',
-  USER_API_ENCRYPTION_KEY: 'a'.repeat(32),
-  WORKER_INTERNAL_SECRET: 'secret',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://abc.supabase.co',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon',
+  SUPABASE_SERVICE_ROLE_KEY: 'service',
+  GEMINI_API_KEY: 'gemini',
+  CRON_SECRET: 'cron',
 }
 
 describe('validateEnv', () => {
-  it('passes with all required vars and WORKER_INTERNAL_SECRET set', () => {
-    const result = validateEnv(VALID_ENV as NodeJS.ProcessEnv)
-    expect(result.ok).toBe(true)
+  it('passes with all required vars (WORKER_INTERNAL_SECRET optional)', () => {
+    expect(validateEnv(VALID_ENV as NodeJS.ProcessEnv).ok).toBe(true)
   })
 
-  it('passes when SUPABASE_SERVICE_ROLE_KEY substitutes for WORKER_INTERNAL_SECRET', () => {
-    const { WORKER_INTERNAL_SECRET, ...rest } = VALID_ENV
-    const result = validateEnv({ ...rest, SUPABASE_SERVICE_ROLE_KEY: 'fallback-secret' } as NodeJS.ProcessEnv)
-    expect(result.ok).toBe(true)
+  it('passes with a dedicated WORKER_INTERNAL_SECRET', () => {
+    expect(validateEnv({ ...VALID_ENV, WORKER_INTERNAL_SECRET: 'x' } as NodeJS.ProcessEnv).ok).toBe(true)
   })
 
-  it('fails when DATABASE_URL is missing', () => {
-    const { DATABASE_URL, ...rest } = VALID_ENV
-    const result = validateEnv(rest as NodeJS.ProcessEnv)
+  it.each(Object.keys(VALID_ENV))('fails when %s is missing', (key) => {
+    const env = { ...VALID_ENV } as Record<string, string>
+    delete env[key]
+    const result = validateEnv(env as NodeJS.ProcessEnv)
     expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('DATABASE_URL'))).toBe(true)
-    }
-  })
-
-  it('fails when neither WORKER_INTERNAL_SECRET nor SUPABASE_SERVICE_ROLE_KEY is set', () => {
-    const { WORKER_INTERNAL_SECRET, ...rest } = VALID_ENV
-    const result = validateEnv(rest as NodeJS.ProcessEnv)
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errors.some((e) => e.includes('WORKER_INTERNAL_SECRET'))).toBe(true)
-    }
+    if (!result.ok) expect(result.errors.some((e) => e.includes(key))).toBe(true)
   })
 
   it('collects multiple errors at once rather than stopping at the first', () => {
     const result = validateEnv({} as NodeJS.ProcessEnv)
     expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.errors.length).toBeGreaterThan(1)
-    }
+    if (!result.ok) expect(result.errors.length).toBeGreaterThan(1)
   })
 })

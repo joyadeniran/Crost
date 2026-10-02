@@ -89,7 +89,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
             {items.map(item => (
               <Link
                 key={item.id}
-                href="/dashboard/approvals"
+                href="/app/approvals"
                 onClick={onClose}
                 style={{
                   display: 'flex',
@@ -127,7 +127,7 @@ export function NotificationDropdown({ onClose }: { onClose: () => void }) {
       </div>
 
       <Link
-        href="/dashboard/approvals"
+        href="/app/approvals"
         onClick={onClose}
         style={{
           display: 'block',

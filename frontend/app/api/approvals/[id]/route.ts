@@ -4,8 +4,10 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { cleanLargePayload, normalizeToolName } from "@/lib/utils"
 import { requireUser } from '@/lib/auth/guard'
+import { runInBackground, triggerDispatch } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // LLM work runs inside the request / waitUntil on Vercel
 
 interface Params { params: { id: string } }
 
@@ -68,7 +70,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const isOwner = approval.user_id === user.id || approval.created_by === user.id
     if (!isOwner) {
       console.error(`[PATCH /api/approvals] Ownership mismatch. Record owner: ${approval.user_id || approval.created_by}, Requestor: ${user.id}`)
-      return NextResponse.json({ error: 'You do not have permission to decide on this approval' }, { status: 403 })
+      // Cross-user access returns 404, not 403 (don't reveal the row exists).
+      return NextResponse.json({ error: 'Approval not found' }, { status: 404 })
     }
 
     if (approval.status !== 'pending') {
@@ -122,14 +125,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         }).eq('goal_id', approval.goal_id).eq('task_id', taskId)
 
         // Trigger chain reaction so downstream tasks that only needed this one to terminal can proceed.
-        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-          },
-          body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
-        }).catch(e => console.error('[Approval Rejection] Chain reaction failed:', e))
+        triggerDispatch(approval.goal_id, 'CHAIN_REACTION')
       }
     }
 
@@ -154,18 +150,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const rawAction: string | null =
         (approval.payload as any)?.__tool_action
         ?? (approval.action_type !== 'tool_call' ? approval.action_type : null)
-      const composioActionForCall = normalizeToolName(rawAction ?? approval.action_type)
-      const normalizedAction = composioActionForCall.toLowerCase()
+      const toolActionName = normalizeToolName(rawAction ?? approval.action_type)
+      const normalizedAction = toolActionName.toLowerCase()
 
       const isExternalAction = normalizedAction.startsWith('gmail_') ||
+        normalizedAction === 'send_email' ||
         normalizedAction.startsWith('googlecalendar_') ||
         normalizedAction.startsWith('googlesheets_') ||
         normalizedAction.startsWith('googledrive_') ||
-        normalizedAction.startsWith('slack_') ||
-        normalizedAction.startsWith('github_') ||
-        normalizedAction.startsWith('notion_') ||
-        normalizedAction.startsWith('linear_') ||
-        (composioActionForCall.includes('_') && composioActionForCall === composioActionForCall.toUpperCase())
+        (toolActionName.includes('_') && toolActionName === toolActionName.toUpperCase())
 
       const isInternalTool = ['supabase_query', 'company_memos', 'save_document', 'get_sales_data'].includes(normalizedAction)
 
@@ -174,9 +167,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           let result: any;
 
           if (isExternalAction) {
-            const normalizedActionUpper = composioActionForCall.toUpperCase()
+            const normalizedActionUpper = toolActionName.toUpperCase()
             // Native Gmail send via the user's Google OAuth token (no broker).
-            if (normalizedAction.startsWith('gmail_') && normalizedAction.includes('send')) {
+            if ((normalizedAction.startsWith('gmail_') && normalizedAction.includes('send')) || normalizedAction === 'send_email') {
               const { getGoogleToken } = await import('@/lib/google/auth')
               const { sendGmail } = await import('@/lib/google/gmail')
               const { accessToken, expired, connected } = await getGoogleToken(supabase, user.id)
@@ -216,25 +209,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
               }
             }
           } else {
-            console.log(`[Approval Execution] Executing Internal tool "${approval.action_type}" for user ${user.id}`)
-            // Call our own internal tool execution endpoint
-            const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/tools/execute`, {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Cookie': req.headers.get('cookie') || '' // Forward auth cookies
-              },
-              body: JSON.stringify({
-                tool: normalizedAction,
-                params: approval.payload,
-                goal_id: approval.goal_id,
-                department_slug: approval.department_slug,
-                department_id: approval.department_id
-              })
-            })
-            if (!res.ok) throw new Error(`Internal tool execution failed: ${await res.text()}`)
-            const json = await res.json()
-            result = json.data
+            // Internal tools (memos / queries) have no external side-effect in the beta:
+            // the approval is recorded and the task proceeds.
+            console.log(`[Approval Execution] Recording internal action "${approval.action_type}" for user ${user.id}`)
+            result = {
+              success: true,
+              action: normalizedAction.toUpperCase(),
+              status: 'recorded',
+              message: `Action "${approval.action_label}" approved and recorded.`,
+            }
           }
           
           // Persist result
@@ -292,16 +275,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             }).eq('goal_id', approval.goal_id).eq('task_id', taskId)
 
             // Trigger chain reaction dispatch for downstream tasks
-            // We use a relative path or the configured APP_URL
-            const dispatchUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/goals/${approval.goal_id}/dispatch`
-            fetch(dispatchUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-crost-internal-secret': process.env.WORKER_INTERNAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-              },
-              body: JSON.stringify({ task_id: 'CHAIN_REACTION' })
-            }).catch(e => console.error('[Approval Execution] Chain reaction failed:', e))
+            triggerDispatch(approval.goal_id, 'CHAIN_REACTION')
           }
 
           // RESET DEPARTMENT STATUS (Spec §11)
@@ -322,11 +296,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
               .eq('goal_id', approval.goal_id)
             if (!taskCount || taskCount === 0) {
               const { runOrcReport } = await import('@/lib/llm-client')
-              runOrcReport(approval.goal_id)
-                .then(async () => {
-                  await supabase.from('goals').update({ status: 'completed' }).eq('id', approval.goal_id)
-                })
-                .catch(e => console.error('[Approval Execution] runOrcReport failed:', e))
+              runInBackground(
+                runOrcReport(approval.goal_id)
+                  .then(async () => {
+                    await supabase.from('goals').update({ status: 'completed' }).eq('id', approval.goal_id)
+                  })
+                  .catch(e => console.error('[Approval Execution] runOrcReport failed:', e))
+              )
             }
           }
           

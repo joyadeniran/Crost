@@ -177,10 +177,9 @@ describe('ERROR_REGISTRY', () => {
     })
   }
 
-  it('CR-TOOL-GMAIL actionHref points to integrations settings', () => {
+  it('CR-TOOL-GMAIL actionHref restarts the native Google connect flow', () => {
     const entry = ERROR_REGISTRY['CR-TOOL-GMAIL']
-    expect(entry.actionHref).toContain('/dashboard/settings')
-    expect(entry.actionHref).toContain('integrations')
+    expect(entry.actionHref).toBe('/api/connect/google/start')
   })
 
   it('CR-AUTH-401 actionHref points to /login', () => {
@@ -188,10 +187,10 @@ describe('ERROR_REGISTRY', () => {
     expect(entry.actionHref).toBe('/login')
   })
 
-  it('CR-LLM-QUOTA actionHref points to API key settings', () => {
+  it('CR-LLM-QUOTA has no BYO-key action in the beta (keys were cut)', () => {
     const entry = ERROR_REGISTRY['CR-LLM-QUOTA']
-    expect(entry.actionHref).toContain('/dashboard/settings')
-    expect(entry.actionHref).toContain('keys')
+    expect(entry.actionHref).toBeUndefined()
+    expect(entry.founderMessage).toMatch(/resets/i)
   })
 })
 

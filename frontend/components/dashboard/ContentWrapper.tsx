@@ -15,11 +15,10 @@ export function ContentWrapper({ children, initialEvents }: Props) {
   // Define pages where the Live Events sidebar should be HIDDEN
   // These are focus-heavy or space-intensive pages.
   const hideSidebarOn = [
-    '/dashboard/settings',
-    '/dashboard/knowledge',
-    '/dashboard/memos',
-    '/dashboard/approvals',
-    '/dashboard/artifacts'
+    '/app/settings',
+    '/app/memos',
+    '/app/approvals',
+    '/app/artifacts'
   ]
 
   // Check if current path starts with any of the hidden paths

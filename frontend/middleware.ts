@@ -1,53 +1,35 @@
-// middleware.ts — Firebase JWT auth for Next.js App Router
-// Uses jose to verify Firebase ID tokens in edge runtime (no firebase-admin needed).
+// middleware.ts — Supabase Auth session refresh + route protection.
 
 import { NextResponse, type NextRequest } from 'next/server'
-import { jwtVerify, createRemoteJWKSet } from 'jose'
-
-const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? ''
-const JWKS = createRemoteJWKSet(
-  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
-)
+import { createServerClient } from '@supabase/ssr'
 
 const ONBOARDING_ROUTES = [
-  '/onboarding/identity',
-  '/onboarding/control',
-  '/onboarding/orc',
-  '/onboarding/team',
-  '/onboarding/activate',
+  '/app/onboarding/identity',
+  '/app/onboarding/orc',
+  '/app/onboarding/activate',
 ]
 
 function getOnboardingTarget(step?: string | null) {
-  if (step === 'complete') return '/dashboard'
-  if (step === 'activated') return '/onboarding/activate'
-  if (step === 'team') return '/onboarding/team'
-  if (step === 'orc') return '/onboarding/orc'
-  if (step === 'control') return '/onboarding/control'
-  return '/onboarding/identity'
+  if (step === 'complete') return '/app'
+  if (step === 'activated') return '/app/onboarding/activate'
+  if (step === 'orc') return '/app/onboarding/orc'
+  return '/app/onboarding/identity'
 }
 
 function getRouteRank(pathname: string) {
   return ONBOARDING_ROUTES.findIndex((route) => pathname.startsWith(route))
 }
 
-// ─── CSRF: origin-check for state-changing API requests (Phase 4) ─────────
-// SameSite=Lax on the firebase-token cookie (lib/firebase-browser.ts) already
-// blocks the cookie from being sent on cross-site top-level navigations, but
-// doesn't cover every CSRF vector (e.g. same-site subdomain attacks, or
-// browsers with looser SameSite handling). This adds an explicit
-// Origin-header allowlist check as defense in depth, matching the pattern
-// already used for OAuth redirect URIs (lib/google/oauth.ts allowedOrigins).
+// ─── CSRF: origin-check for state-changing API requests ────────────────────
+// Defense in depth on top of SameSite=Lax session cookies.
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export function isTrustedOrigin(selfOrigin: string, origin: string | null): boolean {
-  // No Origin header at all: not a browser cross-site request signal (fetch()
-  // and form submissions from a browser always send Origin on state-changing
-  // requests; its absence means a non-browser caller — e.g. a webhook or a
-  // server-to-server call — which Origin-based CSRF checks don't apply to).
+  // No Origin header: not a browser cross-site request (webhook, cron, server-to-server).
   if (!origin) return true
   const normalized = origin.replace(/\/$/, '')
   if (normalized === selfOrigin.replace(/\/$/, '')) return true
-  const allowlist = [process.env.NEXT_PUBLIC_APP_URL, 'https://app.crosthq.com']
+  const allowlist = [process.env.NEXT_PUBLIC_APP_URL, 'https://crosthq.com', 'https://www.crosthq.com']
     .filter((u): u is string => Boolean(u))
     .map((u) => u.replace(/\/$/, ''))
   return allowlist.includes(normalized)
@@ -61,10 +43,6 @@ export function checkInternalSecretHeader(headerValue: string | null): boolean {
 function checkCsrf(request: NextRequest): NextResponse | null {
   if (!request.nextUrl.pathname.startsWith('/api/')) return null
   if (!STATE_CHANGING_METHODS.has(request.method)) return null
-
-  // Trusted server-to-server callers (worker execution, chain-reaction
-  // recursive dispatch, cron) carry this header and typically don't send a
-  // browser Origin header at all — always allowed regardless of Origin.
   if (checkInternalSecretHeader(request.headers.get('x-crost-internal-secret'))) return null
 
   const origin = request.headers.get('origin')
@@ -74,80 +52,66 @@ function checkCsrf(request: NextRequest): NextResponse | null {
   return null
 }
 
-async function verifyToken(token: string): Promise<Record<string, unknown> | null> {
-  if (!FIREBASE_PROJECT_ID) return null
-  try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      audience: FIREBASE_PROJECT_ID,
-      issuer: `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`,
-    })
-    return payload as Record<string, unknown>
-  } catch {
-    return null
-  }
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const csrfBlock = checkCsrf(request)
   if (csrfBlock) return csrfBlock
 
-  // API routes do their own auth (createSupabaseServerComponentClient /
-  // lib/auth/guard.ts) — nothing below this point reads `user` for an
-  // /api/* path, so skip the redundant Firebase JWKS verification round-trip.
+  // API routes do their own auth (lib/auth/guard.ts).
   if (pathname.startsWith('/api/')) return NextResponse.next()
 
-  const token = request.cookies.get('firebase-token')?.value
+  let response = NextResponse.next({ request })
 
-  let user: Record<string, unknown> | null = null
-  if (token) user = await verifyToken(token)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (toSet) => {
+          toSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          toSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+        },
+      },
+    }
+  )
 
-  const response = NextResponse.next()
+  // getUser() validates the JWT with Supabase Auth and refreshes the cookie.
+  const { data } = await supabase.auth.getUser()
+  const user = data.user
 
-  // Protected: Dashboard requires valid auth
-  if (pathname.startsWith('/dashboard')) {
-    if (!user) return NextResponse.redirect(new URL('/login', request.url))
+  const redirectTo = (path: string) => {
+    const res = NextResponse.redirect(new URL(path, request.url))
+    response.cookies.getAll().forEach((c) => res.cookies.set(c))
+    return res
   }
 
-  // Block unverified email users
-  if (user && user.email_verified === false) {
-    const allowed = pathname === '/login' || pathname === '/signup' ||
-                    pathname === '/verify-email' || pathname.startsWith('/auth')
-    if (!allowed) {
-      const url = new URL('/verify-email', request.url)
-      if (user.email) url.searchParams.set('email', user.email as string)
-      return NextResponse.redirect(url)
+  // Protected: the whole app requires a valid session.
+  if (pathname.startsWith('/app')) {
+    if (!user) return redirectTo('/login')
+
+    const step = (user.user_metadata?.onboarding_step as string | undefined) ?? null
+    const target = getOnboardingTarget(step)
+    if (pathname.startsWith('/app/onboarding')) {
+      const requestedRank = getRouteRank(pathname)
+      const maxAllowedRank = getRouteRank(target)
+      if (target === '/app' || requestedRank > maxAllowedRank) return redirectTo(target)
+    } else if (step !== 'complete') {
+      return redirectTo(target)
     }
-    return response
   }
 
-  // Redirect authenticated users away from login/signup/onboarding when done
-  if (pathname === '/login' || pathname.startsWith('/onboarding') || pathname === '/signup') {
-    if (user) {
-      const step = (user.onboarding_step as string) ?? null
-      const target = getOnboardingTarget(step)
-
-      if (pathname === '/login' || pathname === '/signup') {
-        return NextResponse.redirect(new URL(target, request.url))
-      }
-
-      if (pathname.startsWith('/onboarding')) {
-        const requestedRank = getRouteRank(pathname)
-        const maxAllowedRank = getRouteRank(target)
-        if (requestedRank > maxAllowedRank) {
-          return NextResponse.redirect(new URL(target, request.url))
-        }
-      }
-    }
+  // Signed-in users skip login/signup.
+  if (user && (pathname === '/login' || pathname === '/signup')) {
+    const step = (user.user_metadata?.onboarding_step as string | undefined) ?? null
+    return redirectTo(getOnboardingTarget(step))
   }
 
   return response
 }
 
 export const config = {
-  // /api/:path* added in Phase 4 so the CSRF origin-check above actually runs
-  // for API routes — previously the matcher only covered page routes, so
-  // state-changing API requests were never touched by this middleware at all.
-  matcher: ['/dashboard/:path*', '/onboarding/:path*', '/login', '/signup', '/api/:path*'],
+  matcher: ['/app/:path*', '/login', '/signup', '/api/:path*'],
 }

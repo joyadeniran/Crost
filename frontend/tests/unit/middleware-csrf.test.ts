@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('isTrustedOrigin', () => {
   it('allows a request with no Origin header (non-browser callers)', () => {
-    expect(isTrustedOrigin('https://app.crosthq.com', null)).toBe(true)
+    expect(isTrustedOrigin('https://crosthq.com', null)).toBe(true)
   })
 
   it('allows an Origin that exactly matches the request self-origin', () => {
@@ -25,19 +25,20 @@ describe('isTrustedOrigin', () => {
   })
 
   it('allows the canonical NEXT_PUBLIC_APP_URL even when self-origin differs (custom domain hit)', () => {
-    expect(isTrustedOrigin('https://app.crosthq.com', 'https://crost-frontend-3ge3tx36sa-uc.a.run.app')).toBe(true)
+    expect(isTrustedOrigin('https://crosthq.com', 'https://crost-frontend-3ge3tx36sa-uc.a.run.app')).toBe(true)
   })
 
-  it('allows the hardcoded app.crosthq.com domain', () => {
-    expect(isTrustedOrigin('https://crost-frontend-3ge3tx36sa-uc.a.run.app', 'https://app.crosthq.com')).toBe(true)
+  it('allows the hardcoded crosthq.com domains', () => {
+    expect(isTrustedOrigin('https://crost-abc123.vercel.app', 'https://crosthq.com')).toBe(true)
+    expect(isTrustedOrigin('https://crost-abc123.vercel.app', 'https://www.crosthq.com')).toBe(true)
   })
 
   it('rejects an origin not in the allowlist', () => {
-    expect(isTrustedOrigin('https://app.crosthq.com', 'https://evil-attacker.example.com')).toBe(false)
+    expect(isTrustedOrigin('https://crosthq.com', 'https://evil-attacker.example.com')).toBe(false)
   })
 
   it('ignores a trailing slash difference when comparing origins', () => {
-    expect(isTrustedOrigin('https://app.crosthq.com/', 'https://app.crosthq.com')).toBe(true)
+    expect(isTrustedOrigin('https://app.crosthq.com/', 'https://crosthq.com')).toBe(true)
   })
 })
 

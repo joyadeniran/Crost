@@ -4,19 +4,17 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ModeToggle } from '@/components/ui/ModeToggle'
 import { useCrostStore } from '@/lib/store'
 import { NotificationDropdown } from './NotificationDropdown'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/dashboard':               'Agent Office',
-  '/dashboard/approvals':     'Approval Feed',
-  '/dashboard/knowledge':     'Knowledge Base',
-  '/dashboard/memos':         'Company Memos',
-  '/dashboard/settings':      'Settings',
-  '/dashboard/constitution':  'Constitution',
-  '/dashboard/artifacts':     'Artifacts',
-  '/dashboard/event-log':     'Event Log',
+  '/app':               'Agent Office',
+  '/app/approvals':     'Approval Feed',
+  '/app/memos':         'Company Memos',
+  '/app/settings':      'Settings',
+  '/app/constitution':  'Constitution',
+  '/app/artifacts':     'Artifacts',
+  '/app/event-log':     'Event Log',
 }
 
 function BellIcon() {
@@ -42,7 +40,7 @@ export function Topbar() {
   const [showNotifications, setShowNotifications] = useState(false)
   
   // Match dept pages — extract slug for richer title
-  const isDeptPage = pathname.startsWith('/dashboard/departments/') && pathname !== '/dashboard/departments/new'
+  const isDeptPage = pathname.startsWith('/app/departments/')
   const isDeptSettings = isDeptPage && pathname.endsWith('/settings')
   const title = isDeptSettings
     ? 'Department Settings'
@@ -59,7 +57,6 @@ export function Topbar() {
 
       {/* Right controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <ModeToggle />
 
         {/* Bell with Dropdown */}
         <div style={{ position: 'relative' }}>
@@ -99,8 +96,8 @@ export function Topbar() {
 
         {/* Settings */}
         <Link
-          href="/dashboard/settings"
-          className={`topbar-control-btn ${pathname === '/dashboard/settings' ? 'active' : ''}`}
+          href="/app/settings"
+          className={`topbar-control-btn ${pathname === '/app/settings' ? 'active' : ''}`}
         >
           <GearIcon />
         </Link>

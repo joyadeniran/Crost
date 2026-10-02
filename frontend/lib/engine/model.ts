@@ -3,8 +3,6 @@
 // Extracted verbatim from lib/llm-client.ts during the Phase 2 god-module
 // split — no behavior change.
 
-import { getModelForTask } from '@/lib/model-routing'
-import { resolveApiKey } from '@/lib/key-resolver'
 import { logUsage } from '@/lib/usage-logger'
 import { checkTokenBudget } from './budget'
 import { logEvent } from './events'
@@ -12,30 +10,14 @@ import { log } from '@/lib/log'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-// Default model — Gemini 2.0 Flash on Google Cloud Vertex AI
+// Default model — Gemini via the Google AI API (GEMINI_API_KEY)
 export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash'
 const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash'
 
 export async function getModel(
   taskType: 'planning' | 'execution' | 'analysis' | 'summarization',
-  userId?: string | null
+  _userId?: string | null
 ): Promise<{ model: string; provider?: string }> {
-  const roleMap: Record<string, string> = {
-    planning: 'orc_planning',
-    execution: 'tool_execution',
-    analysis: 'analysis',
-    summarization: 'synthesis'
-  }
-  const role = roleMap[taskType] || 'tool_execution'
-
-  if (userId) {
-    try {
-      return await getModelForTask(userId, role)
-    } catch (err) {
-      log.warn('[getModel] Failed to fetch model for role, using fallback', { module: 'engine/model', userId, role, error: String(err) })
-    }
-  }
-
   const MODELS: Record<string, string> = {
     planning: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
     execution: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash',
@@ -46,7 +28,7 @@ export async function getModel(
   return { model, provider: model.split('/')[0] }
 }
 
-// ─── Gemini Integration (Google Cloud Vertex AI) ─────────────────────────────
+// ─── Gemini Integration (Google AI API) ──────────────────────────────────────
 
 async function callLiteLLM(
   model: string,
@@ -58,7 +40,8 @@ async function callLiteLLM(
 ): Promise<{ content: string; tokensUsed: number }> {
   const provider = providerOverride ?? model.split('/')[0]
 
-  const { apiKey: _apiKey, keyType } = await resolveApiKey({ userId, provider, isBootstrap })
+  // Beta: one system-wide Gemini key; per-user budget still enforced below.
+  const keyType = 'system' as const
 
   if (keyType === 'system' && !isBootstrap && userId) {
     const budget = await checkTokenBudget(userId)
@@ -96,7 +79,7 @@ async function callLiteLLM(
 // Canonical fallback chain for high-reliability operations.
 // Evaluated in order if the primary model fails.
 const RESILIENT_FALLBACK_CHAIN = [
-  'gemini/gemini-2.5-flash',            // Primary (Vertex AI, us-central1)
+  'gemini/gemini-2.5-flash',            // Primary
   'gemini/gemini-2.5-flash-lite',      // Cheaper/faster backup
   'gemini/gemini-2.5-pro',             // Strongest reasoning fallback
 ]
@@ -170,14 +153,4 @@ export async function callLLM(
   }
 
   throw new Error('LLM call failed after multiple fallback attempts.')
-}
-
-export async function callEmbeddings(
-  input: string | string[],
-  _userId?: string | null
-): Promise<number[][]> {
-  const { getGeminiEmbedding } = await import('@/lib/gemini-client')
-  const inputs = Array.isArray(input) ? input : [input]
-  const results = await Promise.all(inputs.map(text => getGeminiEmbedding(text)))
-  return results
 }

@@ -4,18 +4,13 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { requireCronSecret } from '@/lib/auth/cron'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 500 })
-  }
-  const provided = req.headers.get('x-cron-secret')
-  if (provided !== cronSecret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+async function handle(req: NextRequest) {
+  const denied = requireCronSecret(req)
+  if (denied) return denied
   try {
     const supabase = createServerSupabaseClient()
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -54,3 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to expire approvals' }, { status: 500 })
   }
 }
+
+// POST for manual callers; GET because Vercel Cron issues GET requests.
+export const POST = handle
+export const GET = handle

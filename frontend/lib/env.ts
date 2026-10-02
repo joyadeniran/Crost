@@ -1,15 +1,10 @@
 // lib/env.ts
 // Zod-based env validation (Phase 2.4, 10x rebuild).
 //
-// Scope note: this validates the server-side secrets that the worker/engine
-// layer needs to run (DB, GCS, Firebase Admin, encryption, internal auth).
-// It is deliberately NOT wired into every Next.js route or the root layout —
-// this repo's .env.local is currently missing NEXT_PUBLIC_FIREBASE_* (a
-// pre-existing, documented gap — see CROST_MASTER.md Phase 2.1 entry), and
-// forcing a hard throw at request time across all routes would turn that
-// known-but-tolerated gap into a wider outage than it is today. Call
-// validateEnv() explicitly from a real process entrypoint (scripts/worker.ts)
-// where "fail fast at boot" is unambiguously the right behavior.
+// Scope note: this validates the server-side secrets the app needs to run
+// (DB, Supabase auth/storage, Gemini, internal auth). It is surfaced at boot by
+// instrumentation.ts as a loud log line — it deliberately does NOT throw at
+// request time, so one missing optional secret can't take the whole site down.
 //
 // Server-side ONLY.
 
@@ -24,23 +19,21 @@ function requiredEnvVar(message: string) {
 }
 
 const EnvSchema = z.object({
-  DATABASE_URL: requiredEnvVar('DATABASE_URL is required (Cloud SQL connection string)'),
-  GCS_BUCKET: requiredEnvVar('GCS_BUCKET is required (artifact storage)'),
-  FIREBASE_PROJECT_ID: requiredEnvVar('FIREBASE_PROJECT_ID is required (Firebase Admin auth)'),
-  FIREBASE_CLIENT_EMAIL: requiredEnvVar('FIREBASE_CLIENT_EMAIL is required (Firebase Admin auth)'),
-  FIREBASE_PRIVATE_KEY: requiredEnvVar('FIREBASE_PRIVATE_KEY is required (Firebase Admin auth)'),
-  USER_API_ENCRYPTION_KEY: requiredEnvVar('USER_API_ENCRYPTION_KEY is required (per-user API key encryption)'),
-  // Both optional individually — enforced together by refine() below, since
-  // WORKER_INTERNAL_SECRET falls back to SUPABASE_SERVICE_ROLE_KEY (see
-  // lib/auth/guard.ts). Must be declared here (not just read off process.env
-  // inside refine) or zod strips them from the parsed output before refine
-  // ever sees them.
+  DATABASE_URL: requiredEnvVar('DATABASE_URL is required (Supabase Postgres connection string — use the pooler URL on Vercel)'),
+  NEXT_PUBLIC_SUPABASE_URL: requiredEnvVar('NEXT_PUBLIC_SUPABASE_URL is required (Supabase project URL)'),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: requiredEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY is required (Supabase anon key)'),
+  SUPABASE_SERVICE_ROLE_KEY: requiredEnvVar('SUPABASE_SERVICE_ROLE_KEY is required (auth admin + storage)'),
+  GEMINI_API_KEY: requiredEnvVar('GEMINI_API_KEY is required (Orc + department agents)'),
+  CRON_SECRET: requiredEnvVar('CRON_SECRET is required (Vercel Cron + approval-expiry routes hard-fail without it)'),
+  // Trusted internal-caller secret. Falls back to SUPABASE_SERVICE_ROLE_KEY
+  // (see lib/auth/guard.ts); set a dedicated value to rotate independently.
   WORKER_INTERNAL_SECRET: z.string().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // Only needed to connect Gmail (seals stored OAuth tokens); validated as 64 hex chars when present.
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
+    .optional(),
 })
-  .refine((env) => Boolean(env.WORKER_INTERNAL_SECRET || env.SUPABASE_SERVICE_ROLE_KEY), {
-    message: 'One of WORKER_INTERNAL_SECRET or SUPABASE_SERVICE_ROLE_KEY is required (trusted internal-caller auth)',
-  })
 
 export type ValidatedEnv = z.infer<typeof EnvSchema>
 

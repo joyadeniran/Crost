@@ -18,7 +18,7 @@ function requestOrigin(req: NextRequest): string {
 function settingsRedirect(req: NextRequest, status: string) {
   // Stay on whichever domain the user is using.
   const base = requestOrigin(req) || process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin
-  return NextResponse.redirect(`${base.replace(/\/$/, '')}/dashboard/settings?google=${status}`)
+  return NextResponse.redirect(`${base.replace(/\/$/, '')}/app/settings?google=${status}`)
 }
 
 export async function GET(req: NextRequest) {

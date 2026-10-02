@@ -24,9 +24,8 @@ export const ERROR_REGISTRY: Record<string, CrostError> = {
   // LLM / INTELLIGENCE
   'CR-LLM-QUOTA': {
     code: 'CR-LLM-QUOTA',
-    founderMessage: 'Daily free limit reached.',
-    actionLabel: 'ADD API KEY',
-    actionHref: '/dashboard/settings?tab=keys'
+    founderMessage: 'Daily free limit reached. It resets at midnight UTC.',
+    actionLabel: 'GOT IT'
   },
   'CR-LLM-GATEWAY': {
     code: 'CR-LLM-GATEWAY',
@@ -35,9 +34,8 @@ export const ERROR_REGISTRY: Record<string, CrostError> = {
   },
   'CR-LLM-AUTH': {
     code: 'CR-LLM-AUTH',
-    founderMessage: 'Authentication issue with the intelligence provider. Please check your API keys.',
-    actionLabel: 'FIX KEYS',
-    actionHref: '/dashboard/settings?tab=keys'
+    founderMessage: 'Authentication issue with the intelligence provider. This is on our side — please try again shortly.',
+    actionLabel: 'RETRY MISSION'
   },
   'CR-LLM-RATE': {
     code: 'CR-LLM-RATE',
@@ -45,18 +43,17 @@ export const ERROR_REGISTRY: Record<string, CrostError> = {
     actionLabel: 'WAIT'
   },
 
-  // TOOLS / COMPOSIO
+  // TOOLS
   'CR-TOOL-GMAIL': {
     code: 'CR-TOOL-GMAIL',
     founderMessage: 'Unable to access your Gmail account.',
     actionLabel: 'RECONNECT GMAIL',
-    actionHref: '/dashboard/settings?tab=integrations'
+    actionHref: '/api/connect/google/start'
   },
   'CR-TOOL-GITHUB': {
     code: 'CR-TOOL-GITHUB',
-    founderMessage: 'GitHub authentication failed.',
-    actionLabel: 'FIX CONNECTION',
-    actionHref: '/dashboard/settings?tab=integrations'
+    founderMessage: 'GitHub is not available in the beta.',
+    actionLabel: 'GOT IT'
   },
   'CR-TOOL-TRACKING': {
     code: 'CR-TOOL-TRACKING',
@@ -74,7 +71,7 @@ export const ERROR_REGISTRY: Record<string, CrostError> = {
     code: 'CR-DB-SYNC',
     founderMessage: 'Database synchronization interrupted.',
     actionLabel: 'SYNC NOW',
-    actionHref: '/dashboard'
+    actionHref: '/app'
   }
 };
 

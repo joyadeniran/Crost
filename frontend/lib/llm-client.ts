@@ -9,7 +9,7 @@
 //
 // Server-side ONLY — never import from a client component.
 
-export { CLOUD_MODEL, getModel, callLLM, callEmbeddings } from './engine/model'
+export { CLOUD_MODEL, getModel, callLLM } from './engine/model'
 export { buildFinalPrompt, buildOrcContext } from './engine/prompt'
 export { checkTokenBudget } from './engine/budget'
 export { logEvent } from './engine/events'

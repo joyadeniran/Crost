@@ -44,7 +44,7 @@ export function SyncFailedBadge({ personaId, slug }: Props) {
 
   return (
     <span
-      title="Department not synced. Click 'Sync Departments' on the dashboard to fix this."
+      title="Department not synced. Reload the dashboard to re-sync it."
       style={{
         fontFamily: 'var(--font-dm-mono, monospace)',
         fontSize: 9,

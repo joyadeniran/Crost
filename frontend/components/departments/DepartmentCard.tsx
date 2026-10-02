@@ -19,7 +19,7 @@ export function DepartmentCard({ department: dept }: Props) {
 
   return (
     <Link
-      href={`/dashboard/departments/${dept.slug}`}
+      href={`/app/departments/${dept.slug}`}
       className={`dept-card ${isActive ? 'dept-card-active' : ''}`}
     >
       {/* Colored top bar */}

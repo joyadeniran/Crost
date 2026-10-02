@@ -1,6 +1,9 @@
 // GET /api/artifacts — list artifacts, filtered by status/type/department/goal
 // POST /api/artifacts — create a new artifact (lands in 'draft' sandbox by default)
 
+import { ARTIFACT_LIST_COLUMNS, parseLimit } from '@/lib/egress-columns'
+import { guardRead } from '@/lib/egress-guard'
+import { withEgressLabel } from '@/lib/egress'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
@@ -20,6 +23,9 @@ export async function GET(req: NextRequest) {
     if (!guardResult.ok) return guardResult.response
     const user = { id: guardResult.userId }
 
+    const blocked = await guardRead('read')
+    if (blocked) return blocked
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const type = searchParams.get('type')
@@ -30,9 +36,10 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('artifacts')
-      .select('*')
+      .select(ARTIFACT_LIST_COLUMNS)
       .eq('created_by', user.id)
       .order('created_at', { ascending: false })
+      .limit(parseLimit(searchParams.get('limit')))
 
     if (statusParam === 'gallery') {
       query = query.in('status', GALLERY_STATUSES)
@@ -44,7 +51,7 @@ export async function GET(req: NextRequest) {
     if (department) query = query.eq('department_slug', department)
     if (goal) query = query.eq('goal_id', goal)
 
-    const { data, error } = await query
+    const { data, error } = await withEgressLabel('artifacts-list', async () => await query)
     if (error) throw error
 
     return NextResponse.json({ success: true, data, timestamp: new Date().toISOString() })

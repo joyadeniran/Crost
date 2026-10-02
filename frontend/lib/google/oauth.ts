@@ -31,14 +31,15 @@ export interface GoogleOAuthConfig {
 function allowedOrigins(): string[] {
   return [
     process.env.NEXT_PUBLIC_APP_URL,
-    'https://app.crosthq.com',
+    'https://crosthq.com',
+    'https://www.crosthq.com',
   ]
     .filter(Boolean)
     .map((u) => (u as string).replace(/\/$/, ''))
 }
 
 /**
- * @param origin Optional request origin (e.g. https://app.crosthq.com). When it
+ * @param origin Optional request origin (e.g. https://crosthq.com). When it
  * matches a registered domain it is used for the redirect URI; otherwise the
  * canonical NEXT_PUBLIC_APP_URL is used.
  */

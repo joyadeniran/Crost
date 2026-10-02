@@ -63,32 +63,6 @@ const ACTION_SLUG_MAP: Record<
       artifact_id: ctx.artifact_id,
     }),
   },
-  send_to_contact: {
-    service: 'hubspot',
-    action: 'create_contact',
-    buildParams: (ctx) => ({
-      email: ctx.contact_email ?? ctx.target_email ?? '',
-      firstname: ctx.first_name ?? '',
-      lastname: ctx.last_name ?? '',
-      notes: ctx.body ?? '',
-    }),
-  },
-  save_to_kb: {
-    service: 'internal',
-    action: 'knowledge_base_import',
-    buildParams: (ctx) => ({
-      artifact_id: ctx.artifact_id,
-    }),
-  },
-  schedule_recurring: {
-    service: 'googlecalendar',
-    action: 'create_event',
-    buildParams: (ctx) => ({
-      summary: ctx.title ?? 'Recurring Review',
-      start: ctx.start_date ?? new Date().toISOString(),
-      recurrence: ctx.recurrence ?? 'RRULE:FREQ=WEEKLY',
-    }),
-  },
   generate_companion: {
     service: 'internal',
     action: 'save_document',

@@ -1,5 +1,5 @@
 // GET /api/usage/today
-// Returns per-user system token usage for today plus BYOK key status.
+// Returns per-user system token usage for today.
 // Used by the settings page to display the real usage meter and reset time.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -37,21 +37,11 @@ export async function GET(_req: NextRequest) {
 
     const tokensUsed = (usage ?? []).reduce((sum: number, row: any) => sum + (row.total_tokens ?? 0), 0)
 
-    // Check if user has any valid BYOK keys (any provider)
-    const { data: keys } = await supabase
-      .from('user_api_keys')
-      .select('provider')
-      .eq('created_by', user.id)
-      .eq('is_valid', true)
-      .limit(1)
-
-    const hasUserKey = (keys ?? []).length > 0
-
     return NextResponse.json({
       tokensUsed,
       limit,
       resetAt: resetAt.toISOString(),
-      hasUserKey,
+      hasUserKey: false,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

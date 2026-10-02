@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { requireUser } from '@/lib/auth/guard'
+import { runInBackground } from '@/lib/background'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,17 +93,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Trigger Orchestrator Synthesis if goal is being completed manually
     if (parsed.status === 'completed') {
       const { runOrcReport } = await import('@/lib/llm-client')
-      runOrcReport(params.id).catch(err => {
+      runInBackground(runOrcReport(params.id).catch(err => {
         console.error('[PATCH /api/goals/:id] Synthesis failed:', err)
-      })
-      const { writeOutcomeToDecisionLog } = await import('@/lib/orc-learning')
-      writeOutcomeToDecisionLog(params.id, 'successful', data?.outcome ?? undefined).catch(() => {})
-    }
-
-    // Log failed outcome
-    if (parsed.status === 'failed') {
-      const { writeOutcomeToDecisionLog } = await import('@/lib/orc-learning')
-      writeOutcomeToDecisionLog(params.id, 'failed', data?.outcome ?? undefined).catch(() => {})
+      }))
     }
 
     // On cancel: reject all non-terminal tasks so the chain stops cleanly

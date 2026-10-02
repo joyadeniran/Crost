@@ -1,6 +1,9 @@
 // GET /api/approvals         — list pending approvals (optionally filter by status)
 // POST /api/approvals        — create a new approval request (called by agent actions)
 
+import { parseLimit } from '@/lib/egress-columns'
+import { guardRead } from '@/lib/egress-guard'
+import { withEgressLabel } from '@/lib/egress'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { beginIdempotentRequest, completeIdempotentRequest } from '@/lib/idempotency'
@@ -15,6 +18,9 @@ export async function GET(req: NextRequest) {
     if (!guardResult.ok) return guardResult.response
     const user = { id: guardResult.userId }
 
+    const blocked = await guardRead('read')
+    if (blocked) return blocked
+
     const supabase = createServerSupabaseClient()
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || 'pending'
@@ -25,11 +31,12 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('created_by', user.id)
       .order('requested_at', { ascending: false })
+      .limit(parseLimit(searchParams.get('limit')))
 
     if (status !== 'all') query = query.eq('status', status)
     if (departmentSlug) query = query.eq('department_slug', departmentSlug)
 
-    const { data, error } = await query
+    const { data, error } = await withEgressLabel('approvals-list', async () => await query)
     if (error) throw error
     return NextResponse.json({ data })
   } catch (err) {

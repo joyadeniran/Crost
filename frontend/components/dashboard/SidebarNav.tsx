@@ -88,16 +88,15 @@ export function SidebarNav({ pendingCount: initialPending, artifactCount: initia
     <>
       <nav className="sidebar-nav">
         <div className="nav-section">Workspace</div>
-        <NavItem href="/dashboard"           label="Dashboard"    Icon={IconGrid}      exact />
-        <NavItem href="/dashboard/notifications" label="Inbox"    Icon={IconBell}      badge={pendingCount} />
-        <NavItem href="/dashboard/knowledge"     label="Knowledge"    Icon={IconDatabase} />
-        <NavItem href="/dashboard/memos"     label="Memos"        Icon={IconMemos} />
-        <NavItem href="/dashboard/artifacts" label="Artifacts"    Icon={IconArtifacts} badge={artifactCount} />
-        <NavItem href="/dashboard/constitution" label="Constitution" Icon={IconShield} />
-        <NavItem href="/dashboard/settings"     label="Settings"     Icon={IconSettings} />
+        <NavItem href="/app"           label="Dashboard"    Icon={IconGrid}      exact />
+        <NavItem href="/app/notifications" label="Inbox"    Icon={IconBell}      badge={pendingCount} />
+        <NavItem href="/app/memos"     label="Memos"        Icon={IconMemos} />
+        <NavItem href="/app/artifacts" label="Artifacts"    Icon={IconArtifacts} badge={artifactCount} />
+        <NavItem href="/app/constitution" label="Constitution" Icon={IconShield} />
+        <NavItem href="/app/settings"     label="Settings"     Icon={IconSettings} />
 
         <div className="nav-section" style={{ marginTop: 8 }}>Activity</div>
-        <NavItem href="/dashboard/event-log" label="Event Log"    Icon={IconActivity} />
+        <NavItem href="/app/event-log" label="Event Log"    Icon={IconActivity} />
       </nav>
 
       <div className="sidebar-bottom">
