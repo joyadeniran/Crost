@@ -53,7 +53,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-dm-sans, 'DM Sans'), sans-serif;
+  font-family: var(--font-dm-sans, 'Inter'), sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -107,7 +107,7 @@ body::before {
 }
 
 .crost-topbar-title {
-  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-family: var(--font-syne, 'Fraunces'), sans-serif;
   font-weight: 600;
   font-size: 14px;
   color: var(--text);
@@ -208,7 +208,7 @@ body::before {
 }
 
 .artifact-name {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
@@ -230,7 +230,7 @@ body::before {
 .crost-badge {
   padding: 2px 8px;
   border-radius: 6px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -314,7 +314,7 @@ body::before {
   position: absolute;
   left: 0;
   color: var(--accent);
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 12px;
   font-weight: 700;
   top: 1px;
@@ -376,7 +376,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-family: var(--font-syne, 'Fraunces'), sans-serif;
   font-weight: 800;
   font-size: 13px;
   color: #000;
@@ -384,7 +384,7 @@ body::before {
 }
 
 .logo-text {
-  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-family: var(--font-syne, 'Fraunces'), sans-serif;
   font-weight: 700;
   font-size: 15px;
   letter-spacing: 0.02em;
@@ -401,7 +401,7 @@ body::before {
 }
 
 .nav-section {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   color: var(--text-3);
   letter-spacing: 0.12em;
@@ -450,7 +450,7 @@ body::before {
   gap: 5px;
   padding: 3px 8px;
   border-radius: 10px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -465,7 +465,7 @@ body::before {
 .crost-activation-badge {
   padding: 2px 7px;
   border-radius: 8px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -547,14 +547,14 @@ body::before {
 }
 
 .dept-name {
-  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-family: var(--font-syne, 'Fraunces'), sans-serif;
   font-weight: 700;
   font-size: 15px;
   color: var(--text);
 }
 
 .dept-slug {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   color: var(--text-3);
 }
@@ -578,7 +578,7 @@ body::before {
 }
 
 .dept-model {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   color: var(--text-3);
 }
@@ -614,7 +614,7 @@ body::before {
 .add-dept-card:hover .add-dept-label { color: var(--accent); }
 
 .add-dept-label {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   color: var(--text-3);
   letter-spacing: 0.06em;
@@ -635,7 +635,7 @@ body::before {
 .mode-toggle-btn {
   padding: 4px 12px;
   border-radius: 16px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -654,7 +654,7 @@ body::before {
 .risk-badge {
   padding: 2px 7px;
   border-radius: 8px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -720,7 +720,7 @@ body::before {
 }
 
 .events-panel-title {
-  font-family: var(--font-syne, 'Syne'), sans-serif;
+  font-family: var(--font-syne, 'Fraunces'), sans-serif;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
@@ -756,7 +756,7 @@ body::before {
 }
 
 .event-meta {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   color: var(--text-3);
   margin-top: 2px;
@@ -771,7 +771,7 @@ body::before {
   font-size: 12px;
   cursor: pointer;
   border: none;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-weight: 500;
   transition: all 0.15s;
 }
@@ -786,7 +786,7 @@ body::before {
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: #000;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -818,7 +818,7 @@ body::before {
 .crost-input:focus { border-color: var(--accent); }
 
 .crost-label {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   color: var(--text-2);
   margin-bottom: 6px;
@@ -828,7 +828,7 @@ body::before {
 
 /* ─── SECTION HEADERS ─────────────────────────────────────────────────────── */
 .crost-section-label {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   color: var(--text-3);
   letter-spacing: 0.1em;
@@ -946,7 +946,7 @@ body::before {
 }
 
 .input-label {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -1129,7 +1129,7 @@ body::before {
   text-align: center;
   font-size: 11px;
   color: rgba(255,255,255,0.2);
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
 }
 
 @keyframes spin {
@@ -1569,7 +1569,7 @@ body::before {
 }
 
 .profile-summary .summary-item label {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1610,7 +1610,7 @@ body::before {
   border: none;
   color: rgba(255, 255, 255, 0.42);
   cursor: pointer;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1766,7 +1766,7 @@ body::before {
   padding: 60px;
   text-align: center;
   color: rgba(255,255,255,0.5);
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 13px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1867,7 +1867,7 @@ body::before {
 
 .dept-footer-secondary {
   color: rgba(255,255,255,0.28);
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1875,7 +1875,7 @@ body::before {
 }
 
 .model-badge {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1916,7 +1916,7 @@ body::before {
 }
 
 .selection-count {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1983,7 +1983,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 16px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 14px;
   color: rgba(255,255,255,0.4);
 }
@@ -1994,7 +1994,7 @@ body::before {
 }
 
 .redirect-note {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   text-align: center;
   margin-top: 32px;
   font-size: 11px;
@@ -2081,7 +2081,7 @@ body::before {
 .goal-suggestion-label {
   margin-top: 22px;
   color: rgba(255, 255, 255, 0.36);
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2125,7 +2125,7 @@ body::before {
   border-left: 2px solid var(--accent);
   background: rgba(0, 212, 170, 0.05);
   border-radius: 0 8px 8px 0;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 13px;
   color: var(--accent);
   line-height: 1.5;
@@ -2199,7 +2199,7 @@ body::before {
   border-radius: 100px;
   padding: 8px 16px;
   font-size: 12px;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   cursor: pointer;
@@ -2304,7 +2304,7 @@ body::before {
   background: rgba(0,212,170,0.08);
   border: 1px solid rgba(0,212,170,0.2);
   color: #00D4AA;
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 12px;
   padding: 6px 14px;
   border-radius: 100px;
@@ -2327,7 +2327,7 @@ body::before {
 .kb-upload-zone--has-file { cursor: default; border-style: solid; border-color: rgba(0,212,170,0.3); }
 .kb-upload-icon { font-size: 40px; margin-bottom: 16px; }
 .kb-upload-text { font-size: 17px; font-weight: 600; color: #fff; margin: 0 0 8px; }
-.kb-upload-hint { font-size: 13px; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono, monospace); }
+.kb-upload-hint { font-size: 13px; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono); }
 .kb-upload-form { display: flex; flex-direction: column; gap: 12px; max-width: 480px; margin: 0 auto; text-align: left; }
 .kb-upload-file-info {
   display: flex;
@@ -2339,7 +2339,7 @@ body::before {
   border: 1px solid rgba(255,255,255,0.08);
 }
 .kb-upload-fname { font-size: 14px; font-weight: 600; margin: 0; }
-.kb-upload-fsize { font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; font-family: var(--font-dm-mono, monospace); }
+.kb-upload-fsize { font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; font-family: var(--font-dm-mono); }
 .kb-file-icon { font-size: 28px; }
 .kb-clear-btn { margin-left: auto; background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 16px; transition: color 0.2s; }
 .kb-clear-btn:hover { color: #fff; }
@@ -2368,7 +2368,7 @@ body::before {
 }
 .kb-upload-btn:hover:not(:disabled) { background: #00efc0; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,212,170,0.25); }
 .kb-upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.kb-upload-progress { font-size: 13px; color: #00D4AA; text-align: center; font-family: var(--font-dm-mono, monospace); }
+.kb-upload-progress { font-size: 13px; color: #00D4AA; text-align: center; font-family: var(--font-dm-mono); }
 .kb-toolbar { display: flex; gap: 12px; margin-bottom: 28px; }
 .kb-search-input {
   flex: 1;
@@ -2423,15 +2423,15 @@ body::before {
 .kb-card--selected { border-color: rgba(0,212,170,0.5); box-shadow: 0 0 0 1px rgba(0,212,170,0.3), 0 12px 40px rgba(0,0,0,0.5); }
 .kb-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 .kb-card-icon { font-size: 28px; }
-.kb-card-status { font-size: 11px; font-family: var(--font-dm-mono, monospace); letter-spacing: 0.05em; }
+.kb-card-status { font-size: 11px; font-family: var(--font-dm-mono); letter-spacing: 0.05em; }
 .kb-card-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; color: #fff; line-height: 1.4; }
-.kb-card-category { font-size: 11px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-dm-mono, monospace); margin: 0 0 12px; }
+.kb-card-category { font-size: 11px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-dm-mono); margin: 0 0 12px; }
 .kb-card-summary { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0 0 12px; }
 .kb-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-.kb-tag { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 11px; padding: 3px 10px; border-radius: 100px; font-family: var(--font-dm-mono, monospace); }
+.kb-tag { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 11px; padding: 3px 10px; border-radius: 100px; font-family: var(--font-dm-mono); }
 .kb-tag-empty { color: rgba(255,255,255,0.25); font-size: 12px; font-style: italic; }
 .kb-card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
-.kb-card-refs { font-size: 12px; color: rgba(255,255,255,0.3); font-family: var(--font-dm-mono, monospace); }
+.kb-card-refs { font-size: 12px; color: rgba(255,255,255,0.3); font-family: var(--font-dm-mono); }
 .kb-delete-btn { background: none; border: none; color: rgba(239,68,68,0.5); font-size: 12px; cursor: pointer; transition: color 0.2s; padding: 0; }
 .kb-delete-btn:hover { color: #ef4444; }
 .kb-drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; display: flex; justify-content: flex-end; }
@@ -2441,22 +2441,22 @@ body::before {
 .kb-drawer-title-row { display: flex; align-items: center; gap: 16px; }
 .kb-drawer-icon { font-size: 36px; }
 .kb-drawer-title { font-family: var(--font-fraunces, serif); font-size: 20px; font-weight: 600; margin: 0 0 4px; color: #fff; }
-.kb-drawer-meta { font-size: 12px; color: rgba(255,255,255,0.35); margin: 0; font-family: var(--font-dm-mono, monospace); }
+.kb-drawer-meta { font-size: 12px; color: rgba(255,255,255,0.35); margin: 0; font-family: var(--font-dm-mono); }
 .kb-drawer-close { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 20px; cursor: pointer; transition: color 0.2s; padding: 4px; }
 .kb-drawer-close:hover { color: #fff; }
 .kb-drawer-body { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 28px; }
-.kb-drawer-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono, monospace); margin: 0 0 12px; }
+.kb-drawer-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono); margin: 0 0 12px; }
 .kb-drawer-summary { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.7; margin: 0; }
-.kb-drawer-status { font-size: 14px; font-family: var(--font-dm-mono, monospace); }
+.kb-drawer-status { font-size: 14px; font-family: var(--font-dm-mono); }
 .kb-drawer-insights { display: flex; flex-direction: column; gap: 10px; }
 .kb-insight { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.6); }
 .kb-insight-icon { font-size: 18px; }
 .kb-drawer-footer { padding: 20px 28px; border-top: 1px solid rgba(255,255,255,0.06); }
 .kb-drawer-delete { width: 100%; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .kb-drawer-delete:hover { background: rgba(239,68,68,0.2); }
-le { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono, monospace); margin: 0 0 12px; }
+le { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.35); font-family: var(--font-dm-mono); margin: 0 0 12px; }
 .kb-drawer-summary { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.7; margin: 0; }
-.kb-drawer-status { font-size: 14px; font-family: var(--font-dm-mono, monospace); }
+.kb-drawer-status { font-size: 14px; font-family: var(--font-dm-mono); }
 .kb-drawer-insights { display: flex; flex-direction: column; gap: 10px; }
 .kb-insight { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.6); }
 .kb-insight-icon { font-size: 18px; }
@@ -2508,7 +2508,7 @@ le { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: r
 }
 
 .intervention-action {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 9px;
   font-weight: 700;
   color: var(--accent);
@@ -2522,7 +2522,7 @@ le { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: r
 }
 
 .intervention-code {
-  font-family: var(--font-dm-mono, monospace);
+  font-family: var(--font-dm-mono);
   font-size: 8px;
   color: var(--text-4);
   margin-top: 4px;

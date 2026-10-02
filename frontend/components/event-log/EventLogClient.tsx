@@ -145,7 +145,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
           padding: '7px 12px',
           marginBottom: 12,
           fontSize: 11,
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           color: '#f87171',
         }}>
           <span style={{ flex: 1 }}>Filtered to goal: <strong style={{ letterSpacing: '0.03em' }}>{goalScope.slice(0, 8)}…</strong></span>
@@ -198,7 +198,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
           </select>
         )}
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: 'var(--text-3)',
           padding: '6px 4px',
@@ -237,7 +237,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
                 }}
               >
                 {/* Time */}
-                <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)' }}>
+                <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)' }}>
                   {new Date(ev.created_at).toLocaleString([], {
                     month: 'short', day: 'numeric',
                     hour: '2-digit', minute: '2-digit',
@@ -246,7 +246,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
 
                 {/* Type badge */}
                 <span style={{
-                  fontFamily: 'var(--font-dm-mono, monospace)',
+                  fontFamily: 'var(--font-dm-mono)',
                   fontSize: 9,
                   padding: '2px 7px',
                   borderRadius: 4,
@@ -269,12 +269,12 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
                 {/* Dept + tokens */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
                   {ev.department_slug && (
-                    <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--text-3)' }}>
                       /{ev.department_slug}
                     </span>
                   )}
                   {ev.tokens_used > 0 && (
-                    <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--accent)' }}>
+                    <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--accent)' }}>
                       {ev.tokens_used.toLocaleString()} tok
                     </span>
                   )}
@@ -297,7 +297,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
               borderRadius: 6,
               color: 'var(--text)',
               fontSize: 10,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               padding: '8px 24px',
               cursor: loadingMore ? 'default' : 'pointer',
               opacity: loadingMore ? 0.7 : 1,
@@ -314,7 +314,7 @@ export function EventLogClient({ events: initial, initialGoalId, initialType }: 
           textAlign: 'center', 
           fontSize: 10, 
           color: 'var(--text-4)', 
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           marginBottom: 40
         }}>
           END OF LOG

@@ -14,7 +14,7 @@ export function MemoCard({ memo }: Props) {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
         <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{memo.title}</div>
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           color: 'var(--text-4)',
           flexShrink: 0,
@@ -30,7 +30,7 @@ export function MemoCard({ memo }: Props) {
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ 
-          fontFamily: 'var(--font-dm-mono, monospace)', 
+          fontFamily: 'var(--font-dm-mono)', 
           fontSize: 10, 
           color: 'var(--accent)',
           background: 'var(--accent-dim)',

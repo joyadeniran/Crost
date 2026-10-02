@@ -38,7 +38,7 @@ function NavItem({ href, label, Icon, badge, exact = false }: NavItemProps) {
           background: 'var(--red)',
           boxShadow: '0 0 8px rgba(239, 68, 68, 0.4)',
           borderRadius: 10,
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           fontWeight: 700,
           display: 'flex',
@@ -87,21 +87,15 @@ export function SidebarNav({ pendingCount: initialPending, artifactCount: initia
   return (
     <>
       <nav className="sidebar-nav">
-        <div className="nav-section">Workspace</div>
-        <NavItem href="/app"           label="Dashboard"    Icon={IconGrid}      exact />
-        <NavItem href="/app/notifications" label="Inbox"    Icon={IconBell}      badge={pendingCount} />
-        <NavItem href="/app/memos"     label="Memos"        Icon={IconMemos} />
-        <NavItem href="/app/artifacts" label="Artifacts"    Icon={IconArtifacts} badge={artifactCount} />
-        <NavItem href="/app/constitution" label="Constitution" Icon={IconShield} />
-        <NavItem href="/app/settings"     label="Settings"     Icon={IconSettings} />
-
-        <div className="nav-section" style={{ marginTop: 8 }}>Activity</div>
-        <NavItem href="/app/event-log" label="Event Log"    Icon={IconActivity} />
+        <NavItem href="/app"               label="Chat"      Icon={IconGrid}      exact />
+        <NavItem href="/app/notifications" label="Approvals" Icon={IconBell}      badge={pendingCount} />
+        <NavItem href="/app/artifacts"     label="Artifacts" Icon={IconArtifacts} badge={artifactCount} />
+        <NavItem href="/app/settings"      label="Settings"  Icon={IconSettings} />
       </nav>
 
       <div className="sidebar-bottom">
         <div style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: 'var(--text-4)',
           padding: '4px 12px 10px',

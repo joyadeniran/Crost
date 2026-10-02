@@ -52,7 +52,7 @@ export default async function NotificationsPage() {
               padding: '40px',
               textAlign: 'center',
               color: 'var(--text-3)',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 12
             }}>
               No pending actions. You&apos;re all clear.
@@ -90,7 +90,7 @@ export default async function NotificationsPage() {
                       {event.description}
                     </div>
                     <div style={{
-                      fontFamily: 'var(--font-dm-mono, monospace)',
+                      fontFamily: 'var(--font-dm-mono)',
                       fontSize: 10,
                       color: 'var(--text-4)',
                       marginTop: 4
@@ -116,11 +116,11 @@ export default async function NotificationsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                 <span style={{ color: 'var(--text-3)' }}>Pending Approvals</span>
-                <span style={{ color: 'var(--amber)', fontFamily: 'var(--font-dm-mono, monospace)' }}>{pendingApprovals.length}</span>
+                <span style={{ color: 'var(--amber)', fontFamily: 'var(--font-dm-mono)' }}>{pendingApprovals.length}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                 <span style={{ color: 'var(--text-3)' }}>Activity (24h)</span>
-                <span style={{ color: 'var(--text-2)', fontFamily: 'var(--font-dm-mono, monospace)' }}>{recentEvents.length}</span>
+                <span style={{ color: 'var(--text-2)', fontFamily: 'var(--font-dm-mono)' }}>{recentEvents.length}</span>
               </div>
             </div>
           </section>

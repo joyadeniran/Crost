@@ -51,7 +51,7 @@ export function HomeSections() {
               </div>
             </div>
             <div className="feature-visual reveal-right">
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 14 }}>AGENT CONSTITUTION</div>
+              <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 14 }}>AGENT CONSTITUTION</div>
               {[
                 ["NEVER", "take an irreversible action without approval"],
                 ["NEVER", "fabricate data, metrics, or facts"],
@@ -65,7 +65,7 @@ export function HomeSections() {
                 </div>
               ))}
               <div style={{ marginTop: 12, padding: "8px 10px", background: "var(--accent2)", borderRadius: 6, border: "1px solid var(--accent3)" }}>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--accent)" }}>Founders can add clauses. Core rules cannot be removed.</div>
+                <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 10, color: "var(--accent)" }}>Founders can add clauses. Core rules cannot be removed.</div>
               </div>
             </div>
           </div>
@@ -83,7 +83,7 @@ export function HomeSections() {
               </div>
             </div>
             <div className="feature-visual reveal-left">
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 12 }}>APPROVAL FEED</div>
+              <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 12 }}>APPROVAL FEED</div>
               {[
                 { dept: "Marketing", label: "Send launch announcement to 40 beta contacts", risk: "medium", riskClass: "high" },
                 { dept: "Sales", label: "Email intro offer to 12 warm leads", risk: "high", riskClass: "critical" },
@@ -116,7 +116,7 @@ export function HomeSections() {
               </div>
             </div>
             <div className="feature-visual reveal-right">
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 12 }}>COMPANY MEMOS</div>
+              <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 10, color: "var(--text3)", letterSpacing: ".1em", marginBottom: 12 }}>COMPANY MEMOS</div>
               {[
                 { priority: "urgent", title: "Launch budget capped at $2,000", body: "Plan campaigns inside the cap. No paid spend without approval.", from: "Operations" },
                 { priority: "high", title: "Payments ship Friday", body: "Do not promise payment features before then.", from: "Engineering" },
@@ -176,10 +176,10 @@ export function HomeSections() {
           </div>
           <div className="globe-visual reveal-right">
             {[
-              { flag: "🇳🇬", city: "Lagos, Nigeria", founder: "B2B credit for informal retail", mode: "CLOUD · Gemini" },
-              { flag: "🇮🇩", city: "Jakarta, Indonesia", founder: "SME logistics marketplace", mode: "CLOUD · Gemini" },
-              { flag: "🇧🇷", city: "São Paulo, Brazil", founder: "Embedded finance for merchants", mode: "CLOUD · Gemini" },
-              { flag: "🇰🇪", city: "Nairobi, Kenya", founder: "AgriTech platform for farmers", mode: "CLOUD · Gemini" },
+              { flag: "🇳🇬", city: "Lagos, Nigeria", founder: "B2B credit for informal retail", mode: "CLOUD" },
+              { flag: "🇮🇩", city: "Jakarta, Indonesia", founder: "SME logistics marketplace", mode: "CLOUD" },
+              { flag: "🇧🇷", city: "São Paulo, Brazil", founder: "Embedded finance for merchants", mode: "CLOUD" },
+              { flag: "🇰🇪", city: "Nairobi, Kenya", founder: "AgriTech platform for farmers", mode: "CLOUD" },
             ].map((r, i) => (
               <div key={i} className="globe-row">
                 <div className="globe-flag">{r.flag}</div>

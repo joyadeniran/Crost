@@ -86,7 +86,7 @@ export function ConstitutionEditor({ constitution }: Props) {
           Agent Constitution
         </div>
         <span style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           color: 'var(--accent)',
           background: 'var(--accent-dim)',
@@ -100,7 +100,7 @@ export function ConstitutionEditor({ constitution }: Props) {
       {/* Core clauses — read-only */}
       <div style={{ marginBottom: 16 }}>
         <div style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: 'var(--text-3)',
           letterSpacing: '0.08em',
@@ -121,7 +121,7 @@ export function ConstitutionEditor({ constitution }: Props) {
               padding: '7px 12px',
               lineHeight: 1.5,
             }}>
-              <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>
                 {String(i + 1).padStart(2, '0')}
               </span>
               {line}
@@ -134,7 +134,7 @@ export function ConstitutionEditor({ constitution }: Props) {
       {extras.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             color: 'var(--text-3)',
             letterSpacing: '0.08em',
@@ -156,7 +156,7 @@ export function ConstitutionEditor({ constitution }: Props) {
                 padding: '7px 12px',
                 lineHeight: 1.5,
               }}>
-                <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--accent)', flexShrink: 0 }}>
                   {String(CORE_CLAUSE_COUNT + i + 1).padStart(2, '0')}
                 </span>
                 <span style={{ flex: 1 }}>{line}</span>
@@ -206,7 +206,7 @@ export function ConstitutionEditor({ constitution }: Props) {
           onClick={addClause}
           disabled={!newClause.trim()}
           style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 11,
             padding: '7px 14px',
             borderRadius: 8,
@@ -232,7 +232,7 @@ export function ConstitutionEditor({ constitution }: Props) {
           {saving ? 'Saving…' : 'Save Constitution'}
         </button>
         {success && (
-          <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+          <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono)' }}>
             ✓ Saved
           </span>
         )}

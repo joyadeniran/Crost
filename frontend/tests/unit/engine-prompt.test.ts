@@ -17,12 +17,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ── Chainable Supabase mock ────────────────────────────────────────────────
 
 let artifactRows: any[] = []
+let eqCalls: Array<[string, string, unknown]> = []
+let structuredMemoRow: any = null
 
 function makeBuilder(table: string) {
   const builder: any = {
     _table: table,
     select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockImplementation(function (this: any, col: string, val: unknown) { eqCalls.push([table, col, val]); return this }),
     neq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
@@ -40,7 +42,7 @@ function makeBuilder(table: string) {
       }
       return { data: null, error: null }
     }),
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    maybeSingle: vi.fn().mockImplementation(async () => ({ data: table === 'company_memo' ? structuredMemoRow : null, error: null })),
     then: vi.fn().mockImplementation(function (this: any, resolve: any) {
       const data = table === 'artifacts' ? artifactRows : []
       return Promise.resolve({ data, error: null }).then(resolve)
@@ -59,7 +61,7 @@ vi.mock('@/lib/log', () => ({
   log: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }))
 
-import { buildFinalPrompt } from '@/lib/engine/prompt'
+import { buildFinalPrompt, buildOrcContext } from '@/lib/engine/prompt'
 
 describe('buildFinalPrompt — prior task artifact context', () => {
   beforeEach(() => {
@@ -152,5 +154,35 @@ describe('buildFinalPrompt — prior task artifact context', () => {
     ]
     const prompt = await buildFinalPrompt('Persona', 'Task', [], [], 'sales')
     expect(prompt).not.toContain('PRIOR TASK OUTPUTS')
+  })
+})
+
+
+describe('buildOrcContext — ownership scoping and legacy-data resilience', () => {
+  beforeEach(() => {
+    eqCalls = []
+    structuredMemoRow = null
+  })
+
+  it('returns empty context (and queries nothing) when there is no user', async () => {
+    expect(await buildOrcContext(null)).toBe('')
+    expect(eqCalls).toEqual([])
+  })
+
+  it('scopes every company_memos query to the owner', async () => {
+    await buildOrcContext('user-1')
+    const memoScopes = eqCalls.filter(([t, c]) => t === 'company_memos' && c === 'created_by')
+    expect(memoScopes).toHaveLength(4)
+    expect(memoScopes.every(([, , v]) => v === 'user-1')).toBe(true)
+  })
+
+  it('does not throw when migrated jsonb columns are not arrays', async () => {
+    structuredMemoRow = {
+      company_profile: { name: 'Acme' },
+      decisions: { not: 'an array' },
+      task_logs: null,
+    }
+    const ctx = await buildOrcContext('user-1')
+    expect(ctx).toContain('COMPANY PROFILE: Acme')
   })
 })

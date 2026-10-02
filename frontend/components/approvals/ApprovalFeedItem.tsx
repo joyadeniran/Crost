@@ -60,7 +60,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
         position: 'absolute',
         top: 16,
         right: 20,
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
         fontSize: 9,
         fontWeight: 700,
         color: riskColor,
@@ -90,7 +90,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
         </div>
         <div>
           <div style={{ 
-            fontFamily: 'var(--font-dm-mono, monospace)', 
+            fontFamily: 'var(--font-dm-mono)', 
             fontSize: 10, 
             color: 'var(--text-4)',
             letterSpacing: '0.04em',
@@ -126,7 +126,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
           <button
             onClick={() => setExpanded(!expanded)}
             style={{
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               fontSize: 10,
               color: 'var(--text-3)',
               background: 'none',
@@ -150,7 +150,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
               borderRadius: 8,
               padding: '12px 14px',
               border: '1px solid rgba(255,255,255,0.05)',
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
             }}>
               {Object.entries(item.payload).map(([key, val]) => (
                 <div key={key} style={{ marginBottom: 6, display: 'flex', gap: 10 }}>
@@ -175,7 +175,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
         borderTop: '1px solid rgba(255,255,255,0.04)'
       }}>
         <div style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 10,
           color: isExpiringSoon ? 'var(--amber)' : 'var(--text-4)',
         }}>
@@ -197,7 +197,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: 'pointer',
-                fontFamily: 'var(--font-dm-mono, monospace)'
+                fontFamily: 'var(--font-dm-mono)'
               }}
             >
               {loading ? '...' : 'APPROVE'}
@@ -214,7 +214,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: 'pointer',
-                fontFamily: 'var(--font-dm-mono, monospace)'
+                fontFamily: 'var(--font-dm-mono)'
               }}
             >
               {loading ? '...' : 'REJECT'}
@@ -222,7 +222,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
           </div>
         ) : (
           <span style={{
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontSize: 10,
             fontWeight: 700,
             color: item.status === 'approved' ? 'var(--accent)'

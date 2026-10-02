@@ -3,6 +3,7 @@
 // Server-side ONLY — never import from a client component.
 
 import { createServerSupabaseClient } from '@/lib/supabase'
+import { WORKING_GEMINI_MODEL } from '@/lib/gemini-models'
 
 // ─── orc_context in-memory cache ─────────────────────────────────────────────
 // 60-second TTL per user. Avoids a Supabase round-trip on every orchestration
@@ -245,11 +246,38 @@ Return exactly this JSON shape:
 }`
 
 const DEFAULT_DECISION: OrcDecision = {
-  mode: 'full_plan',
+  mode: 'quick_plan',
   confidence: 0.5,
-  reasoning: 'Classification unavailable — defaulting to full plan mode.',
+  reasoning: 'Classification unavailable — defaulting to a quick plan.',
   risk_notes: [],
   followup_options: [],
+}
+
+const ASSISTANT_DECISION: OrcDecision = {
+  mode: 'assistant',
+  confidence: 0.8,
+  reasoning: 'Conversational message — answer directly, no plan or departments.',
+  risk_notes: [],
+  followup_options: [],
+}
+
+// Verbs that mean "go produce something" — their presence means a real task, not chit-chat.
+const TASK_VERB = /\b(write|draft|create|build|make|design|plan|prepare|generate|research|analy[sz]e|compile|outline|schedule|send|post|launch|develop|produce|put together|set up|find me|find us|compare)\b/i
+const GREETING = /^(hi|hello|hey|yo|thanks|thank you|ok|okay|cool|great|nice|good (morning|afternoon|evening)|help|who are you|what can you do)[.!?\s]*$/i
+const CHAT_OPENER = /^(hi|hello|hey|yo|thanks|thank you|ok|okay|cool|great|good (morning|afternoon|evening)|what|who|why|how|when|where|which|can you|could you|do you|are you|is there|tell me|explain|help)\b/i
+
+/**
+ * Cheap deterministic check for obvious conversation ("what can you do?", "hi", "who are you")
+ * so Orc never spins up a mission plan for a chat message — also the safe fallback when the
+ * classifier model is unavailable.
+ */
+export function looksConversational(input: string): boolean {
+  const t = input.trim()
+  if (!t) return false
+  if (GREETING.test(t)) return true
+  const words = t.split(/\s+/).length
+  if (words > 14 || TASK_VERB.test(t)) return false
+  return CHAT_OPENER.test(t) || t.endsWith('?')
 }
 
 /**
@@ -266,6 +294,16 @@ export async function orcDecisionGate(
   conversationHistory: Array<{ role: string; content: string }> = [],
   extraRiskNotes: string[] = []
 ): Promise<OrcDecision> {
+  // Greetings / "what can you do?" never need a classifier call (cheaper, faster, outage-proof).
+  if (GREETING.test(founderInput.trim()) && conversationHistory.length === 0) {
+    return { ...ASSISTANT_DECISION, confidence: 0.95, risk_notes: extraRiskNotes }
+  }
+
+  const fallback = (): OrcDecision =>
+    looksConversational(founderInput)
+      ? { ...ASSISTANT_DECISION, risk_notes: extraRiskNotes }
+      : { ...DEFAULT_DECISION, risk_notes: extraRiskNotes }
+
   try {
     const contextSummary = formatOrcContextForPrompt(orcContext)
     const recentHistory = conversationHistory
@@ -284,7 +322,7 @@ export async function orcDecisionGate(
     let raw = ''
     try {
       const { content } = await callGemini({
-        model: process.env.CLOUD_MODEL_CLASSIFIER ?? 'gemini-2.5-flash',
+        model: process.env.CLOUD_MODEL_CLASSIFIER ?? WORKING_GEMINI_MODEL,
         prompt: classifierPrompt,
         systemNote: DECISION_GATE_SYSTEM_NOTE,
         temperature: 0.1,
@@ -292,18 +330,18 @@ export async function orcDecisionGate(
       raw = content
     } catch (err: any) {
       console.warn('[orcDecisionGate] Classifier error — using fallback:', err.message)
-      return DEFAULT_DECISION
+      return fallback()
     }
 
     const first = raw.indexOf('{')
     const last  = raw.lastIndexOf('}')
-    if (first === -1 || last === -1) return DEFAULT_DECISION
+    if (first === -1 || last === -1) return fallback()
 
     const parsed = JSON.parse(raw.slice(first, last + 1))
 
     if (!VALID_MODES.includes(parsed.mode as OrcResponseMode)) {
       console.warn(`[orcDecisionGate] Unknown mode "${parsed.mode}" — using fallback`)
-      return DEFAULT_DECISION
+      return fallback()
     }
 
     const classifierRiskNotes: string[] = Array.isArray(parsed.risk_notes) ? parsed.risk_notes : []
@@ -317,6 +355,6 @@ export async function orcDecisionGate(
     }
   } catch (err) {
     console.error('[orcDecisionGate] Classification failed:', err)
-    return { ...DEFAULT_DECISION, risk_notes: extraRiskNotes }
+    return fallback()
   }
 }

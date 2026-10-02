@@ -117,7 +117,7 @@ function FileTypeIcon({ ext, size = 40 }: { ext: string; size?: number }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontFamily: 'var(--font-dm-mono, monospace)',
+      fontFamily: 'var(--font-dm-mono)',
       fontSize: size < 30 ? 9 : 11,
       fontWeight: 700,
       textTransform: 'uppercase',
@@ -156,7 +156,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
     <div>
       <div style={{
         fontSize: 10, color: 'var(--text-4)',
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
         letterSpacing: '0.08em', marginBottom: 10,
       }}>
         SOURCES
@@ -179,7 +179,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
             {memoCount > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
                   color: 'rgba(90,171,255,0.9)',
                   background: 'rgba(40,130,255,0.08)',
                   border: '1px solid rgba(40,130,255,0.18)',
@@ -193,7 +193,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
             {kbCount > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
                   color: 'rgba(0,200,150,0.9)',
                   background: 'rgba(0,200,150,0.08)',
                   border: '1px solid rgba(0,200,150,0.18)',
@@ -207,7 +207,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
             {toolCount > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono, monospace)',
+                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
                   color: 'rgba(255,180,0,0.9)',
                   background: 'rgba(255,180,0,0.08)',
                   border: '1px solid rgba(255,180,0,0.18)',
@@ -230,7 +230,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
                     overflow: 'auto',
                     border: '1px solid rgba(255,255,255,0.06)',
                     maxHeight: 140,
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                   }}>
                     {sources!.tool_calls.map((tc: any, i) => (
                       <div key={i} style={{ 
@@ -280,7 +280,7 @@ function SandboxBadge({ status }: { status?: string }) {
       left: 8,
       zIndex: 20,
       fontSize: 9,
-      fontFamily: 'var(--font-dm-mono, monospace)',
+      fontFamily: 'var(--font-dm-mono)',
       fontWeight: 700,
       textTransform: 'uppercase',
       letterSpacing: '0.06em',
@@ -570,7 +570,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{
             fontSize: 10,
-            fontFamily: 'var(--font-dm-mono, monospace)',
+            fontFamily: 'var(--font-dm-mono)',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -585,7 +585,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
           {goalTitle && (
             <span style={{
               fontSize: 10,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               color: 'var(--text-4)',
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
@@ -604,7 +604,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
           gap: 8,
           fontSize: 11,
           color: 'var(--text-4)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           marginTop: 'auto',
         }}>
           <span>{timeAgo(artifact.created_at)}</span>
@@ -802,7 +802,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 </div>
                 <div>
                   <div style={{
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     fontSize: 14, fontWeight: 700,
                     color: 'var(--text)', marginBottom: 5,
                     wordBreak: 'break-all',
@@ -812,7 +812,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <ExtBadge ext={ext} />
                     {fileSize && (
-                      <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)' }}>
                         {fileSize}
                       </span>
                     )}
@@ -917,7 +917,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                       )}
 
                       <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
                           CONTENT PREVIEW
                         </div>
                         <div style={{
@@ -942,7 +942,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div style={{
                     fontSize: 10, color: 'var(--text-4)',
-                    fontFamily: 'var(--font-dm-mono, monospace)',
+                    fontFamily: 'var(--font-dm-mono)',
                     letterSpacing: '0.08em',
                   }}>
                     METADATA
@@ -974,7 +974,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                     <div>
                       <div style={{
                         fontSize: 10, color: 'var(--text-4)',
-                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontFamily: 'var(--font-dm-mono)',
                         letterSpacing: '0.08em', marginBottom: 10,
                       }}>
                         SKILLS USED
@@ -988,7 +988,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                             border: '1px solid rgba(255,255,255,0.08)',
                             borderRadius: 5,
                             padding: '3px 8px',
-                            fontFamily: 'var(--font-dm-mono, monospace)',
+                            fontFamily: 'var(--font-dm-mono)',
                           }}>
                             {skill}
                           </span>
@@ -1001,7 +1001,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 /* Lineage Tab */
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {loadingLineage ? (
-                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontFamily: 'var(--font-dm-mono, monospace)' }}>
+                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontFamily: 'var(--font-dm-mono)' }}>
                       Loading lineage data...
                     </div>
                   ) : !artifact.task_id ? (
@@ -1015,7 +1015,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   ) : (
                     <>
                       <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
                           SOURCE TASK
                         </div>
                         <div style={{
@@ -1046,7 +1046,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                       </div>
 
                       <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono, monospace)', letterSpacing: '0.08em', marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
                           PARENT GOAL
                         </div>
                         <div style={{

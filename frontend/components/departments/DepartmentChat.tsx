@@ -93,7 +93,7 @@ export function DepartmentChat({ department: dept }: Props) {
         borderRadius: 'var(--radius)',
         padding: '14px 16px',
       }}>
-        <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 11, color: 'var(--text-3)' }}>
+        <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 11, color: 'var(--text-3)' }}>
           {reason}
         </p>
       </div>
@@ -126,7 +126,7 @@ export function DepartmentChat({ department: dept }: Props) {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <span style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.04em' }}>
+        <span style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 9, color: 'var(--text-3)', letterSpacing: '0.04em' }}>
           LIVE CHAT — {dept.name.toUpperCase()}
         </span>
         {messages.length > 0 && (
@@ -137,7 +137,7 @@ export function DepartmentChat({ department: dept }: Props) {
               border: 'none',
               color: 'var(--text-3)',
               fontSize: 9,
-              fontFamily: 'var(--font-dm-mono, monospace)',
+              fontFamily: 'var(--font-dm-mono)',
               cursor: 'pointer',
               textDecoration: 'underline',
               opacity: 0.7
@@ -157,7 +157,7 @@ export function DepartmentChat({ department: dept }: Props) {
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)' }}>
             <p style={{ fontSize: 13, marginBottom: 6, color: 'var(--text-2)' }}>Ask {dept.name} anything.</p>
-            <p style={{ fontFamily: 'var(--font-dm-mono, monospace)', fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, maxWidth: 300, margin: '0 auto' }}>
+            <p style={{ fontFamily: 'var(--font-dm-mono)', fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, maxWidth: 300, margin: '0 auto' }}>
               Constitution is always prepended. Irreversible actions go to the Approval Feed.
             </p>
           </div>
@@ -189,7 +189,7 @@ export function DepartmentChat({ department: dept }: Props) {
                     <a
                       href="/app/approvals"
                       style={{
-                        fontFamily: 'var(--font-dm-mono, monospace)',
+                        fontFamily: 'var(--font-dm-mono)',
                         fontSize: 10,
                         color: 'var(--amber)',
                         textDecoration: 'none',

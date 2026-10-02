@@ -241,7 +241,7 @@ export function IdentityEditor({
       )}
 
       {success && (
-        <p style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono, monospace)', marginTop: 8 }}>
+        <p style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-dm-mono)', marginTop: 8 }}>
           ✓ Identity synchronized
         </p>
       )}

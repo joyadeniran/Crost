@@ -94,13 +94,12 @@ function buildGeo() {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
 const FONT_CSS = `
-@font-face{font-family:'Syne';src:url('/fonts/Syne-Variable.ttf') format('truetype');font-weight:400 800;font-display:swap}
 .bridge-copy h2,.bridge-copy .bridge-h{font-family:'Fraunces',serif;font-weight:400;line-height:1.05;letter-spacing:-0.02em;color:#e8e8f0;margin:0}
 .bridge-copy em{font-style:italic;color:#00d4aa}
-.bridge-eyebrow{font-family:'DM Mono',monospace;letter-spacing:.12em;color:#8a8a9e;font-size:clamp(11px,1.15vw,22px)}
+.bridge-eyebrow{font-family:'Inter',sans-serif;letter-spacing:.12em;color:#8a8a9e;font-size:clamp(11px,1.15vw,22px)}
 .bridge-h{font-size:clamp(34px,5.4vw,104px)}
-.bridge-sub{font-family:'DM Sans',sans-serif;color:#b1b1c1;line-height:1.45;font-size:clamp(15px,1.5vw,28px);max-width:min(900px,88vw);margin:0}
-.bridge-btn{display:inline-flex;align-items:center;height:clamp(44px,3.2vw,60px);padding:0 clamp(18px,1.6vw,30px);border-radius:100px;font-family:'DM Sans',sans-serif;font-size:clamp(14px,1.15vw,22px);text-decoration:none;cursor:pointer;transition:background .2s,border-color .2s}
+.bridge-sub{font-family:'Inter',sans-serif;color:#b1b1c1;line-height:1.45;font-size:clamp(15px,1.5vw,28px);max-width:min(900px,88vw);margin:0}
+.bridge-btn{display:inline-flex;align-items:center;height:clamp(44px,3.2vw,60px);padding:0 clamp(18px,1.6vw,30px);border-radius:100px;font-family:'Inter',sans-serif;font-size:clamp(14px,1.15vw,22px);text-decoration:none;cursor:pointer;transition:background .2s,border-color .2s}
 .bridge-btn.primary{background:#00d4aa;color:#09090b;font-weight:500;border:1px solid #00d4aa}
 .bridge-btn.primary:hover{background:#00efc0}
 .bridge-btn.ghost{border:1px solid rgba(255,255,255,.13);color:#e8e8f0;background:transparent}
@@ -358,7 +357,7 @@ export default function BridgeScroll() {
                     {DEPTS.map((d) => (
                       <div key={d.name} className="bridge-chip">
                         <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color }} />
-                        <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 'clamp(15px,1.25vw,24px)', color: '#e8e8f0' }}>{d.name}</span>
+                        <span style={{ fontFamily: "'Fraunces',sans-serif", fontWeight: 700, fontSize: 'clamp(15px,1.25vw,24px)', color: '#e8e8f0' }}>{d.name}</span>
                         <span className="bridge-eyebrow" style={{ fontSize: 'clamp(10px,.95vw,18px)' }}>{d.slug}</span>
                       </div>
                     ))}

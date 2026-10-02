@@ -7,22 +7,23 @@ import { logUsage } from '@/lib/usage-logger'
 import { checkTokenBudget } from './budget'
 import { logEvent } from './events'
 import { log } from '@/lib/log'
+import { WORKING_GEMINI_MODEL, LITE_GEMINI_MODEL, PRO_GEMINI_MODEL } from '@/lib/gemini-models'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 // Default model — Gemini via the Google AI API (GEMINI_API_KEY)
-export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash'
-const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash'
+export const CLOUD_MODEL = process.env.CLOUD_MODEL ?? `gemini/${WORKING_GEMINI_MODEL}`
+const CLOUD_MODEL_WORKER = process.env.CLOUD_MODEL_WORKER ?? `gemini/${WORKING_GEMINI_MODEL}`
 
 export async function getModel(
   taskType: 'planning' | 'execution' | 'analysis' | 'summarization',
   _userId?: string | null
 ): Promise<{ model: string; provider?: string }> {
   const MODELS: Record<string, string> = {
-    planning: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
-    execution: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash',
-    analysis: process.env.CLOUD_MODEL ?? 'gemini/gemini-2.5-flash',
-    summarization: process.env.CLOUD_MODEL_WORKER ?? 'gemini/gemini-2.5-flash'
+    planning: process.env.CLOUD_MODEL ?? `gemini/${WORKING_GEMINI_MODEL}`,
+    execution: process.env.CLOUD_MODEL_WORKER ?? `gemini/${WORKING_GEMINI_MODEL}`,
+    analysis: process.env.CLOUD_MODEL ?? `gemini/${WORKING_GEMINI_MODEL}`,
+    summarization: process.env.CLOUD_MODEL_WORKER ?? `gemini/${WORKING_GEMINI_MODEL}`
   }
   const model = MODELS[taskType] || MODELS.execution
   return { model, provider: model.split('/')[0] }
@@ -79,9 +80,9 @@ async function callLiteLLM(
 // Canonical fallback chain for high-reliability operations.
 // Evaluated in order if the primary model fails.
 const RESILIENT_FALLBACK_CHAIN = [
-  'gemini/gemini-2.5-flash',            // Primary
-  'gemini/gemini-2.5-flash-lite',      // Cheaper/faster backup
-  'gemini/gemini-2.5-pro',             // Strongest reasoning fallback
+  `gemini/${WORKING_GEMINI_MODEL}`,            // Primary
+  `gemini/${LITE_GEMINI_MODEL}`,      // Cheaper/faster backup
+  `gemini/${PRO_GEMINI_MODEL}`,             // Strongest reasoning fallback
 ]
 
 export async function callLLM(

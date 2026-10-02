@@ -2203,3 +2203,12 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - Old artifact files stay downloadable: `lib/storage.ts getObject` falls back to the pre-beta bucket named after the logical bucket. Legacy buckets set private.
 - Removed every reference to `app.crosthq.com` and the old Cloud Run/GCS hosts from code, tests, docs and config; hackathon `CHALLENGE_SUBMISSION.md` archived; `supabase/.temp` untracked.
 - Dashboard-only: Supabase Auth → URL Configuration (Site URL `https://crosthq.com`, redirect `https://crosthq.com/auth/callback`; remove the old app subdomain), DNS cleanup of `app`/`www`, Render suspension.
+
+---
+
+## Session v14.4 — First-goal failure fixes, chat-first Orc, simpler UI + type
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE
+- **Root cause of the failed first goal:** Gemini 2.x ids return 404 for new API users. Ids now live in `lib/gemini-models.ts` (3.x defaults, env-overridable); `normalizeModel` remaps retired 1.x/2.x ids.
+- **Orc is chat-first:** greetings / "what can you do?" answer directly (no classifier call); when the classifier is unavailable the fallback is `assistant` for questions and `quick_plan` otherwise (was `full_plan`, which turned a chat message into a mission brief).
+- **Bugs found in the same logs:** `buildOrcContext` read other founders' memos (no `created_by` scope — fixed) and crashed on non-array jsonb; `available_tools` was queried with columns that don't exist in the beta schema.
+- **UI:** type pairing is Fraunces (serif headings) + Inter (everything else) via Google Fonts (`styles/fonts.css` aliases keep old `--font-dm-*`/`--font-syne` names working); self-hosted Syne/DM fonts removed. Sidebar is Chat / Approvals / Artifacts / Settings; home is a greeting + the chat; live-events panel and dashboard stats removed (also trims egress). Marketing copy no longer names the model provider (privacy policy still discloses it).

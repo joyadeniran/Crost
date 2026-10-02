@@ -51,7 +51,7 @@ export default async function MemosPage() {
           textAlign: 'center',
           padding: '60px 20px',
           color: 'var(--text-3)',
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 12,
         }}>
           <div style={{ fontSize: 28, marginBottom: 12 }}>Memo</div>

@@ -61,7 +61,7 @@ export function PrivacyPage() {
         </section>
         <section id="ai" className="legal-section">
           <h3>4. AI Agents and Data Processing</h3>
-          <p>Crost uses AI language models to power Orc and your department agents. The text of your goals, company context and related memos is sent to Google&apos;s Gemini API to generate plans and drafts, under Google&apos;s API terms. Crost never sends email or takes any other external action without your approval.</p>
+          <p>Crost uses AI language models to power Orc and your department agents. The text of your goals, company context and related memos is sent to our AI model provider (currently Google&apos;s Gemini API) to generate plans and drafts, under that provider&apos;s API terms. Crost never sends email or takes any other external action without your approval.</p>
         </section>
         <section id="third" className="legal-section">
           <h3>5. Third-Party Services</h3>

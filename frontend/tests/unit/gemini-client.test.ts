@@ -14,7 +14,13 @@ const { normalizeModel, WORKING_GEMINI_MODEL } = await import('@/lib/gemini-clie
 
 describe('normalizeModel', () => {
   it('strips the gemini/ provider prefix', () => {
-    expect(normalizeModel('gemini/gemini-2.5-flash')).toBe('gemini-2.5-flash')
+    expect(normalizeModel('gemini/gemini-3.8-flash')).toBe('gemini-3.8-flash')
+  })
+
+  it('remaps the retired gemini-2.5 family (404 for new API users) to the working model', () => {
+    expect(normalizeModel('gemini/gemini-2.5-flash')).toBe(WORKING_GEMINI_MODEL)
+    expect(normalizeModel('gemini-2.5-flash-lite')).toBe(WORKING_GEMINI_MODEL)
+    expect(normalizeModel('gemini-2.5-pro')).toBe(WORKING_GEMINI_MODEL)
   })
 
   it('remaps retired gemini-2.0-flash to the working model', () => {
@@ -28,9 +34,9 @@ describe('normalizeModel', () => {
     expect(normalizeModel('gemini-1.5-flash-002')).toBe(WORKING_GEMINI_MODEL)
   })
 
-  it('remaps AI-Studio-only preview IDs to the working model', () => {
+  it('remaps old 2.x preview IDs but keeps current 3.x preview IDs', () => {
     expect(normalizeModel('gemini-2.5-flash-preview-05-20')).toBe(WORKING_GEMINI_MODEL)
-    expect(normalizeModel('gemini/gemini-2.5-flash-preview-05-20')).toBe(WORKING_GEMINI_MODEL)
+    expect(normalizeModel('gemini-3.1-pro-preview')).toBe('gemini-3.1-pro-preview')
   })
 
   it('routes non-Gemini providers to the working Gemini model', () => {
@@ -40,7 +46,7 @@ describe('normalizeModel', () => {
   })
 
   it('passes through other valid Gemini model IDs unchanged', () => {
-    expect(normalizeModel('gemini-2.5-flash')).toBe('gemini-2.5-flash')
-    expect(normalizeModel('gemini-2.5-pro')).toBe('gemini-2.5-pro')
+    expect(normalizeModel('gemini-3.8-flash')).toBe('gemini-3.8-flash')
+    expect(normalizeModel('gemini-3.5-flash-lite')).toBe('gemini-3.5-flash-lite')
   })
 })

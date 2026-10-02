@@ -26,7 +26,7 @@ export function SyncFailedBadge({ personaId, slug }: Props) {
       <span
         title="Running in Direct LLM mode — tasks work normally, Orc RAG unavailable."
         style={{
-          fontFamily: 'var(--font-dm-mono, monospace)',
+          fontFamily: 'var(--font-dm-mono)',
           fontSize: 9,
           padding: '2px 7px',
           borderRadius: 4,
@@ -46,7 +46,7 @@ export function SyncFailedBadge({ personaId, slug }: Props) {
     <span
       title="Department not synced. Reload the dashboard to re-sync it."
       style={{
-        fontFamily: 'var(--font-dm-mono, monospace)',
+        fontFamily: 'var(--font-dm-mono)',
         fontSize: 9,
         padding: '2px 7px',
         borderRadius: 4,

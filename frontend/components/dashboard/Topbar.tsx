@@ -77,7 +77,7 @@ export function Topbar() {
                 borderRadius: '50%',
                 fontSize: 9,
                 fontWeight: 700,
-                fontFamily: 'var(--font-dm-mono, monospace)',
+                fontFamily: 'var(--font-dm-mono)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   formatOrcContextForPrompt,
   orcDecisionGate,
+  looksConversational,
   type OrcContextRow,
   type OrcDecision,
 } from '@/lib/orc-decision-gate'
@@ -53,6 +54,7 @@ vi.mock('@/lib/gemini-client', () => ({
     }
   },
   normalizeModel: (m: string) => m,
+  WORKING_GEMINI_MODEL: 'gemini-3.8-flash',
   makeGeminiModel: vi.fn(),
   getGeminiEmbedding: vi.fn().mockResolvedValue([]),
   GEMINI_FALLBACK_CHAIN: ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-flash'],
@@ -149,7 +151,7 @@ describe('orcDecisionGate', () => {
       risk_notes: [],
       followup_options: ['What can you do?', 'Set up my company'],
     })
-    const result = await orcDecisionGate('Who are you?', emptyContext)
+    const result = await orcDecisionGate('Explain what Crost is and who it is for', emptyContext)
     expect(result.mode).toBe('assistant')
     expect(result.confidence).toBeGreaterThanOrEqual(0.9)
   })
@@ -228,35 +230,60 @@ describe('orcDecisionGate', () => {
     expect(result.mode).toBe('escalate')
   })
 
+  // ── Chat-first: conversation never becomes a mission ─────────────────────
+
+  it.each(['hi', 'What can you do?', 'who are you', 'thanks!', 'help'])(
+    'answers "%s" directly (assistant) without calling the classifier',
+    async (msg) => {
+      vi.mocked(fetch).mockClear()
+      const result = await orcDecisionGate(msg, emptyContext)
+      expect(result.mode).toBe('assistant')
+      expect(fetch).not.toHaveBeenCalled()
+    }
+  )
+
+  it('falls back to assistant (not a plan) for a question when the classifier model is down', async () => {
+    mockLLMFailure(404)
+    const result = await orcDecisionGate('What is our runway looking like this quarter given spend?', emptyContext)
+    expect(result.mode).toBe('assistant')
+  })
+
+  it.each(['Write our investor pitch deck', 'Grow revenue', 'Draft a welcome email sequence for new signups'])(
+    'does not treat "%s" as chit-chat',
+    (msg) => {
+      expect(looksConversational(msg)).toBe(false)
+    }
+  )
+
   // ── Resilience ────────────────────────────────────────────────────────────
 
-  it('falls back to full_plan on HTTP error', async () => {
+  it('falls back to quick_plan on HTTP error', async () => {
     mockLLMFailure(503)
     const result = await orcDecisionGate('Do something complex', emptyContext)
-    expect(result.mode).toBe('full_plan')
+    expect(result.mode).toBe('quick_plan')
     expect(result.confidence).toBe(0.5)
   })
 
-  it('falls back to full_plan on invalid JSON from LLM', async () => {
+  it('falls back to quick_plan on invalid JSON from LLM', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({
         choices: [{ message: { content: 'This is not JSON at all' } }]
       }), { status: 200 })
     )
     const result = await orcDecisionGate('Plan something', emptyContext)
-    expect(result.mode).toBe('full_plan')
+    expect(result.mode).toBe('quick_plan')
   })
 
-  it('falls back to full_plan on unknown mode string', async () => {
+  it('falls back to quick_plan on unknown mode string', async () => {
     mockLLMResponse({ mode: 'hallucinated_mode', confidence: 0.9, reasoning: '...', risk_notes: [], followup_options: [] })
     const result = await orcDecisionGate('Do something', emptyContext)
-    expect(result.mode).toBe('full_plan')
+    expect(result.mode).toBe('quick_plan')
   })
 
-  it('falls back to full_plan on fetch network error', async () => {
+  it('falls back to quick_plan on fetch network error', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error('Network failure'))
     const result = await orcDecisionGate('Do something', emptyContext)
-    expect(result.mode).toBe('full_plan')
+    expect(result.mode).toBe('quick_plan')
     expect(result.confidence).toBe(0.5)
   })
 
@@ -264,7 +291,7 @@ describe('orcDecisionGate', () => {
 
   it('clamps confidence to [0.5, 1.0]', async () => {
     mockLLMResponse({ mode: 'assistant', confidence: 0.1, reasoning: 'test', risk_notes: [], followup_options: [] })
-    const low = await orcDecisionGate('hi', emptyContext)
+    const low = await orcDecisionGate('Review everything about our strategy and positioning', emptyContext)
     expect(low.confidence).toBe(0.5)
 
     mockLLMResponse({ mode: 'quick_plan', confidence: 9.9, reasoning: 'test', risk_notes: [], followup_options: [] })
