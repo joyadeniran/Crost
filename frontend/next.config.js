@@ -38,7 +38,7 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      // Pre-merge URLs: the app used to live at app.crosthq.com/dashboard.
+      // Legacy /dashboard and /onboarding URLs now live under /app.
       { source: '/dashboard', destination: '/app', permanent: true },
       { source: '/dashboard/:path*', destination: '/app/:path*', permanent: true },
       { source: '/onboarding/:path*', destination: '/app/onboarding/:path*', permanent: true },

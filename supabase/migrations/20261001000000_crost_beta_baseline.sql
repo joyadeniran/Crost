@@ -861,7 +861,7 @@ CREATE TRIGGER company_profile_updated_at
 
 -- ---- merged from cloudsql_fixes_v13.10.sql ----
 -- Cloud SQL parity fixes — Session v13.10 (2026-06-11)
--- Applied to crost-hq:us-central1:crost-db to unblock the tool-execution + goal flow.
+-- Applied to the pre-beta production database to unblock the tool-execution + goal flow.
 -- Idempotent. The original cloudsql_migration.sql was an incomplete port of
 -- supabase/migrations/* — these statements close the gaps the app code depends on.
 
@@ -931,7 +931,7 @@ ALTER TABLE goal_tasks ALTER COLUMN orc_notes DROP NOT NULL;
 -- ---- merged from cloudsql_fixes_v13.17.sql ----
 -- Cloud SQL parity fix — Session v13.17 (2026-07-02)
 -- Phase 3 (10x rebuild): state-machine characterization work surfaced a live
--- production bug. Confirmed against the live DB (crost-hq:us-central1:crost-db):
+-- production bug. Confirmed against the live DB (pre-beta production database):
 --   SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'goals_status_check';
 --   -> CHECK ((status = ANY (ARRAY['pending','planning','awaiting_approval','executing','completed','failed'])))
 --

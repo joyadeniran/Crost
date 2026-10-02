@@ -47,8 +47,8 @@ Optional: `TOKEN_ENCRYPTION_KEY` (+ `GOOGLE_OAUTH_CLIENT_ID/SECRET`) to enable "
 
 - Framework: Next.js · **Root Directory: `frontend`** · Node 20+.
 - Domain: add `crosthq.com` (+ `www`) to the project, then point DNS at Vercel.
-  `app.crosthq.com` can be removed or 301-redirected to `https://crosthq.com/app`
-  (the app also redirects the old `/dashboard` and `/onboarding` paths into `/app`).
+  Delete any DNS records for retired subdomains. The app also redirects the old `/dashboard`
+  and `/onboarding` paths into `/app`.
 - Function duration: LLM routes set `maxDuration = 300`; this needs Fluid Compute (default on
   new projects) or a Pro plan. On a plan capped at 60s, planning/worker calls can time out.
 

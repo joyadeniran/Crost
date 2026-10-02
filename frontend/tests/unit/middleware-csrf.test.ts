@@ -12,7 +12,7 @@ import { isTrustedOrigin, checkInternalSecretHeader, middleware } from '@/middle
 const ORIGINAL_ENV = process.env
 
 beforeEach(() => {
-  process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_APP_URL: 'https://crost-frontend-3ge3tx36sa-uc.a.run.app', WORKER_INTERNAL_SECRET: 'test-secret' }
+  process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_APP_URL: 'https://preview.example.test', WORKER_INTERNAL_SECRET: 'test-secret' }
 })
 
 describe('isTrustedOrigin', () => {
@@ -21,11 +21,11 @@ describe('isTrustedOrigin', () => {
   })
 
   it('allows an Origin that exactly matches the request self-origin', () => {
-    expect(isTrustedOrigin('https://crost-frontend-3ge3tx36sa-uc.a.run.app', 'https://crost-frontend-3ge3tx36sa-uc.a.run.app')).toBe(true)
+    expect(isTrustedOrigin('https://preview.example.test', 'https://preview.example.test')).toBe(true)
   })
 
   it('allows the canonical NEXT_PUBLIC_APP_URL even when self-origin differs (custom domain hit)', () => {
-    expect(isTrustedOrigin('https://crosthq.com', 'https://crost-frontend-3ge3tx36sa-uc.a.run.app')).toBe(true)
+    expect(isTrustedOrigin('https://crosthq.com', 'https://preview.example.test')).toBe(true)
   })
 
   it('allows the hardcoded crosthq.com domains', () => {
@@ -38,7 +38,7 @@ describe('isTrustedOrigin', () => {
   })
 
   it('ignores a trailing slash difference when comparing origins', () => {
-    expect(isTrustedOrigin('https://app.crosthq.com/', 'https://crosthq.com')).toBe(true)
+    expect(isTrustedOrigin('https://crosthq.com/', 'https://crosthq.com')).toBe(true)
   })
 })
 
@@ -64,7 +64,7 @@ describe('middleware() — CSRF gate on /api/* routes', () => {
     const headers: Record<string, string> = {}
     if (opts.origin) headers.origin = opts.origin
     if (opts.internalSecret) headers['x-crost-internal-secret'] = opts.internalSecret
-    return new NextRequest('https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/goals', {
+    return new NextRequest('https://preview.example.test/api/goals', {
       method: opts.method,
       headers,
     })
@@ -81,7 +81,7 @@ describe('middleware() — CSRF gate on /api/* routes', () => {
   })
 
   it('allows a same-origin POST', async () => {
-    const res = await middleware(apiRequest({ method: 'POST', origin: 'https://crost-frontend-3ge3tx36sa-uc.a.run.app' }))
+    const res = await middleware(apiRequest({ method: 'POST', origin: 'https://preview.example.test' }))
     expect(res.status).toBe(200)
   })
 

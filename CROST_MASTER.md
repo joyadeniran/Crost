@@ -2193,3 +2193,13 @@ Suspend/delete the old Render services (`crost-worker`, `crost-frontend`, `crost
 ## Session v14.2 — Waitlist retired from the landing page
 **Date**: 2026-10-02 **Status**: ✅ COMPLETE
 The beta is open signup, so the landing CTA is now a single "Try the beta" button to `/signup?source=landing`; the email form, "founders waiting" counter and Brevo mention are gone. `/api/waitlist` and the `waitlist` table are kept dormant (insert-only, rate-limited) — remove with their test if confirmed unneeded.
+
+---
+
+## Session v14.3 — Supabase reconnect, legacy data salvage, old-URL purge
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE (dashboard-only steps listed below)
+- Applied the baseline to Supabase `vgktzhlfpaetgiqjpnbu` (old objects archived to schema `legacy`, nothing dropped).
+- Salvaged legacy data in-database (no egress): 36 per-user departments (fixed 5 slugs only), 222 goals, 378 tasks, 37 approvals, 493 memos, 1281 events, 271 artifacts, 453 suggested actions, 11 profiles, 11 consents, 103 system_config rows, usage logs, tool executions. Safety pass: in-flight goals → `failed`, open tasks → `skipped`, unexecuted approvals → `expired`, so nothing resumes or fires. OAuth tokens (`connections`) deliberately NOT migrated (were unsealed) — users reconnect Google.
+- Old artifact files stay downloadable: `lib/storage.ts getObject` falls back to the pre-beta bucket named after the logical bucket. Legacy buckets set private.
+- Removed every reference to `app.crosthq.com` and the old Cloud Run/GCS hosts from code, tests, docs and config; hackathon `CHALLENGE_SUBMISSION.md` archived; `supabase/.temp` untracked.
+- Dashboard-only: Supabase Auth → URL Configuration (Site URL `https://crosthq.com`, redirect `https://crosthq.com/auth/callback`; remove the old app subdomain), DNS cleanup of `app`/`www`, Render suspension.

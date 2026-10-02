@@ -61,13 +61,13 @@ describe('GET /api/artifacts/[id]/download', () => {
   })
 
   it('returns 422 for a file_url with no recognizable /artifacts/ marker', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/other-bucket/foo.pdf', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/other-bucket/foo.pdf', title: 'T', created_by: 'user-1' }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.status).toBe(422)
   })
 
   it('derives the object path after the /artifacts/ marker, single-prefixed', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/goals/g1/report.pdf', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/bucket/artifacts/goals/g1/report.pdf', title: 'T', created_by: 'user-1' }
     mockGetObjectResult = { data: Buffer.from('pdf bytes'), error: null }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.status).toBe(200)
@@ -75,7 +75,7 @@ describe('GET /api/artifacts/[id]/download', () => {
   })
 
   it('does not choke on legacy double-prefixed URLs — passes the raw remainder through (appStorage collapses it)', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/artifacts/goals/g1/report.pdf', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/bucket/artifacts/artifacts/goals/g1/report.pdf', title: 'T', created_by: 'user-1' }
     mockGetObjectResult = { data: Buffer.from('pdf bytes'), error: null }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.status).toBe(200)
@@ -85,7 +85,7 @@ describe('GET /api/artifacts/[id]/download', () => {
   })
 
   it('sets Content-Type by extension and Content-Disposition attachment header', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/report.docx', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/bucket/artifacts/report.docx', title: 'T', created_by: 'user-1' }
     mockGetObjectResult = { data: Buffer.from('docx bytes'), error: null }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.headers.get('Content-Type')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
@@ -95,7 +95,7 @@ describe('GET /api/artifacts/[id]/download', () => {
   })
 
   it('returns 304 without touching storage when If-None-Match matches (egress)', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/report.docx', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/bucket/artifacts/report.docx', title: 'T', created_by: 'user-1' }
     getObjectMock.mockClear()
     const req = new NextRequest('http://localhost/api/artifacts/art-1/download', { headers: { 'if-none-match': '"art-1"' } })
     const res = await GET(req, { params: { id: 'art-1' } })
@@ -104,7 +104,7 @@ describe('GET /api/artifacts/[id]/download', () => {
   })
 
   it('returns 404 when the object is missing from GCS', async () => {
-    mockArtifact = { id: 'art-1', file_url: 'https://storage.googleapis.com/bucket/artifacts/missing.pdf', title: 'T', created_by: 'user-1' }
+    mockArtifact = { id: 'art-1', file_url: 'https://storage.example.test/bucket/artifacts/missing.pdf', title: 'T', created_by: 'user-1' }
     mockGetObjectResult = { data: null, error: { message: 'not found' } }
     const res = await GET(makeReq(), { params: { id: 'art-1' } })
     expect(res.status).toBe(404)
