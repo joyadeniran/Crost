@@ -2239,3 +2239,18 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - Mission card now fetches progress immediately (`startPolling({ immediate: true })`).
 - Tests: `task-answer.test.ts` (auth, 404, 409, plan+row write, assume, last-step close), worker-prompt founder-input test, polling immediate test. 820 unit tests green.
 - Ops note: the four old Render services (`crost-frontend`, `crost-worker`, `crost-litellm`, `crost-approval-expiry`) were failing builds on every merge (their root `package.json` / `litellm/` no longer exist). Founder suspended them; they can be deleted — Vercel replaces all four.
+
+---
+
+## Session v15.2 — Deliverables: simple reading panel + format fixes
+**Date**: 2026-10-02 **Status**: ✅ COMPLETE
+Divergences found on the Deliverables page and in the files it served, all fixed:
+- **Drawer was dark-themed on the light app:** hard-coded `#1a1a20` gradient with `var(--text)` ink → filename and the active "Preview" tab were invisible. The card's ⋯ menu had the same dark-on-dark problem.
+- **Blank preview box:** Office Online / PDF iframes and `<Image>` pointed at the storage URL, but the bucket is private, so they rendered empty (also leaked file URLs to Microsoft). Removed all embedded viewers and the card thumbnails.
+- **Dead tabs:** Lineage read through the browser Supabase stub (a deliberate no-op) → always "not found"; suggested-action chips did the same → always empty; Sources listed KB files (cut from beta). Removed the tabs, lineage, sources and chips from the panel.
+- **Wrong actions:** footer always showed "Delete", which 409s for approved deliverables. Actions now follow status: drafts get Approve / Make changes / Discard; approved get Make changes / Archive. "Send for review" removed: the founder is the only reviewer and draft->active is a legal transition, so the review step did nothing. Legacy `review` rows are shown and handled as drafts.
+- **Filename & title noise:** panel showed the timestamped storage key; cards showed "Output: …". New `lib/artifact-view.ts` (`displayTitle`, `downloadFileName`, `fileExtension`, `toReadableView`) — content renders as summary + headed sections + code files, never raw JSON (invariant #4). Full body fetched from `GET /api/artifacts/[id]` on open (list query truncates to 1500 chars).
+- **Copy exported as .xlsx with raw JSON in a cell:** `containsTableLikeData` treated an array of `{heading, content}` sections as a table. Prose arrays are now excluded → .docx; the docx generic fallback uses the output's own title/summary/sections instead of "Department Output / Heading: / Content:".
+- **Code bundle downloads were empty:** `transformToCode` ignored `files[]` (only header comments). Multi-file bundles now export as one .md with each file fenced.
+- Grid: filter chips only for types present, readable active chip, "Search deliverables", single-column on phones; empty state matches the header copy.
+- Tests: `artifact-view.test.ts`; regression cases in `artifact-transformers.test.ts` (fail without the fix). 829+ unit tests green, `tsc` clean. Already-generated files keep their old format (artifacts are immutable); new runs get the fixed format.

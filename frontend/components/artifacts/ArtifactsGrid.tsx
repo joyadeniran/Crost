@@ -28,8 +28,9 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
     })
   }, [initialArtifacts, searchTerm, activeFilter, goalMap])
 
-  const filterOptions: { label: string, value: FilterType }[] = [
-    { label: 'All', value: 'all' },
+  // Only offer filters for types that actually exist in the list (most founders
+  // only ever have documents and spreadsheets — eight empty chips was noise).
+  const ALL_FILTERS: { label: string, value: FilterType }[] = [
     { label: 'Documents', value: 'document' },
     { label: 'Spreadsheets', value: 'spreadsheet' },
     { label: 'Presentations', value: 'presentation' },
@@ -38,32 +39,27 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
     { label: 'Data', value: 'data' },
     { label: 'Code', value: 'code' },
   ]
+  const presentTypes = new Set(initialArtifacts.map(a => a.artifact_type))
+  const typeFilters = ALL_FILTERS.filter(f => presentTypes.has(f.value as Artifact['artifact_type']))
+  const filterOptions = typeFilters.length > 1 ? [{ label: 'All', value: 'all' as FilterType }, ...typeFilters] : []
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Search and Filters */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-        padding: '16px',
-        background: 'rgba(28,25,23,0.02)',
-        borderRadius: 12,
-        border: '1px solid var(--border)'
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ position: 'relative', width: '100%' }}>
           <input
             type="text"
-            placeholder="Search artifacts or goals..."
+            placeholder="Search deliverables"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               width: '100%',
               padding: '10px 16px',
-              background: 'var(--bg-3)',
+              background: 'var(--bg-2)',
               border: '1px solid var(--border)',
-              borderRadius: 8,
+              borderRadius: 10,
               fontSize: 14,
               color: 'var(--text)',
               outline: 'none'
@@ -71,7 +67,7 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
           />
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {filterOptions.length > 0 && (<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {filterOptions.map(opt => (
             <button
               key={opt.value}
@@ -87,14 +83,14 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
                 background: activeFilter === opt.value ? 'var(--accent)' : 'var(--bg-3)',
-                color: activeFilter === opt.value ? '#000' : 'var(--text-3)',
+                color: activeFilter === opt.value ? '#fff' : 'var(--text-3)',
                 border: activeFilter === opt.value ? '1px solid var(--accent)' : '1px solid var(--border)',
               }}
             >
               {opt.label}
             </button>
           ))}
-        </div>
+        </div>)}
       </div>
 
       {/* Grid */}
@@ -109,12 +105,12 @@ export function ArtifactsGrid({ initialArtifacts, goalMap, deptColorMap }: Props
           borderRadius: 16,
           border: '1px dashed rgba(28,25,23,0.05)',
         }}>
-          No results found matching your search and filter.
+          No deliverables match that search.
         </div>
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
           gap: 16,
         }}>
           {filteredArtifacts.map(artifact => (

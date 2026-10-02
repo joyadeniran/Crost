@@ -164,6 +164,32 @@ export async function transformToDocument(data: any): Promise<Buffer> {
   }
 
   // ─── Generic fallback — any JSON ─────────────────────────────────────────
+  // Use the output's own title/summary/sections when present, so a copy doc reads
+  // "Hero Section / <copy>" instead of "Title: … / Heading: … / Content: …".
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const ownTitle = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : null;
+    addTitle(children, ownTitle ?? buildTitle(data, 'Department Output'));
+    if (typeof data.summary === 'string') addSummary(children, data.summary);
+    if (Array.isArray(data.sections)) {
+      for (const sec of data.sections) {
+        if (sec && typeof sec === 'object' && !Array.isArray(sec)) {
+          const heading = sec.heading ?? sec.title ?? sec.name;
+          const text = sec.content ?? sec.body ?? sec.text ?? sec.copy;
+          if (typeof heading === 'string') addHeading2(children, heading);
+          if (typeof text === 'string') addBody(children, text);
+          else renderValue(children, text ?? sec, 1);
+        } else {
+          renderValue(children, sec, 1);
+        }
+      }
+    }
+    const rest = Object.fromEntries(
+      Object.entries(data).filter(([k]) => !['title', 'summary', 'sections', 'status', 'skill', 'format'].includes(k))
+    );
+    renderValue(children, rest);
+    return buildDoc(children);
+  }
+
   addTitle(children, buildTitle(data, 'Department Output'));
   renderValue(children, data);
   return buildDoc(children);

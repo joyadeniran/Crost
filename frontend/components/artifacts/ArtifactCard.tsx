@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Artifact, ArtifactSources, GoalTask, Goal } from '@/types'
-import Image from 'next/image'
-import { SuggestedActionChips } from '@/components/suggested-actions/SuggestedActionChips'
-import { supabaseClient } from '@/lib/supabase-browser'
+// Deliverables: one simple card + one simple reading panel.
+// No embedded viewers (the bucket is private, so Office/PDF iframes and direct
+// file URLs render blank), no tabs, no lineage/citations — just the content,
+// in plain text, and the actions that apply to its status.
+
+import { useEffect, useMemo, useState } from 'react'
+import { Artifact } from '@/types'
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 import { toast } from '@/components/ui/toaster'
+import { displayTitle, downloadFileName, fileExtension, toReadableView, ReadableView } from '@/lib/artifact-view'
 
 interface Props {
   artifact: Artifact
@@ -16,30 +19,6 @@ interface Props {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function inferFilename(artifact: Artifact): { name: string; ext: string } {
-  if (artifact.file_url) {
-    const raw = artifact.file_url.split('/').pop()?.split('?')[0] ?? ''
-    const parts = raw.split('.')
-    if (parts.length >= 2) {
-      const ext = parts.pop()!.toLowerCase()
-      const name = parts.join('.')
-      return { name: decodeURIComponent(name), ext }
-    }
-  }
-  const title = artifact.title.replace(/[^a-zA-Z0-9\s_-]/g, '').replace(/\s+/g, '_')
-  const extMap: Record<string, string> = {
-    spreadsheet: 'xlsx',
-    document: 'docx',
-    image: 'png',
-    data: 'json',
-    code: 'txt',
-    presentation: 'pptx',
-    pdf: 'pdf',
-  }
-  const ext = extMap[artifact.artifact_type] ?? 'txt'
-  return { name: title, ext }
-}
-
 function formatBytes(bytes: number | null): string {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
@@ -48,9 +27,7 @@ function formatBytes(bytes: number | null): string {
 }
 
 function timeAgo(dateString: string): string {
-  const date = new Date(dateString)
-  const now = new Date()
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
   if (seconds < 60) return 'just now'
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
@@ -58,394 +35,132 @@ function timeAgo(dateString: string): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return new Date(dateString).toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function extractPreviewText(raw: string | null): string {
-  if (!raw) return 'No preview available.'
-  const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-  try {
-    const parsed = JSON.parse(stripped)
-    if (typeof parsed === 'object' && parsed !== null) {
-      const pick = (obj: any, keys: string[]): string => {
-        for (const k of keys) {
-          if (typeof obj[k] === 'string' && obj[k].length > 10) return obj[k]
-        }
-        const vals = Object.values(obj).filter(v => typeof v === 'string' && (v as string).length > 10) as string[]
-        return vals[0] ?? ''
-      }
-      const topLevel = pick(parsed, ['summary', 'executive_summary', 'overview', 'description', 'title'])
-      if (topLevel) return topLevel.slice(0, 180)
-      for (const v of Object.values(parsed)) {
-        if (typeof v === 'object' && v !== null) {
-          const nested = pick(v as any, ['summary', 'overview', 'description'])
-          if (nested) return nested.slice(0, 180)
-        }
-      }
-      return 'Structured data. Download to view full content.'
-    }
-    return stripped.slice(0, 180)
-  } catch {
-    return stripped.slice(0, 180)
-  }
+function snippet(view: ReadableView): string {
+  const text = view.summary || view.sections[0]?.text || (view.files[0] ? `${view.files.length} file${view.files.length === 1 ? '' : 's'}` : '')
+  return text.replace(/\s+/g, ' ').slice(0, 160)
 }
 
-// ─── File Type Icon ───────────────────────────────────────────────────────────
-
-const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
-  xlsx: { bg: 'rgba(0,180,100,0.12)', fg: '#00c866' },
-  csv:  { bg: 'rgba(0,180,100,0.12)', fg: '#00c866' },
-  docx: { bg: 'rgba(40,130,255,0.12)', fg: '#5aabff' },
-  doc:  { bg: 'rgba(40,130,255,0.12)', fg: '#5aabff' },
-  pdf:  { bg: 'rgba(255,70,70,0.12)',  fg: '#ff7070' },
-  png:  { bg: 'rgba(200,100,255,0.12)', fg: '#cc66ff' },
-  jpg:  { bg: 'rgba(200,100,255,0.12)', fg: '#cc66ff' },
-  json: { bg: 'rgba(255,180,0,0.12)', fg: '#ffb800' },
-  md:   { bg: 'rgba(80,200,255,0.12)', fg: '#50c8ff' },
+const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
+  draft:      { label: 'Draft',     color: 'var(--amber)',  bg: 'rgba(183,121,31,0.10)' },
+  review:     { label: 'Draft',     color: 'var(--amber)',  bg: 'rgba(183,121,31,0.10)' }, // legacy status, shown as Draft
+  active:     { label: 'Approved',  color: 'var(--accent)', bg: 'var(--accent-dim)' },
+  paused:     { label: 'Paused',    color: 'var(--text-3)', bg: 'var(--bg-3)' },
+  deprecated: { label: 'Archived',  color: 'var(--text-3)', bg: 'var(--bg-3)' },
 }
 
-function FileTypeIcon({ ext, size = 40 }: { ext: string; size?: number }) {
-  const c = EXT_COLORS[ext] ?? { bg: 'rgba(28,25,23,0.06)', fg: 'var(--text-2)' }
-  const s = { width: size, height: size, display: 'block' } as const
-  return (
-    <div style={{
-      width: size,
-      height: size,
-      borderRadius: 10,
-      background: c.bg,
-      color: c.fg,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontFamily: 'var(--font-dm-mono)',
-      fontSize: size < 30 ? 9 : 11,
-      fontWeight: 700,
-      textTransform: 'uppercase',
-      letterSpacing: '0.04em',
-    }}>
-      {ext}
-    </div>
-  )
-}
-
-function ExtBadge({ ext }: { ext: string }) {
-  const c = EXT_COLORS[ext] ?? { bg: 'rgba(28,25,23,0.06)', fg: 'var(--text-2)' }
-  return (
-    <span
-      className="crost-badge"
-      style={{
-        background: c.bg,
-        color: c.fg,
-        borderColor: `${c.fg}20`,
-      }}
-    >
-      {ext}
-    </span>
-  )
-}
-
-// ─── Citations Section ────────────────────────────────────────────────────────
-
-function CitationsSection({ sources }: { sources?: ArtifactSources }) {
-  const memoCount = sources?.memo_ids?.length ?? 0
-  const kbCount = sources?.kb_file_ids?.length ?? 0
-  const toolCount = sources?.tool_calls?.length ?? 0
-  const hasAnySources = memoCount > 0 || kbCount > 0 || toolCount > 0
-
-  return (
-    <div>
-      <div style={{
-        fontSize: 10, color: 'var(--text-4)',
-        fontFamily: 'var(--font-dm-mono)',
-        letterSpacing: '0.08em', marginBottom: 10,
-      }}>
-        SOURCES
-      </div>
-      <div style={{
-        background: 'rgba(28,25,23,0.02)',
-        border: '1px solid rgba(28,25,23,0.05)',
-        borderRadius: 10,
-        padding: '14px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      }}>
-        {!hasAnySources ? (
-          <span style={{ fontSize: 12, color: 'var(--text-4)', fontStyle: 'italic' }}>
-            No citations recorded for this artefact.
-          </span>
-        ) : (
-          <>
-            {memoCount > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
-                  color: 'rgba(90,171,255,0.9)',
-                  background: 'rgba(40,130,255,0.08)',
-                  border: '1px solid rgba(40,130,255,0.18)',
-                  borderRadius: 5, padding: '2px 7px',
-                }}>MEMOS</span>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {memoCount} memo{memoCount !== 1 ? 's' : ''} referenced
-                </span>
-              </div>
-            )}
-            {kbCount > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
-                  color: 'rgba(0,200,150,0.9)',
-                  background: 'rgba(0,200,150,0.08)',
-                  border: '1px solid rgba(0,200,150,0.18)',
-                  borderRadius: 5, padding: '2px 7px',
-                }}>KB FILES</span>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {kbCount} knowledge base file{kbCount !== 1 ? 's' : ''} referenced
-                </span>
-              </div>
-            )}
-            {toolCount > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontSize: 10, fontFamily: 'var(--font-dm-mono)',
-                  color: 'rgba(255,180,0,0.9)',
-                  background: 'rgba(255,180,0,0.08)',
-                  border: '1px solid rgba(255,180,0,0.18)',
-                  borderRadius: 5, padding: '2px 7px',
-                }}>TOOLS</span>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {toolCount} tool call{toolCount !== 1 ? 's' : ''} made
-                </span>
-                <details style={{ marginLeft: 4 }}>
-                  <summary style={{ fontSize: 11, color: 'var(--text-4)', cursor: 'pointer', listStyle: 'none' }}>
-                    details ▾
-                  </summary>
-                  <div style={{
-                    marginTop: 8,
-                    background: 'rgba(28,25,23,0.10)',
-                    borderRadius: 6,
-                    padding: '8px 10px',
-                    fontSize: 10,
-                    color: 'var(--text-3)',
-                    overflow: 'auto',
-                    border: '1px solid rgba(28,25,23,0.06)',
-                    maxHeight: 140,
-                    fontFamily: 'var(--font-dm-mono)',
-                  }}>
-                    {sources!.tool_calls.map((tc: any, i) => (
-                      <div key={i} style={{ 
-                        paddingBottom: i < toolCount - 1 ? 6 : 0,
-                        marginBottom: i < toolCount - 1 ? 6 : 0,
-                        borderBottom: i < toolCount - 1 ? '1px solid rgba(28,25,23,0.04)' : 'none'
-                      }}>
-                        <div style={{ color: 'rgba(255,180,0,0.8)', fontWeight: 600 }}>
-                          {tc.service ? `${tc.service}.${tc.action || 'call'}` : (typeof tc === 'string' ? tc : 'unnamed_tool')}
-                        </div>
-                        {tc.executed_at && (
-                          <div style={{ opacity: 0.5, fontSize: 9 }}>{new Date(tc.executed_at).toLocaleTimeString()}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-// ─── Sandbox Status Badge ─────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  draft:       { label: 'Draft',  color: '#b7791f', bg: 'rgba(245,166,35,0.12)',  border: 'rgba(245,166,35,0.3)' },
-  review:      { label: 'In Review',   color: '#50c8ff', bg: 'rgba(80,200,255,0.12)', border: 'rgba(80,200,255,0.3)' },
-  active:      { label: 'Published',   color: '#00c866', bg: 'rgba(0,200,100,0.12)',  border: 'rgba(0,200,100,0.3)' },
-  paused:      { label: 'Paused',      color: '#aaa',    bg: 'rgba(170,170,170,0.1)', border: 'rgba(170,170,170,0.25)' },
-  deprecated:  { label: 'Archived',    color: '#888',    bg: 'rgba(136,136,136,0.08)', border: 'rgba(136,136,136,0.2)' },
-  discarded:   { label: 'Discarded',   color: '#ff6060', bg: 'rgba(255,96,96,0.1)',   border: 'rgba(255,96,96,0.25)' },
-}
-
-function SandboxBadge({ status }: { status?: string }) {
-  if (!status || status === 'active') return null
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG['draft']
+function StatusPill({ status }: { status?: string }) {
+  const s = STATUS_LABEL[status ?? 'draft'] ?? STATUS_LABEL.draft
   return (
     <span style={{
-      position: 'absolute',
-      top: 8,
-      left: 8,
-      zIndex: 20,
-      fontSize: 9,
-      fontFamily: 'var(--font-dm-mono)',
-      fontWeight: 700,
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      color: cfg.color,
-      background: cfg.bg,
-      border: `1px solid ${cfg.border}`,
-      borderRadius: 4,
-      padding: '3px 7px',
-      backdropFilter: 'blur(4px)',
+      fontSize: 10, fontFamily: 'var(--font-dm-mono)', fontWeight: 600, letterSpacing: '0.05em',
+      textTransform: 'uppercase', color: s.color, background: s.bg, borderRadius: 6, padding: '2px 8px',
     }}>
-      {cfg.label}
+      {s.label}
     </span>
   )
 }
 
-// ─── ArtifactCard ─────────────────────────────────────────────────────────────
+function ExtLabel({ ext }: { ext: string | null }) {
+  if (!ext) return null
+  return (
+    <span style={{
+      fontSize: 10, fontFamily: 'var(--font-dm-mono)', fontWeight: 600, letterSpacing: '0.05em',
+      textTransform: 'uppercase', color: 'var(--text-2)', background: 'var(--bg-3)',
+      border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px',
+    }}>
+      {ext}
+    </span>
+  )
+}
+
+const btnBase: React.CSSProperties = {
+  padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+  fontFamily: 'var(--font-dm-sans, sans-serif)', cursor: 'pointer',
+  border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)',
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
 
 export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
-  const [showDrawer, setShowDrawer] = useState(false)
-  const [activeTab, setActiveTab] = useState<'preview' | 'details' | 'lineage'>('preview')
+  const [open, setOpen] = useState(false)
+  const [fullBody, setFullBody] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
-  const isImmutable = ['active', 'paused', 'deprecated'].includes(artifact.status ?? '')
+  const title = displayTitle(artifact.title)
+  const ext = fileExtension(artifact.file_url)
+  const size = formatBytes(artifact.file_size)
+  const status = artifact.status ?? 'draft'
+  const isDraft = status === 'draft' || status === 'review'
 
-  const [lineageData, setLineageData] = useState<(GoalTask & { goals: Goal | null }) | null>(null)
-  const [loadingLineage, setLoadingLineage] = useState(false)
+  const listView = useMemo(() => toReadableView(artifact.body), [artifact.body])
+  const view = useMemo(() => (fullBody !== null ? toReadableView(fullBody) : listView), [fullBody, listView])
+
+  // The list query truncates bodies; load the full one when the panel opens.
+  useEffect(() => {
+    if (!open || fullBody !== null) return
+    let cancelled = false
+    fetch(`/api/artifacts/${artifact.id}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (!cancelled) setFullBody(typeof j?.data?.body === 'string' ? j.data.body : artifact.body ?? '') })
+      .catch(() => { if (!cancelled) setFullBody(artifact.body ?? '') })
+    return () => { cancelled = true }
+  }, [open, fullBody, artifact.id, artifact.body])
 
   useEffect(() => {
-    if (showDrawer && activeTab === 'lineage' && artifact.task_id && !lineageData) {
-      const fetchLineage = async () => {
-        setLoadingLineage(true)
-        try {
-          const { data, error } = await supabaseClient
-            .from('goal_tasks')
-            .select(`
-              *,
-              goals (
-                title,
-                founder_input
-              )
-            `)
-            .eq('task_id', artifact.task_id)
-            .single()
-          if (error) throw error
-          setLineageData(data as any)
-        } catch (err) {
-          console.error('[Lineage Fetch Error]', err)
-        } finally {
-          setLoadingLineage(false)
-        }
-      }
-      fetchLineage()
-    }
-  }, [showDrawer, activeTab, artifact.task_id, lineageData])
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
-  const createdAt = new Date(artifact.created_at)
-  const { name, ext } = inferFilename(artifact)
-  const displayFilename = `${name}.${ext}`
-  const previewText = extractPreviewText(artifact.body)
-  const fileSize = formatBytes(artifact.file_size)
-  const iconColor = EXT_COLORS[ext]?.fg ?? 'var(--accent)'
-  const iconBg = EXT_COLORS[ext]?.bg ?? 'rgba(0,255,170,0.08)'
-  const deptBadgeColor = deptColor || iconColor
-
-  const downloadArtifact = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const download = async () => {
+    if (!artifact.file_url) { toast('This deliverable has no file to download.', 'error'); return }
     setDownloading(true)
     try {
-      let downloadUrl = ''
-      let fileName = displayFilename
-
-      if (artifact.file_url) {
-        // The GCS bucket is private — stream through the authenticated proxy
-        // (which verifies ownership) rather than fetching the public URL directly.
-        const res = await fetch(`/api/artifacts/${artifact.id}/download`)
-        if (!res.ok) throw new Error(`Download failed (${res.status})`)
-        const blob = await res.blob()
-        downloadUrl = URL.createObjectURL(blob)
-        fileName = artifact.file_url.split('/').pop()?.split('?')[0] ?? displayFilename
-      } else if (artifact.preview_url) {
-        const res = await fetch(artifact.preview_url)
-        const blob = await res.blob()
-        downloadUrl = URL.createObjectURL(blob)
-      } else {
-        // No fallback to body — file_url is required per spec
-        throw new Error('No downloadable file available')
-      }
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
-    } catch (err) {
-      console.error('[Download Failed]', err)
-      const fallback = artifact.file_url
-        ? `/api/artifacts/${artifact.id}/download`
-        : (artifact.preview_url || '')
-      if (fallback) window.open(fallback, '_blank')
+      const res = await fetch(`/api/artifacts/${artifact.id}/download`)
+      if (!res.ok) throw new Error(String(res.status))
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = downloadFileName(artifact.title, ext)
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      toast('Download failed. Please try again.', 'error')
     } finally {
       setDownloading(false)
     }
   }
 
-  const deleteArtifact = async () => {
-    setIsDeleting(true)
-    try {
-      const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        if (res.status === 409) {
-          toast(err.error || 'Cannot discard a published artifact. Use Deprecate instead.', 'error')
-          return
-        }
-        throw new Error('Delete failed')
-      }
-      toast('Artifact discarded', 'success')
-      window.location.reload()
-    } catch {
-      toast('Failed to discard artifact. Please try again.', 'error')
-      setIsDeleting(false)
-    } finally {
-      setShowDeleteConfirm(false)
-    }
-  }
-
-  const updateStatus = async (status: string) => {
-    setStatusUpdating(true)
-    setMenuOpen(false)
+  const setStatus = async (next: string, okMsg: string) => {
+    setBusy(true)
     try {
       const res = await fetch(`/api/artifacts/${artifact.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: next }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        toast(err.error || `Failed to update to ${status}`, 'error')
+        toast(err.error || 'Could not update this deliverable.', 'error')
         return
       }
-      const statusLabels: Record<string, string> = {
-        review: 'Moved to Review',
-        active: 'Published',
-        paused: 'Paused',
-        deprecated: 'Archived',
-        discarded: 'Discarded',
-      }
-      toast(statusLabels[status] ?? `Updated to ${status}`, 'success')
+      toast(okMsg, 'success')
       window.location.reload()
-    } catch {
-      toast(`Failed to update status`, 'error')
     } finally {
-      setStatusUpdating(false)
+      setBusy(false)
     }
   }
 
-  const initiateRevision = async () => {
-    setStatusUpdating(true)
-    setMenuOpen(false)
+  const makeChanges = async () => {
+    setBusy(true)
     try {
       const res = await fetch(`/api/artifacts/${artifact.id}/make-changes`, {
         method: 'POST',
@@ -453,700 +168,228 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        toast(err.error || 'Failed to create revision task', 'error')
+        toast(err.error || 'Could not start a new version.', 'error')
         return
       }
-      toast('Revision task created and queued for execution', 'success')
+      toast('A new version is being prepared.', 'success')
       window.location.reload()
-    } catch (err) {
-      toast(`Failed to create revision`, 'error')
     } finally {
-      setStatusUpdating(false)
+      setBusy(false)
     }
   }
+
+  const discard = async () => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/artifacts/${artifact.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast(err.error || 'Could not discard this deliverable.', 'error')
+        return
+      }
+      toast('Deliverable discarded', 'success')
+      window.location.reload()
+    } finally {
+      setBusy(false)
+      setConfirmDiscard(false)
+    }
+  }
+
+  const cardSnippet = snippet(listView)
 
   return (
     <>
       <ConfirmationModal
-        isOpen={showDeleteConfirm}
-        title="Discard Artifact"
-        message={`Discard "${displayFilename}"? It will be permanently removed. This cannot be undone.`}
-        confirmLabel={isDeleting ? 'Discarding...' : 'Yes, Discard'}
-        onConfirm={deleteArtifact}
-        onCancel={() => setShowDeleteConfirm(false)}
+        isOpen={confirmDiscard}
+        title="Discard deliverable"
+        message={`Discard "${title}"? This cannot be undone.`}
+        confirmLabel={busy ? 'Discarding…' : 'Discard'}
+        onConfirm={discard}
+        onCancel={() => setConfirmDiscard(false)}
         isDanger
       />
-      {/* ── Card ─────────────────────────────────────────────── */}
-      <div
+
+      {/* ── Card ── */}
+      <button
+        type="button"
         className="artifact-card"
-        onClick={() => { setShowDrawer(true); setActiveTab('preview'); setMenuOpen(false) }}
+        onClick={() => setOpen(true)}
         style={{
-          background: 'rgba(28,25,23,0.02)',
-          border: '1px solid rgba(28,25,23,0.06)',
-          borderRadius: 14,
-          padding: 16,
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          position: 'relative',
+          textAlign: 'left', width: '100%', cursor: 'pointer',
+          background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 14,
+          padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+          color: 'var(--text)', font: 'inherit', transition: 'border-color 0.15s',
         }}
-        onMouseEnter={e => {
-          e.currentTarget.style.borderColor = 'rgba(28,25,23,0.12)'
-          e.currentTarget.style.background = 'rgba(28,25,23,0.035)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = 'rgba(28,25,23,0.06)'
-          e.currentTarget.style.background = 'rgba(28,25,23,0.02)'
-        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-bright)' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
       >
-          {/* Thumbnail area */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <ExtLabel ext={ext} />
+          {status !== 'active' && <StatusPill status={status} />}
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, color: 'var(--text)' }}>
+          {title}
+        </div>
+        {cardSnippet && (
           <div style={{
-            width: '100%',
-            aspectRatio: '16/10',
-            borderRadius: 10,
-            background: 'rgba(0,0,0,0.25)',
-            border: '1px solid rgba(28,25,23,0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            position: 'relative',
+            fontSize: 13, lineHeight: 1.5, color: 'var(--text-3)', overflow: 'hidden',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
           }}>
-            <SandboxBadge status={artifact.status} />
-            {artifact.preview_url || (artifact.artifact_type === 'image' && artifact.file_url) ? (
-              <Image
-                src={artifact.preview_url || artifact.file_url!}
-                fill
-                unoptimized
-                style={{ objectFit: 'cover' }}
-                alt={artifact.title}
-              />
-            ) : artifact.artifact_type === 'pdf' && artifact.file_url ? (
-              <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-                <iframe
-                  src={`${artifact.file_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                  style={{ width: '200%', height: '200%', transform: 'scale(0.5)', transformOrigin: '0 0', border: 'none', background: '#fff', pointerEvents: 'none' }}
-                  title="PDF Thumbnail"
-                  tabIndex={-1}
-                  scrolling="no"
-                />
-                <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }} />
-              </div>
-            ) : ['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url ? (
-              <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-                <iframe
-                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
-                  style={{ width: '200%', height: '200%', transform: 'scale(0.5)', transformOrigin: '0 0', border: 'none', background: '#fff', pointerEvents: 'none' }}
-                  title="Office Thumbnail"
-                  tabIndex={-1}
-                  scrolling="no"
-                />
-                <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }} />
-              </div>
-            ) : (
-              <FileTypeIcon ext={ext} size={48} />
-            )}
+            {cardSnippet}
           </div>
-
-        {/* Title */}
+        )}
         <div style={{
-          fontFamily: 'var(--font-dm-sans, sans-serif)',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--text)',
-          lineHeight: 1.35,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
+          display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 'auto',
+          fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)',
         }}>
-          {artifact.title}
-        </div>
-
-        {/* Department badge + Goal tag */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{
-            fontSize: 10,
-            fontFamily: 'var(--font-dm-mono)',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: deptBadgeColor,
-            background: `${deptBadgeColor}15`,
-            border: `1px solid ${deptBadgeColor}25`,
-            borderRadius: 5,
-            padding: '3px 8px',
-          }}>
-            {artifact.department_slug}
-          </span>
-          {goalTitle && (
-            <span style={{
-              fontSize: 10,
-              fontFamily: 'var(--font-dm-mono)',
-              color: 'var(--text-4)',
-              background: 'rgba(28,25,23,0.04)',
-              border: '1px solid rgba(28,25,23,0.08)',
-              borderRadius: 5,
-              padding: '3px 8px',
-            }}>
-              {goalTitle}
-            </span>
-          )}
-        </div>
-
-        {/* Meta row */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 11,
-          color: 'var(--text-4)',
-          fontFamily: 'var(--font-dm-mono)',
-          marginTop: 'auto',
-        }}>
+          <span style={{ color: deptColor || 'var(--text-3)', textTransform: 'capitalize' }}>{artifact.department_slug}</span>
+          <span>·</span>
           <span>{timeAgo(artifact.created_at)}</span>
-          <span style={{ color: 'rgba(28,25,23,0.15)' }}>•</span>
-          <ExtBadge ext={ext} />
-          {fileSize && (
-            <>
-              <span style={{ color: 'rgba(28,25,23,0.15)' }}>•</span>
-              <span>{fileSize}</span>
-            </>
-          )}
-          <div style={{ marginLeft: 'auto', position: 'relative' }}>
-            <button
-              onClick={e => { e.stopPropagation(); setMenuOpen(o => !o) }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-4)',
-                cursor: 'pointer',
-                padding: '4px 6px',
-                borderRadius: 4,
-                fontSize: 16,
-                lineHeight: 1,
-              }}
-            >
-              ⋯
-            </button>
-            {menuOpen && (
-              <div style={{
-                position: 'absolute',
-                bottom: '100%',
-                right: 0,
-                background: 'rgba(30,30,36,0.98)',
-                border: '1px solid rgba(28,25,23,0.1)',
-                borderRadius: 8,
-                padding: '6px 0',
-                minWidth: 160,
-                zIndex: 50,
-                boxShadow: '0 8px 24px rgba(28,25,23,0.10)',
-              }}>
-                <button
-                  onClick={downloadArtifact}
-                  disabled={downloading}
-                  style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                >
-                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                  Download
-                </button>
-
-                {/* Sandbox: promote draft → review */}
-                {artifact.status === 'draft' && (
-                  <button
-                    onClick={() => updateStatus('review')}
-                    disabled={statusUpdating}
-                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#50c8ff', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                  >
-                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    Submit for Review
-                  </button>
-                )}
-
-                {/* Sandbox: approve review → active */}
-                {artifact.status === 'review' && (
-                  <>
-                    <button
-                      onClick={() => updateStatus('active')}
-                      disabled={statusUpdating}
-                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'#00c866', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                    >
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                      Approve & Publish
-                    </button>
-                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
-                    <button
-                      onClick={initiateRevision}
-                      disabled={statusUpdating}
-                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                    >
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      Make Changes
-                    </button>
-                  </>
-                )}
-
-                {/* Active: immutable — show locked state but allow make changes */}
-                {artifact.status === 'active' && (
-                  <>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', color:'var(--text-4)', fontSize:11, fontFamily:'var(--font-dm-mono,monospace)', opacity:0.6 }}>
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                      Immutable — use Make Changes
-                    </div>
-                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
-                    <button
-                      onClick={initiateRevision}
-                      disabled={statusUpdating}
-                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                    >
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      Make Changes
-                    </button>
-                  </>
-                )}
-
-                {/* Paused: can make changes or archive */}
-                {artifact.status === 'paused' && (
-                  <>
-                    <button
-                      onClick={initiateRevision}
-                      disabled={statusUpdating}
-                      style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-2)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                    >
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      Make Changes
-                    </button>
-                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
-                  </>
-                )}
-
-                {/* Archive active/paused */}
-                {['active', 'paused'].includes(artifact.status ?? '') && (
-                  <button
-                    onClick={() => updateStatus('deprecated')}
-                    disabled={statusUpdating}
-                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'var(--text-3)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                  >
-                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-                    Archive
-                  </button>
-                )}
-
-                {/* Discard draft/review only */}
-                {['draft', 'review'].includes(artifact.status ?? '') && (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={isDeleting}
-                    style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'8px 14px', background:'none', border:'none', color:'rgba(255,90,90,0.9)', fontSize:12, fontFamily:'var(--font-dm-sans,sans-serif)', cursor:'pointer', textAlign:'left' }}
-                  >
-                    <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                    Discard
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          {size && (<><span>·</span><span>{size}</span></>)}
         </div>
-      </div>
+      </button>
 
-      {/* ── Detail Drawer ─────────────────────────────────────── */}
-      {showDrawer && (
+      {/* ── Reading panel ── */}
+      {open && (
         <div
+          onClick={() => setOpen(false)}
           style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(28,25,23,0.10)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            animation: 'fadeIn 0.15s ease-out',
+            position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(28,25,23,0.18)',
+            display: 'flex', justifyContent: 'flex-end',
           }}
-          onClick={() => setShowDrawer(false)}
         >
           <div
-            style={{
-              width: 520,
-              maxWidth: '95vw',
-              height: '100%',
-              background: 'linear-gradient(180deg, rgba(26,26,32,1) 0%, rgba(18,18,22,1) 100%)',
-              borderLeft: '1px solid rgba(28,25,23,0.08)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              boxShadow: '-24px 0 60px rgba(28,25,23,0.10)',
-              animation: 'slideInRight 0.22s cubic-bezier(0.2,0.8,0.2,1)',
-            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             onClick={e => e.stopPropagation()}
+            style={{
+              width: 'min(600px, 100vw)', height: '100%', background: 'var(--bg-2)', color: 'var(--text)',
+              borderLeft: '1px solid var(--border)', boxShadow: '-16px 0 40px rgba(28,25,23,0.08)',
+              display: 'flex', flexDirection: 'column',
+            }}
           >
-            {/* Drawer Header */}
-            <div style={{
-              padding: '24px 28px',
-              borderBottom: '1px solid rgba(28,25,23,0.06)',
-              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-              background: 'rgba(28,25,23,0.01)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                <div style={{
-                  width: 48, height: 48,
-                  borderRadius: 12,
-                  background: iconBg,
-                  border: `1px solid ${iconColor}30`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: iconColor, flexShrink: 0,
+            {/* Header */}
+            <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{
+                  fontFamily: 'var(--font-syne, Fraunces), serif', fontSize: 20, fontWeight: 600,
+                  lineHeight: 1.3, margin: '0 0 8px', color: 'var(--text)', overflowWrap: 'anywhere',
                 }}>
-                  <FileTypeIcon ext={ext} size={28} />
+                  {title}
+                </h2>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: 'var(--text-3)' }}>
+                  <StatusPill status={status} />
+                  <ExtLabel ext={ext} />
+                  <span style={{ textTransform: 'capitalize' }}>{artifact.department_slug}</span>
+                  <span>·</span>
+                  <span>{new Date(artifact.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  {size && (<><span>·</span><span>{size}</span></>)}
                 </div>
-                <div>
-                  <div style={{
-                    fontFamily: 'var(--font-dm-mono)',
-                    fontSize: 14, fontWeight: 700,
-                    color: 'var(--text)', marginBottom: 5,
-                    wordBreak: 'break-all',
-                  }}>
-                    {displayFilename}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <ExtBadge ext={ext} />
-                    {fileSize && (
-                      <span style={{ fontSize: 11, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)' }}>
-                        {fileSize}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                {goalTitle && (
+                  <div style={{ fontSize: 12, color: 'var(--text-4)', marginTop: 6 }}>From: {goalTitle}</div>
+                )}
               </div>
               <button
-                onClick={() => setShowDrawer(false)}
+                type="button"
+                aria-label="Close"
+                onClick={() => setOpen(false)}
                 style={{
-                  width: 32, height: 32, borderRadius: '50%', border: 'none',
-                  background: 'rgba(28,25,23,0.06)', color: 'var(--text-3)',
-                  fontSize: 18, cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
+                  width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--border)',
+                  background: 'var(--bg)', color: 'var(--text-2)', fontSize: 18, lineHeight: 1,
+                  cursor: 'pointer', flexShrink: 0,
                 }}
               >
                 ×
               </button>
             </div>
 
-            {/* Tabs */}
-            <div style={{
-              display: 'flex',
-              borderBottom: '1px solid rgba(28,25,23,0.06)',
-              padding: '0 28px',
-              gap: 20,
-            }}>
-              {(['preview', 'details', 'lineage'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: '14px 0 12px',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: `2px solid ${activeTab === tab ? 'var(--accent)' : 'transparent'}`,
-                    color: activeTab === tab ? 'var(--text)' : 'var(--text-4)',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-dm-sans, sans-serif)',
-                    cursor: 'pointer',
-                    textTransform: 'capitalize',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {activeTab === 'preview' ? (
-                <>
-                  {artifact.artifact_type === 'image' && (artifact.preview_url || artifact.file_url) ? (
-                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 12, overflow: 'hidden' }}>
-                      <Image src={artifact.preview_url || artifact.file_url!} fill unoptimized style={{ objectFit: 'contain', borderRadius: 12 }} alt={artifact.title} />
-                    </div>
-                  ) : (
-                    <>
-                      {/* PDF: native browser inline viewer */}
-                      {artifact.artifact_type === 'pdf' && artifact.file_url && (
-                        <iframe
-                          src={artifact.file_url}
-                          style={{ width: '100%', height: 420, border: 'none', borderRadius: 10, background: '#fff' }}
-                          title={displayFilename}
-                        />
-                      )}
-
-                      {/* PPTX / DOCX / XLSX: Office Online embed */}
-                      {['presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
-                        <iframe
-                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.file_url)}`}
-                          style={{ width: '100%', height: 420, border: 'none', borderRadius: 10 }}
-                          title={displayFilename}
-                          sandbox="allow-scripts allow-same-origin allow-popups"
-                        />
-                      )}
-
-                      {/* Data / code / unknown: show "native file" badge */}
-                      {!['pdf', 'presentation', 'document', 'spreadsheet'].includes(artifact.artifact_type) && artifact.file_url && (
-                        <div style={{
-                          padding: '16px 18px',
-                          background: `${iconBg}`,
-                          border: `1px solid ${iconColor}20`,
-                          borderRadius: 12,
-                          display: 'flex', alignItems: 'center', gap: 14,
-                        }}>
-                          <div style={{ color: iconColor }}>
-                            <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                              <polyline points="14 2 14 8 20 8"/>
-                            </svg>
-                          </div>
-                          <div>
-                            <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>Native File Available</div>
-                            <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 2 }}>
-                              Exported as <strong style={{ color: iconColor }}>.{ext}</strong> — download to open in your native application.
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                          CONTENT PREVIEW
-                        </div>
-                        <div style={{
-                          fontFamily: 'Inter, sans-serif',
-                          fontSize: 14,
-                          lineHeight: 1.75,
-                          color: 'var(--text-2)',
-                          whiteSpace: 'pre-wrap',
-                          background: 'rgba(28,25,23,0.02)',
-                          border: '1px solid rgba(28,25,23,0.05)',
-                          borderRadius: 10,
-                          padding: '16px 18px',
-                        }}>
-                          {previewText}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </>
-              ) : activeTab === 'details' ? (
-                /* Details Tab */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div style={{
-                    fontSize: 10, color: 'var(--text-4)',
-                    fontFamily: 'var(--font-dm-mono)',
-                    letterSpacing: '0.08em',
-                  }}>
-                    METADATA
-                  </div>
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '120px 1fr',
-                    gap: '10px 0',
-                    fontSize: 13,
-                    fontFamily: 'Inter, sans-serif',
-                  }}>
-                    {[
-                      ['Type', artifact.artifact_type],
-                      ['Format', ext.toUpperCase()],
-                      ['Created by', artifact.department_slug],
-                      ['Created at', createdAt.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })],
-                      ['Size', fileSize || '—'],
-                      ['Goal', goalTitle || '—'],
-                      ['Task', artifact.task_id ? artifact.task_id.slice(0, 8) + '…' : '—'],
-                    ].map(([label, value]) => (
-                      <div key={label} style={{ display: 'contents' }}>
-                        <div style={{ color: 'var(--text-4)', fontWeight: 500 }}>{label}</div>
-                        <div style={{ color: 'var(--text)', wordBreak: 'break-word' }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {artifact.skills_used && artifact.skills_used.length > 0 && (
-                    <div>
-                      <div style={{
-                        fontSize: 10, color: 'var(--text-4)',
-                        fontFamily: 'var(--font-dm-mono)',
-                        letterSpacing: '0.08em', marginBottom: 10,
-                      }}>
-                        SKILLS USED
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {artifact.skills_used.map(skill => (
-                          <span key={skill} style={{
-                            fontSize: 11,
-                            color: 'var(--text-3)',
-                            background: 'rgba(28,25,23,0.04)',
-                            border: '1px solid rgba(28,25,23,0.08)',
-                            borderRadius: 5,
-                            padding: '3px 8px',
-                            fontFamily: 'var(--font-dm-mono)',
-                          }}>
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Lineage Tab */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {loadingLineage ? (
-                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontFamily: 'var(--font-dm-mono)' }}>
-                      Loading lineage data...
-                    </div>
-                  ) : !artifact.task_id ? (
-                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontStyle: 'italic' }}>
-                      No lineage tracking available for this legacy artefact.
-                    </div>
-                  ) : !lineageData ? (
-                    <div style={{ color: 'var(--text-4)', fontSize: 13, fontStyle: 'italic' }}>
-                      Lineage data not found.
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                          SOURCE TASK
-                        </div>
-                        <div style={{
-                          background: 'rgba(28,25,23,0.02)',
-                          border: '1px solid rgba(28,25,23,0.05)',
-                          borderRadius: 10,
-                          padding: '16px 18px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 12,
-                        }}>
-                          <div>
-                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Label & Status</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{lineageData.label}</div>
-                              <span className="crost-badge" style={{ fontSize: 9, opacity: 0.8, textTransform: 'uppercase' }}>{lineageData.status}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Reasoning</div>
-                            <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>{lineageData.reasoning}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Expected Deliverable</div>
-                            <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>{lineageData.expected_deliverable}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-4)', fontFamily: 'var(--font-dm-mono)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                          PARENT GOAL
-                        </div>
-                        <div style={{
-                          background: 'rgba(28,25,23,0.02)',
-                          border: '1px solid rgba(28,25,23,0.05)',
-                          borderRadius: 10,
-                          padding: '16px 18px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 12,
-                        }}>
-                          <div>
-                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Goal Title</div>
-                            <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14 }}>{lineageData.goals?.title || 'Unknown Goal'}</div>
-                          </div>
-                          <div>
-                            <div style={{ color: 'var(--text-4)', fontSize: 11, marginBottom: 4 }}>Founder Input</div>
-                            <div style={{
-                              color: 'var(--text-2)',
-                              fontSize: 13,
-                              lineHeight: 1.5,
-                              maxHeight: 120,
-                              overflowY: 'auto',
-                              paddingRight: 8,
-                            }}>
-                              {lineageData.goals?.founder_input}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {artifact.artifact_type === 'image' && artifact.file_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/artifacts/${artifact.id}/download`}
+                  alt={title}
+                  style={{ width: '100%', borderRadius: 10, border: '1px solid var(--border)' }}
+                />
               )}
 
-              {/* Citations — Sources footer (Spec §9) */}
-              <CitationsSection sources={artifact.sources} />
+              {view.summary && (
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: 'var(--text-2)' }}>{view.summary}</p>
+              )}
 
-              {/* Contextual Action Chips */}
-              <SuggestedActionChips entityType="artifact" entityId={artifact.id} />
+              {view.sections.map((s, i) => (
+                <section key={i}>
+                  {s.heading && (
+                    <h3 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 6px', color: 'var(--text)' }}>{s.heading}</h3>
+                  )}
+                  <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text-2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                    {s.text}
+                  </div>
+                </section>
+              ))}
+
+              {view.files.map((f, i) => (
+                <section key={`f${i}`}>
+                  <div style={{ fontSize: 12, fontFamily: 'var(--font-dm-mono)', color: 'var(--text-3)', marginBottom: 6 }}>{f.name}</div>
+                  <pre style={{
+                    margin: 0, padding: 14, background: 'var(--bg)', border: '1px solid var(--border)',
+                    borderRadius: 10, fontSize: 12, lineHeight: 1.55, color: 'var(--text)',
+                    fontFamily: 'var(--font-dm-mono), monospace', overflow: 'auto', maxHeight: 420,
+                  }}>
+                    {f.code}
+                  </pre>
+                </section>
+              ))}
+
+              {!view.summary && view.sections.length === 0 && view.files.length === 0 && (
+                <div style={{ fontSize: 14, color: 'var(--text-3)' }}>
+                  {fullBody === null ? 'Loading…' : 'Nothing to show here. Download the file to open it.'}
+                </div>
+              )}
             </div>
 
-            {/* Drawer Footer */}
-            <div style={{
-              padding: '18px 28px',
-              borderTop: '1px solid rgba(28,25,23,0.06)',
-              display: 'flex', gap: 10,
-              background: 'rgba(0,0,0,0.2)',
-            }}>
-              <button
-                id={`drawer-download-${artifact.id}`}
-                onClick={downloadArtifact}
-                disabled={downloading}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  borderRadius: 10,
-                  background: 'var(--accent)',
-                  color: '#fff',
-                  border: 'none',
-                  fontFamily: 'var(--font-dm-sans, sans-serif)',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: downloading ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  boxShadow: '0 4px 14px rgba(0,255,170,0.2)',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                </svg>
-                {downloading ? 'Downloading…' : `Download ${displayFilename}`}
-              </button>
-              <button
-                id={`drawer-delete-${artifact.id}`}
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={isDeleting}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 10,
-                  background: 'rgba(255,60,60,0.08)',
-                  color: 'rgba(255,90,90,0.9)',
-                  border: '1px solid rgba(255,60,60,0.2)',
-                  fontFamily: 'var(--font-dm-sans, sans-serif)',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.18)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.08)' }}
-              >
-                <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                </svg>
-                Delete
-              </button>
+            {/* Actions */}
+            <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {artifact.file_url && (
+                <button
+                  type="button"
+                  onClick={download}
+                  disabled={downloading}
+                  style={{ ...btnBase, background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff', flex: '1 1 140px' }}
+                >
+                  {downloading ? 'Downloading…' : `Download${ext ? ` .${ext}` : ''}`}
+                </button>
+              )}
+              {/* One step: you are the reviewer, so a draft is approved directly
+                  (draft -> active is a legal transition; 'review' is legacy and
+                  treated as a draft). */}
+              {isDraft && (
+                <button type="button" disabled={busy} onClick={() => setStatus('active', 'Approved')} style={btnBase}>
+                  Approve
+                </button>
+              )}
+              {(isDraft || ['active', 'paused'].includes(status)) && (
+                <button type="button" disabled={busy} onClick={makeChanges} style={btnBase}>
+                  Make changes
+                </button>
+              )}
+              {['active', 'paused'].includes(status) && (
+                <button type="button" disabled={busy} onClick={() => setStatus('deprecated', 'Archived')} style={btnBase}>
+                  Archive
+                </button>
+              )}
+              {isDraft && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmDiscard(true)}
+                  style={{ ...btnBase, color: 'var(--red)', borderColor: 'rgba(200,55,45,0.25)' }}
+                >
+                  Discard
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -157,6 +157,15 @@ describe('PATCH /api/artifacts/[id] — immutability (spec §9.4)', () => {
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'artifact_activated' }))
   })
 
+  // The Deliverables panel approves drafts in one step (no "Send for review").
+  it('approves a draft directly (draft->active) and stamps approved_by', async () => {
+    mockArtifact = { id: 'art-1', status: 'draft', version: 1, created_by: 'user-1', title: 'T', department_slug: 'sales' }
+    mockUpdated = { id: 'art-1', status: 'active', version: 1, approved_by: 'user-1' }
+    const res = await PATCH(makePatchReq({ status: 'active' }), { params: { id: 'art-1' } })
+    expect(res.status).toBe(200)
+    expect(capturedUpdatePayload.approved_by).toBe('user-1')
+  })
+
   it('returns 400 for invalid zod status enum', async () => {
     mockArtifact = { id: 'art-1', status: 'draft', version: 1, created_by: 'user-1', title: 'T', department_slug: 'sales' }
     const res = await PATCH(makePatchReq({ status: 'bogus_status' }), { params: { id: 'art-1' } })
