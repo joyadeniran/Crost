@@ -39,7 +39,7 @@ export function ConfirmationModal({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 20,
-        background: 'rgba(0,0,0,0.7)',
+        background: 'rgba(28,25,23,0.10)',
         backdropFilter: 'blur(4px)',
       }}
       className="crost-fade-in"
@@ -54,7 +54,7 @@ export function ConfirmationModal({
           border: '1px solid var(--border-bright)',
           borderRadius: 'var(--radius)',
           padding: '28px',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+          boxShadow: '0 24px 64px rgba(28,25,23,0.10)',
           position: 'relative',
         }}
       >

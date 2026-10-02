@@ -111,10 +111,10 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
           lineHeight: 1.5, 
           marginBottom: 12, 
           fontStyle: 'italic',
-          background: 'rgba(255,255,255,0.02)',
+          background: 'rgba(28,25,23,0.02)',
           padding: '8px 12px',
           borderRadius: 6,
-          border: '1px solid rgba(255,255,255,0.04)'
+          border: '1px solid rgba(28,25,23,0.04)'
         }}>
           &quot;{item.context}&quot;
         </div>
@@ -149,7 +149,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
               color: 'var(--text-2)',
               borderRadius: 8,
               padding: '12px 14px',
-              border: '1px solid rgba(255,255,255,0.05)',
+              border: '1px solid rgba(28,25,23,0.05)',
               fontFamily: 'var(--font-dm-mono)',
             }}>
               {Object.entries(item.payload).map(([key, val]) => (
@@ -172,7 +172,7 @@ export function ApprovalFeedItem({ item, onDecision }: Props) {
         justifyContent: 'space-between',
         marginTop: 16,
         paddingTop: 16,
-        borderTop: '1px solid rgba(255,255,255,0.04)'
+        borderTop: '1px solid rgba(28,25,23,0.04)'
       }}>
         <div style={{
           fontFamily: 'var(--font-dm-mono)',

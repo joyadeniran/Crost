@@ -76,7 +76,7 @@ export function Toaster() {
             border: '1px solid var(--border-bright)',
             borderRadius: 'var(--radius)',
             padding: '16px 20px',
-            boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            boxShadow: '0 12px 32px rgba(28,25,23,0.10)',
             display: 'flex',
             alignItems: 'flex-start',
             gap: 12,

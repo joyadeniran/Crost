@@ -2,11 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { getPool } from '@/lib/db'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
-import { SidebarNav } from '@/components/dashboard/SidebarNav'
-import { Topbar } from '@/components/dashboard/Topbar'
+import { ChatSidebar } from '@/components/chat/ChatSidebar'
 import { ContentWrapper } from '@/components/dashboard/ContentWrapper'
 import { LayoutStoreHydrator } from '@/components/providers/LayoutStoreHydrator'
-import { Logo } from '@/components/ui/Logo'
 
 import { redirect } from 'next/navigation'
 
@@ -62,42 +60,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="crost-shell">
+      {/* Phones: the sidebar collapses into one row of links. */}
+      <nav className="mobile-bar">
+        <a href="/app" className="side-brand">Crost</a>
+        <a href="/app">New chat</a>
+        <a href="/app/notifications">Approvals{pendingCount > 0 ? ` (${pendingCount})` : ''}</a>
+        <a href="/app/artifacts">Deliverables</a>
+        <a href="/app/settings">Settings</a>
+      </nav>
       {/* ── SIDEBAR ── */}
       <aside className="crost-sidebar">
-        {/* Logo */}
-        <div className="sidebar-logo">
-          <Logo size={28} />
-          <span className="logo-text">Crost</span>
-          <span style={{
-            marginLeft: 'auto',
-            fontFamily: 'var(--font-dm-mono)',
-            fontSize: 9,
-            color: 'var(--text-3)',
-            background: 'var(--bg-3)',
-            padding: '2px 6px',
-            borderRadius: 4,
-          }}>
-            v1.0
-          </span>
-        </div>
-
-        {/* Nav — client component for active state */}
-        <SidebarNav pendingCount={pendingCount} artifactCount={artifactCount} identity={identity} />
-
-        {/* Seeds Zustand + keeps pending count live across all pages */}
+        <ChatSidebar pendingCount={pendingCount} identity={identity} />
+        {/* Seeds Zustand + keeps the approvals badge live across pages */}
         <LayoutStoreHydrator pendingCount={pendingCount} artifactCount={artifactCount} envMode={envMode} />
       </aside>
 
-      {/* ── MAIN ── */}
-      <div className="crost-main">
-        {/* Topbar — client component for pathname-based title */}
-        <Topbar />
-
-        {/* Content wrapper handles context-aware sidebar */}
-        <ContentWrapper>
-          {children}
-        </ContentWrapper>
-      </div>
+      <main className="crost-main">
+        <ContentWrapper>{children}</ContentWrapper>
+      </main>
     </div>
   )
 }

@@ -125,9 +125,9 @@ export default async function DepartmentDetailPage({ params }: Props) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {(dept.capabilities as string[]).map(cap => (
                   <span key={cap} style={{
-                    background: 'rgba(0,212,170,0.08)',
+                    background: 'rgba(15,143,118,0.08)',
                     color: 'var(--accent)',
-                    border: '1px solid rgba(0,212,170,0.2)',
+                    border: '1px solid rgba(15,143,118,0.2)',
                     borderRadius: 8,
                     fontFamily: 'var(--font-dm-mono)',
                     fontSize: 10,

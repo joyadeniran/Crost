@@ -37,6 +37,10 @@ suite('baseline schema + shim (real Postgres)', () => {
     const dir = path.resolve(__dirname, '../../../supabase/migrations')
     const file = fs.readdirSync(dir).filter((f) => f.endsWith('_crost_beta_baseline.sql'))[0]
     await admin.query(fs.readFileSync(path.join(dir, file), 'utf8'))
+    // Then every later (append-only) migration, in filename order — exactly what production runs.
+    for (const later of fs.readdirSync(dir).filter((f) => f.endsWith('.sql') && f > file).sort()) {
+      await admin.query(fs.readFileSync(path.join(dir, later), 'utf8'))
+    }
 
     const mod = await import('@/lib/db')
     db = mod
@@ -174,6 +178,22 @@ suite('baseline schema + shim (real Postgres)', () => {
     it('creates the private artifacts bucket with a 10MB object cap', async () => {
       const { rows } = await admin.query(`SELECT public, file_size_limit::int AS lim FROM storage.buckets WHERE id='crost'`)
       expect(rows).toEqual([{ public: false, lim: 10485760 }])
+    })
+
+    it('has the chat tables, locked to the public API roles, with cascade delete', async () => {
+      const chat = await admin.query(`INSERT INTO chats(created_by,title) VALUES ('u1','t') RETURNING id`)
+      await admin.query(`INSERT INTO chat_messages(chat_id,created_by,role,content,meta) VALUES ($1,'u1','assistant','hi','{"plan":{}}')`, [chat.rows[0].id])
+      for (const role of ['anon', 'authenticated', 'service_role']) {
+        await admin.query(`SET ROLE ${role}`)
+        const res = await admin.query('SELECT * FROM chat_messages').then(() => 'ok', (e) => String(e.message))
+        await admin.query('RESET ROLE')
+        expect(res).toMatch(/permission denied/i)
+      }
+      const bad = await admin.query(`INSERT INTO chat_messages(chat_id,created_by,role) VALUES ($1,'u1','system')`, [chat.rows[0].id]).then(() => 'ok', (e) => String(e.message))
+      expect(bad).toMatch(/check constraint/i)
+      await admin.query('DELETE FROM chats WHERE id = $1', [chat.rows[0].id])
+      const { rows } = await admin.query('SELECT count(*)::int AS n FROM chat_messages WHERE chat_id = $1', [chat.rows[0].id])
+      expect(rows[0].n).toBe(0)
     })
 
     it('has the egress_ledger table, locked to the public API roles', async () => {

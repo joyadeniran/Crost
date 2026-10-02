@@ -152,7 +152,7 @@ export default function LoginPage() {
                   {mode === 'magic-link' ? 'Use password instead' : 'Use magic link instead'}
                 </button>
                 <div className="signup-prompt">
-                  New to Crost? <Link href="/signup" style={{ color: '#00D4AA', textDecoration: 'none', fontWeight: 600 }}>Create an account</Link>
+                  New to Crost? <Link href="/signup" style={{ color: '#0f8f76', textDecoration: 'none', fontWeight: 600 }}>Create an account</Link>
                 </div>
               </div>
             </div>
@@ -161,7 +161,7 @@ export default function LoginPage() {
               <div className="sent-icon">✉️</div>
               <h2 className="sent-title">Check your inbox</h2>
               <p className="sent-desc">
-                We&apos;ve sent a magic code to <strong style={{ color: 'var(--accent, #00D4AA)' }}>{email}</strong>.
+                We&apos;ve sent a magic code to <strong style={{ color: 'var(--accent, #0f8f76)' }}>{email}</strong>.
               </p>
               
               <form onSubmit={handleVerifyOtp} className="otp-form">

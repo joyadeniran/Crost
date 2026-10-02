@@ -165,7 +165,7 @@ export default function ActivatePage() {
             <div className="phase-vignette animate-fade-in">
                <header className="activation-header" style={{ marginBottom: '40px' }}>
                  <h1 style={{ fontSize: '32px', marginBottom: '12px' }}>Initialising your team...</h1>
-                 <p style={{ color: 'rgba(255,255,255,0.5)' }}>Setting up context for {selectedDepartments.join(' & ')}</p>
+                 <p style={{ color: 'rgba(28,25,23,0.5)' }}>Setting up context for {selectedDepartments.join(' & ')}</p>
                </header>
 
                <div className="progress-stack">
@@ -192,13 +192,13 @@ export default function ActivatePage() {
             <div className="phase-vignette animate-fade-in">
               <header className="activation-header" style={{ marginBottom: '40px' }}>
                  <h1 style={{ fontSize: '32px', marginBottom: '12px' }}>Your team is ready.</h1>
-                 <p style={{ color: 'rgba(255,255,255,0.5)' }}>What&apos;s the first thing you want to get done?</p>
+                 <p style={{ color: 'rgba(28,25,23,0.5)' }}>What&apos;s the first thing you want to get done?</p>
                </header>
 
                <form onSubmit={handleGoalSubmit} className="goal-input-area" style={{ position: 'relative' }}>
                   <textarea 
                     className="goal-textarea glass-panel"
-                    style={{ width: '100%', minHeight: '160px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', borderRadius: '16px', color: '#fff', fontSize: '18px', resize: 'none' }}
+                    style={{ width: '100%', minHeight: '160px', background: 'rgba(28,25,23,0.03)', border: '1px solid rgba(28,25,23,0.1)', padding: '24px', borderRadius: '16px', color: 'var(--text)', fontSize: '18px', resize: 'none' }}
                     placeholder={placeholder}
                     value={goal}
                     onChange={e => {
@@ -223,7 +223,7 @@ export default function ActivatePage() {
                     ))}
                   </div>
                   <div className="action-row" style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button type="button" onClick={handleSkip} className="skip-btn" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '14px' }}>Skip for now</button>
+                    <button type="button" onClick={handleSkip} className="skip-btn" style={{ background: 'none', border: 'none', color: 'rgba(28,25,23,0.4)', cursor: 'pointer', fontSize: '14px' }}>Skip for now</button>
                     <button type="submit" className="primary-btn-crost lg" disabled={!goal || loading}>
                       {loading ? 'Processing...' : 'Activate Orc →'}
                     </button>
@@ -239,17 +239,17 @@ export default function ActivatePage() {
               </header>
 
               <div className="orc-status-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div className={`orc-status-item ${progress === 1 ? 'running' : progress > 1 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 1 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                <div className={`orc-status-item ${progress === 1 ? 'running' : progress > 1 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 1 ? '#fff' : 'rgba(28,25,23,0.3)' }}>
                   {progress === 1 && <div className="spinner"></div>}
                   {progress > 1 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
                   <span>Querying your team&apos;s capabilities</span>
                 </div>
-                <div className={`orc-status-item ${progress === 2 ? 'running' : progress > 2 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 2 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                <div className={`orc-status-item ${progress === 2 ? 'running' : progress > 2 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 2 ? '#fff' : 'rgba(28,25,23,0.3)' }}>
                   {progress === 2 && <div className="spinner"></div>}
                   {progress > 2 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
                   <span>Drafting the plan</span>
                 </div>
-                <div className={`orc-status-item ${progress === 3 ? 'running' : progress > 3 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 3 ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+                <div className={`orc-status-item ${progress === 3 ? 'running' : progress > 3 ? 'complete' : 'pending'}`} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '16px', color: progress >= 3 ? '#fff' : 'rgba(28,25,23,0.3)' }}>
                   {progress === 3 && <div className="spinner"></div>}
                   {progress > 3 && <span className="check" style={{ color: 'var(--accent)' }}>✓</span>}
                   <span>Preparing your first approvals</span>
@@ -263,7 +263,7 @@ export default function ActivatePage() {
                   <button 
                     onClick={() => router.push('/app')}
                     className="secondary-button"
-                    style={{ marginTop: '24px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '12px 24px', borderRadius: '100px', cursor: 'pointer' }}
+                    style={{ marginTop: '24px', background: 'rgba(28,25,23,0.05)', border: '1px solid rgba(28,25,23,0.1)', color: 'var(--text)', padding: '12px 24px', borderRadius: '100px', cursor: 'pointer' }}
                   >
                     Taking too long? Go to Dashboard →
                   </button>
@@ -282,7 +282,7 @@ export default function ActivatePage() {
         .spinner {
           width: 16px;
           height: 16px;
-          border: 2px solid rgba(0, 212, 170, 0.2);
+          border: 2px solid rgba(15,143,118,0.2);
           border-top-color: var(--accent);
           border-radius: 50%;
           animation: spin 1s linear infinite;

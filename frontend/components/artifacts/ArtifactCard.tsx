@@ -105,7 +105,7 @@ const EXT_COLORS: Record<string, { bg: string; fg: string }> = {
 }
 
 function FileTypeIcon({ ext, size = 40 }: { ext: string; size?: number }) {
-  const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
+  const c = EXT_COLORS[ext] ?? { bg: 'rgba(28,25,23,0.06)', fg: 'var(--text-2)' }
   const s = { width: size, height: size, display: 'block' } as const
   return (
     <div style={{
@@ -129,7 +129,7 @@ function FileTypeIcon({ ext, size = 40 }: { ext: string; size?: number }) {
 }
 
 function ExtBadge({ ext }: { ext: string }) {
-  const c = EXT_COLORS[ext] ?? { bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-2)' }
+  const c = EXT_COLORS[ext] ?? { bg: 'rgba(28,25,23,0.06)', fg: 'var(--text-2)' }
   return (
     <span
       className="crost-badge"
@@ -162,8 +162,8 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
         SOURCES
       </div>
       <div style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.05)',
+        background: 'rgba(28,25,23,0.02)',
+        border: '1px solid rgba(28,25,23,0.05)',
         borderRadius: 10,
         padding: '14px 16px',
         display: 'flex',
@@ -222,13 +222,13 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
                   </summary>
                   <div style={{
                     marginTop: 8,
-                    background: 'rgba(0,0,0,0.3)',
+                    background: 'rgba(28,25,23,0.10)',
                     borderRadius: 6,
                     padding: '8px 10px',
                     fontSize: 10,
                     color: 'var(--text-3)',
                     overflow: 'auto',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(28,25,23,0.06)',
                     maxHeight: 140,
                     fontFamily: 'var(--font-dm-mono)',
                   }}>
@@ -236,7 +236,7 @@ function CitationsSection({ sources }: { sources?: ArtifactSources }) {
                       <div key={i} style={{ 
                         paddingBottom: i < toolCount - 1 ? 6 : 0,
                         marginBottom: i < toolCount - 1 ? 6 : 0,
-                        borderBottom: i < toolCount - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                        borderBottom: i < toolCount - 1 ? '1px solid rgba(28,25,23,0.04)' : 'none'
                       }}>
                         <div style={{ color: 'rgba(255,180,0,0.8)', fontWeight: 600 }}>
                           {tc.service ? `${tc.service}.${tc.action || 'call'}` : (typeof tc === 'string' ? tc : 'unnamed_tool')}
@@ -481,8 +481,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
         className="artifact-card"
         onClick={() => { setShowDrawer(true); setActiveTab('preview'); setMenuOpen(false) }}
         style={{
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(28,25,23,0.02)',
+          border: '1px solid rgba(28,25,23,0.06)',
           borderRadius: 14,
           padding: 16,
           cursor: 'pointer',
@@ -493,12 +493,12 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
           position: 'relative',
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
-          e.currentTarget.style.background = 'rgba(255,255,255,0.035)'
+          e.currentTarget.style.borderColor = 'rgba(28,25,23,0.12)'
+          e.currentTarget.style.background = 'rgba(28,25,23,0.035)'
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'
-          e.currentTarget.style.background = 'rgba(255,255,255,0.02)'
+          e.currentTarget.style.borderColor = 'rgba(28,25,23,0.06)'
+          e.currentTarget.style.background = 'rgba(28,25,23,0.02)'
         }}
       >
           {/* Thumbnail area */}
@@ -507,7 +507,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             aspectRatio: '16/10',
             borderRadius: 10,
             background: 'rgba(0,0,0,0.25)',
-            border: '1px solid rgba(255,255,255,0.05)',
+            border: '1px solid rgba(28,25,23,0.05)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -587,8 +587,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
               fontSize: 10,
               fontFamily: 'var(--font-dm-mono)',
               color: 'var(--text-4)',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(28,25,23,0.04)',
+              border: '1px solid rgba(28,25,23,0.08)',
               borderRadius: 5,
               padding: '3px 8px',
             }}>
@@ -608,11 +608,11 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
           marginTop: 'auto',
         }}>
           <span>{timeAgo(artifact.created_at)}</span>
-          <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+          <span style={{ color: 'rgba(28,25,23,0.15)' }}>•</span>
           <ExtBadge ext={ext} />
           {fileSize && (
             <>
-              <span style={{ color: 'rgba(255,255,255,0.15)' }}>•</span>
+              <span style={{ color: 'rgba(28,25,23,0.15)' }}>•</span>
               <span>{fileSize}</span>
             </>
           )}
@@ -638,12 +638,12 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 bottom: '100%',
                 right: 0,
                 background: 'rgba(30,30,36,0.98)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(28,25,23,0.1)',
                 borderRadius: 8,
                 padding: '6px 0',
                 minWidth: 160,
                 zIndex: 50,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                boxShadow: '0 8px 24px rgba(28,25,23,0.10)',
               }}>
                 <button
                   onClick={downloadArtifact}
@@ -677,7 +677,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                       <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                       Approve & Publish
                     </button>
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
                     <button
                       onClick={initiateRevision}
                       disabled={statusUpdating}
@@ -696,7 +696,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                       <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                       Immutable — use Make Changes
                     </div>
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
                     <button
                       onClick={initiateRevision}
                       disabled={statusUpdating}
@@ -719,7 +719,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                       <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       Make Changes
                     </button>
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <div style={{ borderTop: '1px solid rgba(28,25,23,0.08)', margin: '4px 0' }} />
                   </>
                 )}
 
@@ -757,7 +757,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
         <div
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.6)',
+            background: 'rgba(28,25,23,0.10)',
             backdropFilter: 'blur(10px)',
             zIndex: 1000,
             display: 'flex',
@@ -773,11 +773,11 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
               maxWidth: '95vw',
               height: '100%',
               background: 'linear-gradient(180deg, rgba(26,26,32,1) 0%, rgba(18,18,22,1) 100%)',
-              borderLeft: '1px solid rgba(255,255,255,0.08)',
+              borderLeft: '1px solid rgba(28,25,23,0.08)',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              boxShadow: '-24px 0 60px rgba(0,0,0,0.5)',
+              boxShadow: '-24px 0 60px rgba(28,25,23,0.10)',
               animation: 'slideInRight 0.22s cubic-bezier(0.2,0.8,0.2,1)',
             }}
             onClick={e => e.stopPropagation()}
@@ -785,9 +785,9 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             {/* Drawer Header */}
             <div style={{
               padding: '24px 28px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid rgba(28,25,23,0.06)',
               display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-              background: 'rgba(255,255,255,0.01)',
+              background: 'rgba(28,25,23,0.01)',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                 <div style={{
@@ -823,7 +823,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                 onClick={() => setShowDrawer(false)}
                 style={{
                   width: 32, height: 32, borderRadius: '50%', border: 'none',
-                  background: 'rgba(255,255,255,0.06)', color: 'var(--text-3)',
+                  background: 'rgba(28,25,23,0.06)', color: 'var(--text-3)',
                   fontSize: 18, cursor: 'pointer', display: 'flex',
                   alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
@@ -836,7 +836,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             {/* Tabs */}
             <div style={{
               display: 'flex',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid rgba(28,25,23,0.06)',
               padding: '0 28px',
               gap: 20,
             }}>
@@ -926,8 +926,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                           lineHeight: 1.75,
                           color: 'var(--text-2)',
                           whiteSpace: 'pre-wrap',
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.05)',
+                          background: 'rgba(28,25,23,0.02)',
+                          border: '1px solid rgba(28,25,23,0.05)',
                           borderRadius: 10,
                           padding: '16px 18px',
                         }}>
@@ -984,8 +984,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                           <span key={skill} style={{
                             fontSize: 11,
                             color: 'var(--text-3)',
-                            background: 'rgba(255,255,255,0.04)',
-                            border: '1px solid rgba(255,255,255,0.08)',
+                            background: 'rgba(28,25,23,0.04)',
+                            border: '1px solid rgba(28,25,23,0.08)',
                             borderRadius: 5,
                             padding: '3px 8px',
                             fontFamily: 'var(--font-dm-mono)',
@@ -1019,8 +1019,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                           SOURCE TASK
                         </div>
                         <div style={{
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.05)',
+                          background: 'rgba(28,25,23,0.02)',
+                          border: '1px solid rgba(28,25,23,0.05)',
                           borderRadius: 10,
                           padding: '16px 18px',
                           display: 'flex',
@@ -1050,8 +1050,8 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                           PARENT GOAL
                         </div>
                         <div style={{
-                          background: 'rgba(255,255,255,0.02)',
-                          border: '1px solid rgba(255,255,255,0.05)',
+                          background: 'rgba(28,25,23,0.02)',
+                          border: '1px solid rgba(28,25,23,0.05)',
                           borderRadius: 10,
                           padding: '16px 18px',
                           display: 'flex',
@@ -1092,7 +1092,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
             {/* Drawer Footer */}
             <div style={{
               padding: '18px 28px',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
+              borderTop: '1px solid rgba(28,25,23,0.06)',
               display: 'flex', gap: 10,
               background: 'rgba(0,0,0,0.2)',
             }}>
@@ -1105,7 +1105,7 @@ export function ArtifactCard({ artifact, goalTitle, deptColor }: Props) {
                   padding: '10px 0',
                   borderRadius: 10,
                   background: 'var(--accent)',
-                  color: '#000',
+                  color: '#fff',
                   border: 'none',
                   fontFamily: 'var(--font-dm-sans, sans-serif)',
                   fontWeight: 700,

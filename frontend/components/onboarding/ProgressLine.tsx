@@ -53,25 +53,25 @@ export function ProgressLine({ label, status, duration, onComplete }: ProgressLi
         }
 
         .label {
-          color: rgba(255,255,255,0.8);
+          color: rgba(28,25,23,0.8);
           min-width: 120px;
         }
 
         .dots {
           flex-grow: 1;
-          border-bottom: 1px dotted rgba(255,255,255,0.1);
+          border-bottom: 1px dotted rgba(28,25,23,0.1);
           margin: 0 12px;
         }
 
         .status {
-          color: rgba(255,255,255,0.4);
+          color: rgba(28,25,23,0.4);
           text-align: right;
           min-width: 140px;
         }
 
         .progress-bar-bg {
           height: 6px;
-          background: rgba(255,255,255,0.05);
+          background: rgba(28,25,23,0.05);
           border-radius: 3px;
           overflow: hidden;
         }
