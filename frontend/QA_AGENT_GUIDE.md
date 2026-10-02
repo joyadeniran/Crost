@@ -16,7 +16,7 @@ cd frontend && npx playwright install chromium
 # 2. Set env vars
 export E2E_TEST_EMAIL=<test-account-email>
 export E2E_TEST_PASSWORD=<test-account-password>
-export PLAYWRIGHT_BASE_URL=http://localhost:3000   # or https://app.crosthq.com
+export PLAYWRIGHT_BASE_URL=http://localhost:3000   # or https://crosthq.com
 
 # 3. Run unit tests
 npm run test:unit
@@ -267,7 +267,7 @@ The following bugs were identified in [`QA_ARCHITECTURE_REPORT.md`](QA_ARCHITECT
 
 ```bash
 # Point Playwright at the live app
-export PLAYWRIGHT_BASE_URL=https://app.crosthq.com
+export PLAYWRIGHT_BASE_URL=https://crosthq.com
 
 # Auth setup (runs once, saves .auth/session.json)
 npx playwright test --project=setup
@@ -303,7 +303,7 @@ jobs:
     env:
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-      PLAYWRIGHT_BASE_URL: https://app.crosthq.com
+      PLAYWRIGHT_BASE_URL: https://crosthq.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

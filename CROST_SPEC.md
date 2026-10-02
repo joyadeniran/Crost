@@ -80,7 +80,7 @@ Beat-by-beat narrative against the founder simulation. Each beat is followed by 
 
 - Landing page (`crosthq.com`) must communicate four things above the fold: Crost is an AI company OS; Orc is the founder's Chief of Staff; departments execute work; founders remain in control.
 - Two CTAs: **Start Free** (primary) and **See Demo** (secondary). The demo path is mandatory — skeptical users want proof before signup.
-- "Start Free" captures email and redirects to `app.crosthq.com/onboarding/identity?email=…&source=landing`. See §15.6 (Auth Bridge).
+- "Start Free" captures email and links to `/signup?source=landing` on crosthq.com. See §15.6 (Auth Bridge).
 
 ### Beat 2 — Auth
 
@@ -1049,7 +1049,7 @@ Two separate deployments share a single Supabase instance, subdomain cookies, an
 
 ### Phase 1 — Auth Bridge (MVP, ~5 hours)
 
-1. Landing CTA: "Start Free" redirects to `https://app.crosthq.com/onboarding/identity?email=…&source=landing`.
+1. Landing CTA: "Start Free" links to `/signup?source=landing` on crosthq.com.
 2. App pre-fill: read `?email` and `?source`, populate the onboarding form.
 3. Auto-claim: on signup, create a `user_consents` record if landing referral.
 4. Cookie config: Supabase Auth Cookie Domain = `.crosthq.com`.

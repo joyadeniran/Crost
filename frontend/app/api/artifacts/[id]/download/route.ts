@@ -2,7 +2,7 @@
 //
 // Streams an artifact's file from the (private) GCS bucket through the service role
 // account, after verifying the requester owns the artifact. The bucket is not
-// public, so the stored storage.googleapis.com URL cannot be fetched directly.
+// public, so the stored object URL cannot be fetched directly.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'

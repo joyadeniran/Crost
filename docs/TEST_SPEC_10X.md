@@ -32,7 +32,7 @@ Spec refs = `CROST_SPEC.md` sections. Where code and spec disagree, test the COD
 
 **T2.2 `lib/tools/parameter-resolver.ts`** — email draft: body drafted from intent (commit e596c06 behavior), recipient/subject extraction, missing-param behavior.
 
-**T2.3 `lib/google/gmail.ts`, `lib/google/oauth.ts`** (extend `gmail.test.ts`, `google-oauth.test.ts`) — send path builds correct RFC822/base64url; token refresh on expiry; refresh-token persistence; origin-aware redirect URI (commit f2d4bfc: run.app AND app.crosthq.com).
+**T2.3 `lib/google/gmail.ts`, `lib/google/oauth.ts`** (extend `gmail.test.ts`, `google-oauth.test.ts`) — send path builds correct RFC822/base64url; token refresh on expiry; refresh-token persistence; origin-aware redirect URI (crosthq.com and www).
 
 ## T3 — Artifact lifecycle (spec §9, §9.4)
 

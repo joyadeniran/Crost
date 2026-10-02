@@ -221,7 +221,7 @@ npx playwright install chromium
 # Set required env vars
 export E2E_TEST_EMAIL=your-test-user@example.com
 export E2E_TEST_PASSWORD=your-test-password
-export PLAYWRIGHT_BASE_URL=http://localhost:3000  # or https://app.crosthq.com
+export PLAYWRIGHT_BASE_URL=http://localhost:3000  # or https://crosthq.com
 ```
 
 ### Vitest unit tests
@@ -242,7 +242,7 @@ cd frontend
 npx playwright test
 
 # Against production (no server spin-up)
-PLAYWRIGHT_BASE_URL=https://app.crosthq.com npx playwright test --project=chromium
+PLAYWRIGHT_BASE_URL=https://crosthq.com npx playwright test --project=chromium
 
 # Single suite
 npx playwright test tests/e2e/waterfall-lifecycle.spec.ts

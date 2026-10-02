@@ -47,6 +47,16 @@ describe('appStorage.from(bucket)', () => {
     expect(res.data?.toString()).toBe('abc')
   })
 
+  it('getObject falls back to the pre-beta bucket named after the logical bucket', async () => {
+    api.download
+      .mockResolvedValueOnce({ data: null, error: { message: 'Object not found' } })
+      .mockResolvedValueOnce({ data: new Blob(['old']), error: null })
+    const res = await appStorage.from('artifacts').getObject('goals/g1/r.pdf')
+    expect(fromBucket).toHaveBeenLastCalledWith('artifacts')
+    expect(api.download).toHaveBeenLastCalledWith('goals/g1/r.pdf')
+    expect(res.data?.toString()).toBe('old')
+  })
+
   it('getObject returns an error object (never throws) when the file is missing', async () => {
     api.download.mockResolvedValue({ data: null, error: { message: 'Object not found' } })
     const res = await appStorage.from('artifacts').getObject('missing.pdf')

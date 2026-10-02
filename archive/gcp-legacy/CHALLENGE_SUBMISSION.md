@@ -125,10 +125,10 @@ This keeps the entire stack on Google infrastructure end to end.
 
 ## Live Demo
 
-- **Demo page:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app/demo`
-- **ADK API:** `GET https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/adk`
-- **MCP Server:** `GET https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/mcp`
-- **Health:** `https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/health`
+- **Demo page:** `<old-host-removed>/demo`
+- **ADK API:** `GET <old-host-removed>/api/adk`
+- **MCP Server:** `GET <old-host-removed>/api/mcp`
+- **Health:** `<old-host-removed>/api/health`
 
 ---
 
@@ -151,17 +151,17 @@ This keeps the entire stack on Google infrastructure end to end.
 
 ## Testing Access
 
-1. Visit `https://app.crosthq.com/demo`
+1. Visit `<old-host-removed>/demo`
 2. Try a goal: *"Write a competitive analysis of our top 3 competitors"*
 3. Watch Orc + Department agents execute in real time
 4. See artifacts, memos, and approval requests created
 
 Or call the API directly:
 ```bash
-curl https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/adk
+curl <old-host-removed>/api/adk
 # Returns ADK capabilities
 
-curl https://crost-frontend-3ge3tx36sa-uc.a.run.app/api/mcp
+curl <old-host-removed>/api/mcp
 # Returns MCP tools list
 ```
 

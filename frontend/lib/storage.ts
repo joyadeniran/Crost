@@ -48,7 +48,14 @@ export const appStorage = {
       getObject: async (path: string): Promise<{ data: Buffer | null; error: Error | null }> => {
         try {
           const rel = path.replace(new RegExp(`^(${bucket}/)+`), '')
-          const { data, error } = await bucketApi().download(key(rel))
+          let { data, error } = await bucketApi().download(key(rel))
+          if (error || !data) {
+            // Pre-beta artifacts live in a bucket named after the logical bucket
+            // (e.g. 'artifacts/goals/...'). Fall back to it so old files stay downloadable.
+            const legacy = await getSupabaseAdmin().storage.from(bucket).download(rel)
+            data = legacy.data
+            error = legacy.error
+          }
           if (error || !data) return { data: null, error: new Error(error?.message ?? 'not found') }
           return { data: Buffer.from(await data.arrayBuffer()), error: null }
         } catch (err) {
