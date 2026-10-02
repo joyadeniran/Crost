@@ -1121,6 +1121,20 @@ INSERT INTO system_config (key, value, is_founder_editable, created_by) VALUES
 ON CONFLICT (key, created_by) DO NOTHING;
 
 -- =============================================================================
+-- EGRESS LEDGER: per-day, per-route byte accounting written by lib/egress-ledger.ts.
+-- Drives the daily budget (EGRESS_DAILY_BUDGET_MB) that sheds polling / blocks reads
+-- before Supabase's monthly egress quota can be overshot. See docs/EGRESS.md.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS egress_ledger (
+  day        DATE        NOT NULL,
+  label      TEXT        NOT NULL,
+  bytes      BIGINT      NOT NULL DEFAULT 0,
+  calls      BIGINT      NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (day, label)
+);
+
+-- =============================================================================
 -- SECURITY: RLS on, no policies, no grants for the public API roles.
 -- =============================================================================
 DO $$
@@ -1128,9 +1142,16 @@ DECLARE t RECORD;
 BEGIN
   FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
-    EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated', t.tablename);
+    EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated, service_role', t.tablename);
   END LOOP;
 END $$;
+
+-- EGRESS: the app reaches Postgres only through DATABASE_URL (server-side pg). Nothing may read
+-- tables through PostgREST/Realtime — that is where the previous project's egress leaked. Drop
+-- service_role's table/sequence privileges (and default privileges for future tables) too.
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role;
 
 -- waitlist: anonymous INSERT only. No SELECT/UPDATE/DELETE for anon — the
 -- public counter is served by the /api/waitlist route (service role) instead.
@@ -1146,5 +1167,5 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
 -- after an ownership check — see app/api/artifacts/[id]/download).
 -- =============================================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('crost', 'crost', false, 52428800)
+VALUES ('crost', 'crost', false, 10485760) -- 10 MB per object (egress cap)
 ON CONFLICT (id) DO NOTHING;

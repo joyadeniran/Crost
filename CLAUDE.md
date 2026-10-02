@@ -34,6 +34,7 @@ No separate worker: work runs inside route handlers via `waitUntil` (`lib/backgr
 - **Stored secrets are sealed** (`lib/crypto.ts`, `TOKEN_ENCRYPTION_KEY`) — never write an OAuth token in plaintext; storing fails closed without the key.
 - **Background work uses `runInBackground`/`triggerDispatch`** (`lib/background.ts`) — a bare un-awaited promise is killed when a Vercel function returns.
 - **Responses** via `apiOk`/`apiError` (`lib/api-response.ts`). Errors from `lib/errors.ts` taxonomy.
+- **Egress.** Supabase egress is the project-killer (see `docs/EGRESS.md`). Never use PostgREST/Realtime or add a polling loop; list queries use explicit columns + `.limit()`; new `select('*')` fails `egress-static.test.ts`; client polling goes through `lib/polling.ts` against a tiny status route; label routes with `withEgressLabel`, gate heavy reads with `guardRead`.
 - **Idempotency-Key** honored on duplicate-prone POSTs; middleware enforces 50MB body cap.
 
 ## Workflow rules

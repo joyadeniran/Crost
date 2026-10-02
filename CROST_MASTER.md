@@ -2167,3 +2167,23 @@ Unit: 725 passing (removed suites for cut modules; added cron-auth, supervisor, 
 
 ### Not done (needs the founder)
 Create the Supabase project, apply the migration, set Vercel env vars, point DNS, rotate the old Brevo/Supabase keys exposed in the old landing repo's `.env.local`, counsel review of legal copy. Not browser-verified against a live backend (no Supabase project exists yet).
+
+---
+
+## Session v14.1 — Egress Guard (Supabase egress can no longer overshoot)
+**Date**: 2026-10-02 **Status**: ✅ CODE COMPLETE
+**Impact**: The previous project was abandoned because Supabase egress always overshot. Root cause was the Render `crost-worker` polling PostgREST (~4 req/s, 16 zombie `executing` goals × `select *`); containment (Data API grants revoked) is applied on the Supabase project. This session makes the new app structurally unable to repeat it. Full write-up: `docs/EGRESS.md`.
+
+### What Changed
+1. **Metering** — `lib/egress.ts` (per-query bytes, route labels via AsyncLocalStorage, row cap 500, `single()`=LIMIT 1, 5 MB per-query cap), wired into the pg shim `lib/db.ts`.
+2. **Budget** — `lib/egress-ledger.ts` + `egress_ledger` table (baseline migration), daily budget `EGRESS_DAILY_BUDGET_MB` (default 100; ok/warn 70%/shed 90%/block 100%; fail-open); `lib/egress-guard.ts` `guardRead()` returns 429 + Retry-After; writes never blocked.
+3. **Polling** — `lib/polling.ts` (backoff, hidden-tab pause, Retry-After, max duration); War Room polls new `GET /api/goals/[id]/status` (~100 B version probe) and refetches the goal only on change.
+4. **Pruning** — layout counts in SQL instead of fetching up to 500 artifact bodies on every navigation; artifact lists use `left(body,1500)` (`lib/egress-columns.ts`); artifacts/approvals list APIs `limit` (50/200); download route ETag/304 + `max-age`.
+5. **Schema** — baseline revokes `service_role` table/sequence privileges (no PostgREST reads at all), creates `egress_ledger`, bucket cap 10 MB.
+6. **Visibility** — `GET /api/usage/egress`; `egress-static.test.ts` blocks new `select('*')` (baseline JSON may only shrink).
+
+### Tests
+Added egress, egress-ledger, db-egress, polling, egress-static unit suites; integration test covers ledger table + service_role lockout + bucket cap. `tsc` clean.
+
+### Still needs the founder
+Suspend/delete the old Render services (`crost-worker`, `crost-frontend`, `crost-approval-expiry`, `crost-litellm`); they are the live leak.

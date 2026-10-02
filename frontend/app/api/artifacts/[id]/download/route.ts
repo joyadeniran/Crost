@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { appStorage } from '@/lib/storage'
 import { requireUser } from '@/lib/auth/guard'
+import { guardRead } from '@/lib/egress-guard'
+import { recordEgress } from '@/lib/egress'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +30,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!guardResult.ok) return guardResult.response
     const user = { id: guardResult.userId }
 
+    const blocked = await guardRead('read')
+    if (blocked) return blocked
+
     const supabase = createServerSupabaseClient()
     const { data: artifact, error } = await supabase
       .from('artifacts')
@@ -40,6 +45,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     const fileUrl: string | null = (artifact as { file_url?: string }).file_url ?? null
     if (!fileUrl) return NextResponse.json({ error: 'Artifact has no downloadable file' }, { status: 404 })
+
+    // EGRESS: an artifact row's file is immutable (changes create a new version/row), so the id is a
+    // stable validator. A revalidating browser gets a 304 and we never touch Storage.
+    const etag = `"${artifact.id}"`
+    if (req.headers.get('if-none-match') === etag) {
+      return new NextResponse(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'private, max-age=3600' } })
+    }
 
     // Derive the object path relative to the 'artifacts' logical bucket.
     // Handles legacy double-prefixed URLs (.../artifacts/artifacts/...) too —
@@ -55,6 +67,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 })
     }
 
+    recordEgress({ label: 'artifact-download', table: 'storage', op: 'select', bytes: bytes.length, rows: 1, ms: 0 })
+
     const fileName = (objectPath.split('/').pop()?.split('?')[0]) || `${artifact.id}`
     const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
     const contentType = CONTENT_TYPES[ext] ?? 'application/octet-stream'
@@ -65,7 +79,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${fileName}"`,
         'Content-Length': String(bytes.length),
-        'Cache-Control': 'private, no-store',
+        'Cache-Control': 'private, max-age=3600',
+        ETag: etag,
       },
     })
   } catch (err) {

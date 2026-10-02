@@ -29,6 +29,7 @@ suite('baseline schema + shim (real Postgres)', () => {
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN; END IF;
       END $$;
       CREATE SCHEMA IF NOT EXISTS storage;
       CREATE TABLE IF NOT EXISTS storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint);
@@ -151,7 +152,7 @@ suite('baseline schema + shim (real Postgres)', () => {
     })
 
     it('anon and authenticated cannot read or write app tables', async () => {
-      for (const role of ['anon', 'authenticated']) {
+      for (const role of ['anon', 'authenticated', 'service_role']) {
         for (const sql of ['SELECT * FROM goals', 'SELECT * FROM approval_queue', 'INSERT INTO goals(title,founder_input) VALUES (\'x\',\'y\')', 'SELECT * FROM connections']) {
           await admin.query(`SET ROLE ${role}`)
           const res = await admin.query(sql).then(() => 'ok', (e) => String(e.message))
@@ -170,9 +171,19 @@ suite('baseline schema + shim (real Postgres)', () => {
       expect(sel).toMatch(/permission denied/i)
     })
 
-    it('creates the private artifacts bucket', async () => {
-      const { rows } = await admin.query(`SELECT public FROM storage.buckets WHERE id='crost'`)
-      expect(rows).toEqual([{ public: false }])
+    it('creates the private artifacts bucket with a 10MB object cap', async () => {
+      const { rows } = await admin.query(`SELECT public, file_size_limit::int AS lim FROM storage.buckets WHERE id='crost'`)
+      expect(rows).toEqual([{ public: false, lim: 10485760 }])
+    })
+
+    it('has the egress_ledger table, locked to the public API roles', async () => {
+      await admin.query(`INSERT INTO egress_ledger(day,label,bytes,calls) VALUES (current_date,'t',1,1)`)
+      for (const role of ['anon', 'authenticated', 'service_role']) {
+        await admin.query(`SET ROLE ${role}`)
+        const res = await admin.query('SELECT * FROM egress_ledger').then(() => 'ok', (e) => String(e.message))
+        await admin.query('RESET ROLE')
+        expect(res).toMatch(/permission denied/i)
+      }
     })
   })
 })

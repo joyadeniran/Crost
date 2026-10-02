@@ -1,5 +1,6 @@
 'use client'
 
+import { startPolling, retryAfterMs, type PollResult } from '@/lib/polling'
 import { toast } from '@/components/ui/toaster'
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
 
@@ -396,7 +397,7 @@ function DeferredMissionReportChips({ goalId }: { goalId: string }) {
   useEffect(() => {
     let cancelled = false
     let attempts = 0
-    const MAX_ATTEMPTS = 10 // poll for up to ~30 s
+    const MAX_ATTEMPTS = 8 // poll for up to ~1 min with growing delay
 
     async function poll() {
       if (cancelled || attempts >= MAX_ATTEMPTS) return
@@ -417,7 +418,7 @@ function DeferredMissionReportChips({ goalId }: { goalId: string }) {
           }
         }
       } catch { /* ignore */ }
-      setTimeout(poll, 3000)
+      setTimeout(poll, 3000 + attempts * 1500)
     }
     poll()
     return () => { cancelled = true }
@@ -1928,70 +1929,70 @@ export function WarRoom() {
   useEffect(() => {
     if (!activeGoalId || !['pending', 'planning', 'clarifying', 'executing', 'awaiting_approval'].includes(activeGoalStatus ?? '')) return
     let consecutiveFailures = 0
-    const interval = setInterval(async () => {
+    let lastVersion: string | null = null
+    // Egress: poll a tiny status probe (/status, ~100 bytes) and fetch the full goal only when its
+    // version changes. lib/polling.ts backs off while idle, pauses on hidden tabs, honors Retry-After.
+    const stop = startPolling(async (): Promise<PollResult> => {
       try {
-        const res = await fetch(`/api/goals/${activeGoalId}`)
-        if (res.status === 401) {
-          // Session expired mid-poll — stop the loop and bounce to sign-in so the
-          // user doesn't sit in front of a silently-dead War Room.
-          clearInterval(interval)
+        const probe = await fetch(`/api/goals/${activeGoalId}/status`)
+        if (probe.status === 401) {
           setPollError('Your session expired. Redirecting to sign in…')
           if (typeof window !== 'undefined') {
             const next = encodeURIComponent(window.location.pathname + window.location.search)
             window.location.href = `/login?next=${next}`
           }
-          return
+          return 'stop'
         }
-        if (res.status === 404) {
-          // The goal is gone (deleted, wrong tenant, or stale persisted id from
-          // a prior session). Retrying won't help — stop polling and clear the
-          // store so the War Room returns to its empty state.
-          clearInterval(interval)
+        if (probe.status === 404) {
           setPollError(null)
           setActiveGoal(null)
           setIsSubmittingGoal(false)
-          return
+          return 'stop'
         }
-        if (!res.ok) {
-          // 502/500/429 etc. — the goal is "live" but we can't reach the server.
-          // Don't silently retry forever; surface a visible banner after a few misses.
+        if (probe.status === 429) {
+          const wait = retryAfterMs(probe.headers.get('Retry-After')) ?? 60000
+          setPollError('Live updates are paused (daily data budget reached). They resume automatically.')
+          return { retryAfterMs: wait }
+        }
+        if (!probe.ok) {
           consecutiveFailures++
           if (consecutiveFailures >= 3) {
-            setPollError(`Can't reach the server (HTTP ${res.status}). Your goal is still running — retrying…`)
+            setPollError(`Can't reach the server (HTTP ${probe.status}). Your goal is still running — retrying…`)
           }
-          return
+          return 'unchanged'
         }
-        const text = await res.text()
-        let json: any
-        try { json = JSON.parse(text) } catch {
+        const pj = await probe.json().catch(() => null)
+        const version: string | undefined = pj?.data?.version
+        if (!pj?.success || !version) {
           consecutiveFailures++
-          if (consecutiveFailures >= 3) {
-            setPollError(`Server returned a non-JSON response (likely a gateway error). Still retrying…`)
-          }
-          return
+          if (consecutiveFailures >= 3) setPollError(pj?.error ?? 'Goal poll returned an unexpected response.')
+          return 'unchanged'
         }
-        if (json.success && json.data) {
-          consecutiveFailures = 0
-          setPollError(null)
+        consecutiveFailures = 0
+        setPollError(null)
+        if (version === lastVersion) return 'unchanged'
+        const res = await fetch(`/api/goals/${activeGoalId}`)
+        if (!res.ok) return 'unchanged'
+        const json = await res.json().catch(() => null)
+        if (json?.success && json.data) {
+          lastVersion = version
           updateActiveGoal(json.data)
           if (['completed', 'failed', 'cancelled', 'synthesis_done'].includes(json.data.status)) {
-            clearInterval(interval)
             setIsSubmittingGoal(false)
+            return 'stop'
           }
-        } else {
-          consecutiveFailures++
-          if (consecutiveFailures >= 3) {
-            setPollError(json?.error ?? 'Goal poll returned an unexpected response.')
-          }
+          return 'changed'
         }
+        return 'unchanged'
       } catch (err: any) {
         consecutiveFailures++
         if (consecutiveFailures >= 3) {
           setPollError(`Network error while polling goal: ${err?.message ?? 'unknown'}`)
         }
+        return 'unchanged'
       }
-    }, 5000)
-    return () => clearInterval(interval)
+    }, { baseMs: 4000, maxMs: 20000 })
+    return stop
   }, [activeGoalId, activeGoalStatus, setActiveGoal, setIsSubmittingGoal, updateActiveGoal])
 
   const handleGoalSubmit = useCallback(async (founderInput: string) => {

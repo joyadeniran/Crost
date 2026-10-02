@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { ARTIFACT_LIST_COLUMNS } from '@/lib/egress-columns'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, createSupabaseServerComponentClient } from '@/lib/supabase'
 import { ArtifactsGrid } from '@/components/artifacts/ArtifactsGrid'
@@ -17,7 +18,7 @@ export default async function ArtifactsPage() {
   const [{ data: artifactsData }, { data: goalsData }, { data: deptsData }] = await Promise.all([
     supabase
       .from('artifacts')
-      .select('*')
+      .select(ARTIFACT_LIST_COLUMNS)
       .eq('created_by', user.id)
       .not('status', 'eq', 'discarded')
       .order('created_at', { ascending: false })

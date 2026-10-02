@@ -6,6 +6,15 @@
 // Server-side ONLY.
 
 import { Pool } from 'pg'
+import {
+  approxBytes,
+  currentEgressLabel,
+  EgressLimitError,
+  getEgressLimits,
+  recordEgress,
+} from './egress'
+import { maybeFlushEgressLedger } from './egress-ledger'
+import { runInBackground } from './background'
 
 let _pool: Pool | null = null
 
@@ -81,13 +90,33 @@ function encodeRow(row: Record<string, unknown>, meta: TableMeta): Record<string
   return out
 }
 
+// ── Egress metering ───────────────────────────────────────────────────────
+// Everything that leaves the database through this shim is measured, attributed to the
+// current request label (lib/egress.ts) and persisted to the daily ledger. Reads over the
+// emergency byte limit throw — a runaway query must fail loudly, not quietly eat the
+// org-wide quota.
+function meter(table: string, op: 'select' | 'write' | 'rpc', rows: unknown, startedAt: number): void {
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : []
+  const bytes = approxBytes(rows)
+  const label = currentEgressLabel()
+  recordEgress({ label, table, op, bytes, rows: list.length, ms: Date.now() - startedAt })
+
+  if (process.env.EGRESS_LEDGER !== 'off') {
+    const flush = maybeFlushEgressLedger(getPool())
+    if (flush) runInBackground(flush)
+  }
+
+  const { maxQueryBytes } = getEgressLimits()
+  if (op === 'select' && bytes > maxQueryBytes) throw new EgressLimitError(table, bytes, maxQueryBytes, label)
+}
+
 class QueryBuilder<T = Record<string, unknown>> {
   private _table: string
   private _cols = '*'
   private _wheres: string[] = []
   private _vals: unknown[] = []
   private _orders: string[] = []
-  private _limitN = 1000
+  private _limitN: number | null = null // null = apply the egress default row cap at run time
   private _isSingle = false
   private _isMaybeSingle = false
   private _insertRows: Partial<T>[] | null = null
@@ -345,7 +374,9 @@ class QueryBuilder<T = Record<string, unknown>> {
           const placeholders = cols.map((_, i) => `$${i + 1}`)
           const vals = cols.map(c => row[c])
           const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`
+          const t0 = Date.now()
           const r = await pool.query(sql, vals)
+          meter(this._table, 'write', r.rows, t0)
           results.push(r.rows[0])
         }
         if (this._isSingle || this._isMaybeSingle) return { data: results[0] ?? null, error: null }
@@ -384,7 +415,9 @@ class QueryBuilder<T = Record<string, unknown>> {
             ? `ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) ${updateSet}`
             : ''
           const sql = `INSERT INTO "${this._table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) ${conflictClause} RETURNING *`
+          const t0 = Date.now()
           const r = await pool.query(sql, [...vals, ...guardVals])
+          meter(this._table, 'write', r.rows, t0)
           results.push(r.rows[0])
         }
         if (this._isSingle || this._isMaybeSingle) return { data: results[0] ?? null, error: null }
@@ -400,14 +433,18 @@ class QueryBuilder<T = Record<string, unknown>> {
         const vals = cols.map(c => data[c])
         const { clause } = this.adjustedWhere(cols.length)
         const sql = `UPDATE "${this._table}" SET ${setClause} ${clause} RETURNING *`
+        const t0 = Date.now()
         const r = await pool.query(sql, [...vals, ...this._vals])
+        meter(this._table, 'write', r.rows, t0)
         return { data: r.rows, error: null }
       }
 
       // DELETE
       if (this._isDelete) {
         const sql = `DELETE FROM "${this._table}" ${this.whereClause()} RETURNING *`
+        const t0 = Date.now()
         const r = await pool.query(sql, this._vals)
+        meter(this._table, 'write', r.rows, t0)
         return { data: r.rows, error: null }
       }
 
@@ -418,8 +455,17 @@ class QueryBuilder<T = Record<string, unknown>> {
         return { data: this._isHead ? null : [], error: null, count: parseInt(cr.rows[0].count, 10) }
       }
 
-      const sql = `SELECT ${this._cols} FROM "${this._table}" ${this.whereClause()} ${this.orderClause()} LIMIT ${this._limitN}`
+      // .single()/.maybeSingle() only ever need one row; everything else gets the egress row cap
+      // unless the caller set an explicit .limit().
+      const explicitLimit = this._limitN !== null
+      const limit = this._isSingle || this._isMaybeSingle ? 1 : (this._limitN ?? getEgressLimits().defaultRowLimit)
+      const sql = `SELECT ${this._cols} FROM "${this._table}" ${this.whereClause()} ${this.orderClause()} LIMIT ${limit}`
+      const t0 = Date.now()
       const r = await pool.query(sql, this._vals)
+      if (!explicitLimit && !this._isSingle && !this._isMaybeSingle && r.rows.length >= limit) {
+        console.warn(`[egress] ${JSON.stringify({ level: 'row_cap_hit', label: currentEgressLabel(), table: this._table, limit })}`)
+      }
+      meter(this._table, 'select', r.rows, t0)
       if (this._isSingle) {
         if (r.rows.length === 0) return { data: null, error: new Error('No rows found') }
         return { data: r.rows[0], error: null }
@@ -447,12 +493,16 @@ async function rpc(fn: string, params: Record<string, unknown> = {}): Promise<QR
   try {
     const keys = Object.keys(params)
     if (keys.length === 0) {
+      const t0 = Date.now()
       const r = await pool.query(`SELECT * FROM "${fn}"()`)
+      meter(fn, 'rpc', r.rows, t0)
       return { data: r.rows, error: null }
     }
     const argList = keys.map((k, i) => `${k} => $${i + 1}`).join(', ')
     const vals = keys.map(k => params[k])
+    const t0 = Date.now()
     const r = await pool.query(`SELECT * FROM "${fn}"(${argList})`, vals)
+    meter(fn, 'rpc', r.rows, t0)
     return { data: r.rows, error: null }
   } catch (err) {
     console.error(`[db] RPC error on "${fn}":`, err)
