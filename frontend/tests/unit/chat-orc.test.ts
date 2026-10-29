@@ -83,7 +83,8 @@ describe('plan protocol', () => {
 
 describe('streamOrcReply', () => {
   const configsSeen: any[] = []
-  function mockGemini(behaviour: Record<string, 'fail' | 'no-thinking' | string[]>) {
+  // 'hang' never answers; 'hang-after' yields one chunk then goes silent (both seen in production).
+  function mockGemini(behaviour: Record<string, 'fail' | 'no-thinking' | 'hang' | 'hang-after' | string[]>) {
     vi.doMock('@google/generative-ai', () => ({
       GoogleGenerativeAI: class {
         getGenerativeModel({ model, generationConfig }: { model: string; generationConfig: any }) {
@@ -94,6 +95,13 @@ describe('streamOrcReply', () => {
               if (b === 'no-thinking') {
                 if (generationConfig.thinkingConfig) throw new Error('[400 Bad Request] Invalid JSON payload: unknown field thinkingConfig')
                 b = ['ok']
+              }
+              if (b === 'hang') return new Promise(() => {})
+              if (b === 'hang-after') {
+                return {
+                  stream: (async function* () { yield { text: () => 'partial' }; await new Promise(() => {}) })(),
+                  response: new Promise(() => {}),
+                }
               }
               if (b === 'fail' || !b) throw new Error(`404 ${model}`)
               return {
@@ -106,6 +114,54 @@ describe('streamOrcReply', () => {
       },
     }))
   }
+
+  it('moves on to the next model when one stalls before its first token', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: 'hang', b: ['Hel', 'lo'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], firstTokenMs: 30 })
+    let out = ''
+    let step = await gen.next()
+    while (!step.done) { out += step.value; step = await gen.next() }
+    expect(out).toBe('Hello')
+    expect(step.value.model).toBe('b')
+    // a stall is not a config rejection: no retry of 'a' without thinkingConfig
+    expect(configsSeen.map((c) => c.model)).toEqual(['a', 'b'])
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('gives up instead of hanging when every model stalls', async () => {
+    vi.resetModules()
+    mockGemini({ a: 'hang', b: 'hang' })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], firstTokenMs: 30 })
+    await expect(gen.next()).rejects.toThrow(/stalled/)
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('stops at the reply deadline even when per-model budgets would allow more', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: 'hang', b: 'hang', c: ['late'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b', 'c'], firstTokenMs: 1000, deadlineMs: 40 })
+    await expect(gen.next()).rejects.toThrow(/stalled/)
+    expect(configsSeen.map((c) => c.model)).toEqual(['a'])
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('errors out (no model switch) when a reply goes silent midway', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: 'hang-after', b: ['other'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], idleMs: 30 })
+    expect((await gen.next()).value).toBe('partial')
+    await expect(gen.next()).rejects.toThrow(/stalled/)
+    expect(configsSeen.map((c) => c.model)).toEqual(['a'])
+    vi.doUnmock('@google/generative-ai')
+  })
 
   it('falls back to the next model when the first is unavailable', async () => {
     vi.resetModules()

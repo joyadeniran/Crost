@@ -2252,3 +2252,13 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - **Figure guard** (`lib/facts/guard.ts`, ported from Timbus): every number / % / ISO date in a deliverable is matched against the facts after unit normalisation (`$2.4m` = `2,400,000`); years and counts ≤ 10 are skipped. The result is stored at insert time in `artifacts.metadata.fact_check` and shown as one line on the deliverable card. It flags; it never blocks.
 - Code: `lib/facts/{facts,guard,store}.ts`, `app/api/facts/route.ts`, `app/api/facts/[id]/route.ts`, `components/settings/FactsEditor.tsx`, FactsCard in `ChatView.tsx`, `lib/chat/orc.ts` (`extractBlocks`), `lib/engine/worker.ts` (`summariseFactCheck`).
 - Tests: `company-facts.test.ts` (22: parsing, staleness, prompt block, guard, `<facts>` protocol, worker prompt + check, routes: auth, ownership, transaction + rollback, chat-message ownership), `chat-routes.test.ts` (+2). 843 unit tests green; `tsc`, lint, `next build` clean. Migration and store SQL also exercised against Postgres (PGlite).
+
+---
+
+## Session v15.3 — Orc chat hangs: time-box Gemini
+**Date**: 2026-10-29 **Status**: ✅ COMPLETE (not deployed)
+**Why:** "What can you do?" (and plain "Hi") sometimes never got a reply. Production evidence: `POST /api/chat` hit Vercel's 60s timeout with no error logged; the user message was saved, the assistant reply never was. Gemini sometimes stalls before its first token with no error, and `streamOrcReply` awaited it with no timeout. (#21's local capability answer only covers the exact capability phrasings and went live at 21:06; the founder's 20:51 "What can you do for me?" ran on the build before it.)
+
+- `lib/chat/orc.ts` `streamOrcReply`: every wait is raced against a timer and the request is aborted (`signal`) when it fires. Before the first token: 15s per model (`FIRST_TOKEN_TIMEOUT_MS`), then the next model in the chain. Mid-reply silence: 20s (`STREAM_IDLE_TIMEOUT_MS`) → error (no model switch after text is shown). Whole reply incl. fallbacks: 50s (`REPLY_DEADLINE_MS`), under the route's 60s `maxDuration`, so the founder gets the "couldn't reach the model" error trailer instead of a dead request. A stall is not retried on the same model without `thinkingConfig`.
+- Tests: `chat-orc.test.ts` +4 (stall → next model, all stall → error, deadline caps fallbacks, mid-reply stall → error). Fail on the old code (hang), pass now. 854 unit tests green; `tsc` clean. Lint errors that predate this change (HomeSections, company-memo) are untouched.
+- Ops note: logs show functions running in `fra1` although `vercel.json` pins `dub1`. Worth checking the project's function region setting (DB is eu-west-1).

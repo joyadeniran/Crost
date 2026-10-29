@@ -170,16 +170,43 @@ export const TRAILER = '\u0000'
 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 
+/** A model that has not produced its first words by then is treated as stalled → next model. */
+export const FIRST_TOKEN_TIMEOUT_MS = 15_000
+/** Longest silence allowed mid-reply. */
+export const STREAM_IDLE_TIMEOUT_MS = 20_000
+/** Whole reply, all fallbacks included. Under POST /api/chat's 60s maxDuration so the founder gets an error, not a dead request. */
+export const REPLY_DEADLINE_MS = 50_000
+
+class StallError extends Error {}
+
+/** Rejects with StallError (and aborts the request) when `p` does not settle within `ms`. */
+function within<T>(p: Promise<T>, ms: number, ac: AbortController, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { ac.abort(); reject(new StallError(`Gemini stalled: no ${what} after ${ms}ms`)) }, Math.max(0, ms))
+  })
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
+}
+
 /**
  * Streams Orc's reply. Falls back through the Gemini chain only while nothing has been emitted
- * yet, so the founder never sees a half answer replaced by another model's answer.
+ * yet, so the founder never sees a half answer replaced by another model's answer. Gemini can
+ * stall before the first token with no error; every wait is time-boxed so a stall moves on to the
+ * next model instead of hanging until the function is killed.
  */
 export async function* streamOrcReply(params: {
   system: string
   history: ChatTurn[]
   apiKey?: string
   models?: string[]
+  firstTokenMs?: number
+  idleMs?: number
+  deadlineMs?: number
 }): AsyncGenerator<string, { model: string; tokens: number }> {
+  const firstTokenMs = params.firstTokenMs ?? FIRST_TOKEN_TIMEOUT_MS
+  const idleMs = params.idleMs ?? STREAM_IDLE_TIMEOUT_MS
+  const deadline = Date.now() + (params.deadlineMs ?? REPLY_DEADLINE_MS)
+  const left = () => deadline - Date.now()
   const apiKey = params.apiKey ?? process.env.GEMINI_API_KEY ?? ''
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
@@ -195,23 +222,37 @@ export async function* streamOrcReply(params: {
   let lastErr: unknown
   for (const modelName of params.models ?? GEMINI_FALLBACK_CHAIN) {
     for (const extra of variants) {
+      if (left() <= 0) throw lastErr ?? new StallError('Gemini stalled: reply deadline reached')
       let emitted = false
+      const ac = new AbortController()
+      // Before the first words: the per-model stall budget. After: the idle budget. Never past the deadline.
+      const wait = () => Math.min(emitted ? idleMs : firstTokenMs, left())
       try {
         const model = genAI.getGenerativeModel({
           model: modelName,
           systemInstruction: params.system,
           generationConfig: { temperature: 0.6, maxOutputTokens: 2048, ...extra } as any,
         })
-        const result = await model.generateContentStream({ contents })
-        for await (const chunk of result.stream) {
-          const text = chunk.text()
+        const startedAt = Date.now()
+        const result = await within(model.generateContentStream({ contents }, { signal: ac.signal }), wait(), ac, 'response')
+        const it = result.stream[Symbol.asyncIterator]()
+        for (;;) {
+          const budget = emitted ? wait() : Math.min(firstTokenMs - (Date.now() - startedAt), left())
+          const step = await within(it.next(), budget, ac, emitted ? 'new text' : 'first token')
+          if (step.done) break
+          const text = step.value.text()
           if (text) { emitted = true; yield text }
         }
-        const final = await result.response
-        return { model: modelName, tokens: final.usageMetadata?.totalTokenCount ?? 0 }
+        const final = await within(result.response, wait(), ac, 'usage').catch(() => null)
+        return { model: modelName, tokens: final?.usageMetadata?.totalTokenCount ?? 0 }
       } catch (err) {
+        ac.abort()
         if (emitted) throw err
         lastErr = err
+        if (err instanceof StallError) {
+          console.warn(`[streamOrcReply] ${modelName}: ${err.message} — trying next model`)
+          break
+        }
         // Only a config rejection is worth retrying on the same model; anything else → next model.
         if (!(Object.keys(extra).length > 0 && /400|invalid|unknown|thinking/i.test(String((err as Error)?.message ?? err)))) break
       }
