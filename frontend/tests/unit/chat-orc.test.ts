@@ -84,19 +84,27 @@ describe('plan protocol', () => {
 describe('streamOrcReply', () => {
   const configsSeen: any[] = []
   // 'hang' never answers; 'hang-after' yields one chunk then goes silent (both seen in production).
-  function mockGemini(behaviour: Record<string, 'fail' | 'no-thinking' | 'hang' | 'hang-after' | string[]>) {
+  const aborted: string[] = []
+  function mockGemini(behaviour: Record<string, 'fail' | 'no-thinking' | 'hang' | 'hang-after' | 'slow' | string[]>) {
     vi.doMock('@google/generative-ai', () => ({
       GoogleGenerativeAI: class {
         getGenerativeModel({ model, generationConfig }: { model: string; generationConfig: any }) {
           configsSeen.push({ model, ...generationConfig })
           return {
-            async generateContentStream() {
+            async generateContentStream(_req: unknown, opts?: { signal?: AbortSignal }) {
+              opts?.signal?.addEventListener('abort', () => aborted.push(model))
               let b = behaviour[model]
               if (b === 'no-thinking') {
                 if (generationConfig.thinkingConfig) throw new Error('[400 Bad Request] Invalid JSON payload: unknown field thinkingConfig')
                 b = ['ok']
               }
               if (b === 'hang') return new Promise(() => {})
+              if (b === 'slow') {
+                return {
+                  stream: (async function* () { await new Promise((r) => setTimeout(r, 300)); yield { text: () => 'slow' } })(),
+                  response: Promise.resolve({ usageMetadata: { totalTokenCount: 1 } }),
+                }
+              }
               if (b === 'hang-after') {
                 return {
                   stream: (async function* () { yield { text: () => 'partial' }; await new Promise(() => {}) })(),
@@ -115,12 +123,38 @@ describe('streamOrcReply', () => {
     }))
   }
 
+  it('asks the next model in parallel when the first has no words yet, and takes whoever speaks first', async () => {
+    vi.resetModules()
+    configsSeen.length = 0; aborted.length = 0
+    mockGemini({ a: 'slow', b: ['Hel', 'lo'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], hedgeMs: 20 })
+    let out = ''
+    let step = await gen.next()
+    while (!step.done) { out += step.value; step = await gen.next() }
+    expect(out).toBe('Hello')
+    expect(step.value.model).toBe('b')
+    expect(aborted).toContain('a') // the loser is cancelled
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('does not hedge when the first model answers in time', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    mockGemini({ a: ['fast'], b: ['other'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], hedgeMs: 200 })
+    expect((await gen.next()).value).toBe('fast')
+    expect(configsSeen.map((c) => c.model)).toEqual(['a'])
+    vi.doUnmock('@google/generative-ai')
+  })
+
   it('moves on to the next model when one stalls before its first token', async () => {
     vi.resetModules()
     configsSeen.length = 0
     mockGemini({ a: 'hang', b: ['Hel', 'lo'] })
     const { streamOrcReply: stream } = await import('@/lib/chat/orc')
-    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], firstTokenMs: 30 })
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], hedgeMs: 20 })
     let out = ''
     let step = await gen.next()
     while (!step.done) { out += step.value; step = await gen.next() }
@@ -131,21 +165,23 @@ describe('streamOrcReply', () => {
     vi.doUnmock('@google/generative-ai')
   })
 
-  it('gives up instead of hanging when every model stalls', async () => {
+  it('gives up with an error instead of hanging when every model stalls', async () => {
     vi.resetModules()
+    aborted.length = 0
     mockGemini({ a: 'hang', b: 'hang' })
     const { streamOrcReply: stream } = await import('@/lib/chat/orc')
-    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], firstTokenMs: 30 })
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b'], hedgeMs: 10, firstTokenMs: 60 })
     await expect(gen.next()).rejects.toThrow(/stalled/)
+    expect(aborted.sort()).toEqual(['a', 'b'])
     vi.doUnmock('@google/generative-ai')
   })
 
-  it('stops at the reply deadline even when per-model budgets would allow more', async () => {
+  it('stops at the reply deadline even before every model has been tried', async () => {
     vi.resetModules()
     configsSeen.length = 0
     mockGemini({ a: 'hang', b: 'hang', c: ['late'] })
     const { streamOrcReply: stream } = await import('@/lib/chat/orc')
-    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b', 'c'], firstTokenMs: 1000, deadlineMs: 40 })
+    const gen = stream({ system: 's', history: [], apiKey: 'k', models: ['a', 'b', 'c'], hedgeMs: 1000, deadlineMs: 40 })
     await expect(gen.next()).rejects.toThrow(/stalled/)
     expect(configsSeen.map((c) => c.model)).toEqual(['a'])
     vi.doUnmock('@google/generative-ai')
@@ -160,6 +196,21 @@ describe('streamOrcReply', () => {
     expect((await gen.next()).value).toBe('partial')
     await expect(gen.next()).rejects.toThrow(/stalled/)
     expect(configsSeen.map((c) => c.model)).toEqual(['a'])
+    vi.doUnmock('@google/generative-ai')
+  })
+
+  it('chats on Flash-Lite first with minimal thinking, Flash as the hedge, never Pro', async () => {
+    vi.resetModules()
+    configsSeen.length = 0
+    const { ORC_CHAT_MODELS } = await import('@/lib/chat/orc')
+    const { LITE_GEMINI_MODEL, WORKING_GEMINI_MODEL, PRO_GEMINI_MODEL } = await import('@/lib/gemini-models')
+    expect(ORC_CHAT_MODELS).toEqual([LITE_GEMINI_MODEL, WORKING_GEMINI_MODEL])
+    expect(ORC_CHAT_MODELS).not.toContain(PRO_GEMINI_MODEL)
+    vi.resetModules()
+    mockGemini({ [LITE_GEMINI_MODEL]: ['hi'] })
+    const { streamOrcReply: stream } = await import('@/lib/chat/orc')
+    expect((await stream({ system: 's', history: [], apiKey: 'k' }).next()).value).toBe('hi')
+    expect(configsSeen[0]).toMatchObject({ model: LITE_GEMINI_MODEL, thinkingConfig: { thinkingLevel: 'minimal' } })
     vi.doUnmock('@google/generative-ai')
   })
 

@@ -3,12 +3,12 @@
 // Most messages: build a small system prompt and stream Gemini's reply. Orc answers, drafts and
 // thinks out loud in chat itself. Only when real work is needed does it append a <plan>…</plan>
 // block, which the UI shows as a card the founder can run (lib/chat/mission.ts).
-// "What can you do?" / "Who are you?" skip the model (capabilityReply): Gemini 3.8 Flash thinks
-// before the first token and cannot turn that off.
+// "What can you do?" / "Who are you?" skip the model (capabilityReply). Everything else streams
+// from Flash-Lite first, hedged with Flash (streamOrcReply).
 // Server-side ONLY.
 
 import { BETA_DEPARTMENT_SLUGS, type BetaDepartmentSlug } from '@/lib/beta-departments'
-import { GEMINI_FALLBACK_CHAIN } from '@/lib/gemini-client'
+import { LITE_GEMINI_MODEL, WORKING_GEMINI_MODEL } from '@/lib/gemini-models'
 import { validateFacts, type ProposedFact } from '@/lib/facts/facts'
 
 export const DEPARTMENT_CAPABILITIES: Record<BetaDepartmentSlug, string> = {
@@ -170,11 +170,19 @@ export const TRAILER = '\u0000'
 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 
-/** A model that has not produced its first words by then is treated as stalled → next model. */
-export const FIRST_TOKEN_TIMEOUT_MS = 15_000
+/**
+ * Chat models, fastest first. Flash-Lite with minimal thinking starts talking in well under a
+ * second; Flash thinks before its first token. Pro is too slow for chat and is left out.
+ */
+export const ORC_CHAT_MODELS = Array.from(new Set([LITE_GEMINI_MODEL, WORKING_GEMINI_MODEL]))
+
+/** No first words by then → also ask the next model, in parallel; the first to speak wins. */
+export const HEDGE_AFTER_MS = 3_000
+/** No first words from any model by then → give up with an error. */
+export const FIRST_TOKEN_TIMEOUT_MS = 20_000
 /** Longest silence allowed mid-reply. */
 export const STREAM_IDLE_TIMEOUT_MS = 20_000
-/** Whole reply, all fallbacks included. Under POST /api/chat's 60s maxDuration so the founder gets an error, not a dead request. */
+/** Whole reply. Under POST /api/chat's 60s maxDuration so the founder gets an error, not a dead request. */
 export const REPLY_DEADLINE_MS = 50_000
 
 class StallError extends Error {}
@@ -188,27 +196,74 @@ function within<T>(p: Promise<T>, ms: number, ac: AbortController, what: string)
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
 }
 
+function sleep(ms: number): { done: Promise<'timer'>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const done = new Promise<'timer'>((resolve) => { timer = setTimeout(() => resolve('timer'), Math.max(0, ms)) })
+  return { done, cancel: () => clearTimeout(timer) }
+}
+
+/** Lite models can skip thinking ("minimal"); others get "low". Either way, fall back to no setting if rejected. */
+function thinkingVariants(modelName: string): Array<Record<string, unknown>> {
+  return [{ thinkingConfig: { thinkingLevel: /lite/i.test(modelName) ? 'minimal' : 'low' } }, {}]
+}
+
+type ChunkIt = AsyncIterator<{ text(): string }>
+interface Opened { model: string; ac: AbortController; it: ChunkIt; response: Promise<any>; first: string; done: boolean }
+
+/** Starts one model and resolves with its first non-empty text (or rejects). */
+async function openFirstText(genAI: any, modelName: string, system: string, contents: unknown, ac: AbortController): Promise<Opened> {
+  let lastErr: unknown
+  for (const extra of thinkingVariants(modelName)) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: system,
+        generationConfig: { temperature: 0.6, maxOutputTokens: 2048, ...extra },
+      })
+      const result = await model.generateContentStream({ contents }, { signal: ac.signal })
+      // A model that loses the race is aborted and its usage promise rejects with nobody awaiting it.
+      result.response.catch(() => {})
+      const it: ChunkIt = result.stream[Symbol.asyncIterator]()
+      for (;;) {
+        const step = await it.next()
+        if (step.done) throw new Error(`${modelName} returned an empty reply`)
+        const text = step.value.text()
+        if (text) return { model: modelName, ac, it, response: result.response, first: text, done: false }
+      }
+    } catch (err) {
+      lastErr = err
+      // Only a config rejection is worth retrying on the same model; anything else → caller tries another.
+      if (!(Object.keys(extra).length > 0 && /400|invalid|unknown|thinking/i.test(String((err as Error)?.message ?? err)))) throw err
+    }
+  }
+  throw lastErr
+}
+
 /**
- * Streams Orc's reply. Falls back through the Gemini chain only while nothing has been emitted
- * yet, so the founder never sees a half answer replaced by another model's answer. Gemini can
- * stall before the first token with no error; every wait is time-boxed so a stall moves on to the
- * next model instead of hanging until the function is killed.
+ * Streams Orc's reply as fast as Gemini allows. Starts the first model; if it has not produced
+ * words within hedgeMs (Gemini sometimes stalls with no error), the next model is started in
+ * parallel and whichever speaks first wins — the other is aborted. A failing model hands over at
+ * once. Model choice happens before anything is emitted, so the founder never sees a half answer
+ * replaced by another model's answer. Every wait is time-boxed.
  */
 export async function* streamOrcReply(params: {
   system: string
   history: ChatTurn[]
   apiKey?: string
   models?: string[]
+  hedgeMs?: number
   firstTokenMs?: number
   idleMs?: number
   deadlineMs?: number
 }): AsyncGenerator<string, { model: string; tokens: number }> {
-  const firstTokenMs = params.firstTokenMs ?? FIRST_TOKEN_TIMEOUT_MS
-  const idleMs = params.idleMs ?? STREAM_IDLE_TIMEOUT_MS
-  const deadline = Date.now() + (params.deadlineMs ?? REPLY_DEADLINE_MS)
-  const left = () => deadline - Date.now()
   const apiKey = params.apiKey ?? process.env.GEMINI_API_KEY ?? ''
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+  const models = params.models ?? ORC_CHAT_MODELS
+  const hedgeMs = params.hedgeMs ?? HEDGE_AFTER_MS
+  const idleMs = params.idleMs ?? STREAM_IDLE_TIMEOUT_MS
+  const start = Date.now()
+  const deadline = start + (params.deadlineMs ?? REPLY_DEADLINE_MS)
+  const firstDeadline = Math.min(deadline, start + (params.firstTokenMs ?? FIRST_TOKEN_TIMEOUT_MS))
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const genAI = new GoogleGenerativeAI(apiKey)
   const contents = params.history.map((t) => ({
@@ -216,47 +271,59 @@ export async function* streamOrcReply(params: {
     parts: [{ text: t.content }],
   }))
 
-  // Chat wants the first word fast: ask for minimal "thinking". If a model rejects that setting,
-  // retry the same model without it (all before anything is shown to the founder).
-  const variants: Array<Record<string, unknown>> = [{ thinkingConfig: { thinkingLevel: 'low' } }, {}]
+  // ── Race for the first words ──
+  type Outcome = { i: number; ok: true; v: Opened } | { i: number; ok: false; err: unknown }
+  const running = new Map<number, { ac: AbortController; p: Promise<Outcome> }>()
+  let launched = 0
   let lastErr: unknown
-  for (const modelName of params.models ?? GEMINI_FALLBACK_CHAIN) {
-    for (const extra of variants) {
-      if (left() <= 0) throw lastErr ?? new StallError('Gemini stalled: reply deadline reached')
-      let emitted = false
-      const ac = new AbortController()
-      // Before the first words: the per-model stall budget. After: the idle budget. Never past the deadline.
-      const wait = () => Math.min(emitted ? idleMs : firstTokenMs, left())
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: params.system,
-          generationConfig: { temperature: 0.6, maxOutputTokens: 2048, ...extra } as any,
-        })
-        const startedAt = Date.now()
-        const result = await within(model.generateContentStream({ contents }, { signal: ac.signal }), wait(), ac, 'response')
-        const it = result.stream[Symbol.asyncIterator]()
-        for (;;) {
-          const budget = emitted ? wait() : Math.min(firstTokenMs - (Date.now() - startedAt), left())
-          const step = await within(it.next(), budget, ac, emitted ? 'new text' : 'first token')
-          if (step.done) break
-          const text = step.value.text()
-          if (text) { emitted = true; yield text }
-        }
-        const final = await within(result.response, wait(), ac, 'usage').catch(() => null)
-        return { model: modelName, tokens: final?.usageMetadata?.totalTokenCount ?? 0 }
-      } catch (err) {
-        ac.abort()
-        if (emitted) throw err
-        lastErr = err
-        if (err instanceof StallError) {
-          console.warn(`[streamOrcReply] ${modelName}: ${err.message} — trying next model`)
-          break
-        }
-        // Only a config rejection is worth retrying on the same model; anything else → next model.
-        if (!(Object.keys(extra).length > 0 && /400|invalid|unknown|thinking/i.test(String((err as Error)?.message ?? err)))) break
-      }
+  const launch = () => {
+    const i = launched++
+    const ac = new AbortController()
+    const p = openFirstText(genAI, models[i], params.system, contents, ac)
+      .then((v): Outcome => ({ i, ok: true, v }), (err): Outcome => ({ i, ok: false, err }))
+    running.set(i, { ac, p })
+  }
+  const abortAll = () => { for (const r of running.values()) r.ac.abort(); running.clear() }
+
+  let winner: Opened | null = null
+  launch()
+  while (!winner) {
+    if (running.size === 0) {
+      if (launched >= models.length) throw lastErr ?? new Error('No Gemini model available')
+      launch()
+      continue
+    }
+    const hedge = launched < models.length ? sleep(hedgeMs) : null
+    const stop = sleep(firstDeadline - Date.now())
+    const out = await Promise.race([...Array.from(running.values()).map((r) => r.p), stop.done.then(() => 'stop' as const), ...(hedge ? [hedge.done] : [])])
+    hedge?.cancel(); stop.cancel()
+    if (out === 'stop') {
+      abortAll()
+      throw new StallError(`Gemini stalled: no first token from ${models.slice(0, launched).join(', ')} after ${firstDeadline - start}ms`)
+    }
+    if (out === 'timer') {
+      console.warn(`[streamOrcReply] no words after ${hedgeMs}ms — also asking ${models[launched]}`)
+      launch()
+      continue
+    }
+    running.delete(out.i)
+    if (out.ok) { winner = out.v; abortAll() }
+    else {
+      lastErr = out.err
+      console.warn(`[streamOrcReply] ${models[out.i]} failed: ${String((out.err as Error)?.message ?? out.err).slice(0, 200)}`)
+      if (launched < models.length) launch()
     }
   }
-  throw lastErr ?? new Error('No Gemini model available')
+
+  // ── Stream the winner ──
+  yield winner.first
+  const ac = winner.ac
+  for (;;) {
+    const step = await within(winner.it.next(), Math.min(idleMs, deadline - Date.now()), ac, 'new text')
+    if (step.done) break
+    const text = step.value.text()
+    if (text) yield text
+  }
+  const final = await within(winner.response, Math.min(idleMs, deadline - Date.now()), ac, 'usage').catch(() => null)
+  return { model: winner.model, tokens: final?.usageMetadata?.totalTokenCount ?? 0 }
 }

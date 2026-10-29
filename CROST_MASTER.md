@@ -2255,10 +2255,14 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 
 ---
 
-## Session v15.3 — Orc chat hangs: time-box Gemini
-**Date**: 2026-10-29 **Status**: ✅ COMPLETE (not deployed)
-**Why:** "What can you do?" (and plain "Hi") sometimes never got a reply. Production evidence: `POST /api/chat` hit Vercel's 60s timeout with no error logged; the user message was saved, the assistant reply never was. Gemini sometimes stalls before its first token with no error, and `streamOrcReply` awaited it with no timeout. (#21's local capability answer only covers the exact capability phrasings and went live at 21:06; the founder's 20:51 "What can you do for me?" ran on the build before it.)
+## Session v15.3 — Orc chat: fast first words, no hangs
+**Date**: 2026-10-29 **Status**: ✅ COMPLETE (pushed to main → Vercel deploy)
+**Why:** "What can you do?" (and plain "Hi") sometimes never got a reply. Production evidence: `POST /api/chat` hit Vercel's 60s timeout with no error logged; the user message was saved, the assistant reply never was. Chat ran on `gemini-3.8-flash` (no `GEMINI_MODEL*` overrides in Vercel), which always thinks before its first token, and Gemini sometimes stalls with no error; `streamOrcReply` waited with no timeout. (#21's local capability answer only covers exact capability phrasings and went live at 21:06; the founder's 20:51 "What can you do for me?" ran on the build before it.)
 
-- `lib/chat/orc.ts` `streamOrcReply`: every wait is raced against a timer and the request is aborted (`signal`) when it fires. Before the first token: 15s per model (`FIRST_TOKEN_TIMEOUT_MS`), then the next model in the chain. Mid-reply silence: 20s (`STREAM_IDLE_TIMEOUT_MS`) → error (no model switch after text is shown). Whole reply incl. fallbacks: 50s (`REPLY_DEADLINE_MS`), under the route's 60s `maxDuration`, so the founder gets the "couldn't reach the model" error trailer instead of a dead request. A stall is not retried on the same model without `thinkingConfig`.
-- Tests: `chat-orc.test.ts` +4 (stall → next model, all stall → error, deadline caps fallbacks, mid-reply stall → error). Fail on the old code (hang), pass now. 854 unit tests green; `tsc` clean. Lint errors that predate this change (HomeSections, company-memo) are untouched.
-- Ops note: logs show functions running in `fra1` although `vercel.json` pins `dub1`. Worth checking the project's function region setting (DB is eu-west-1).
+- `lib/chat/orc.ts` `streamOrcReply`:
+  - **Lighter model first:** `ORC_CHAT_MODELS` = Flash-Lite (`thinkingLevel: 'minimal'`), then Flash (`'low'`); Pro is not used for chat. Both env-overridable via `GEMINI_MODEL_LITE` / `GEMINI_MODEL`.
+  - **Hedged start:** if the first model has no words after 3s (`HEDGE_AFTER_MS`), the next model is started in parallel; first to speak wins, the other is aborted (`signal`). A failing model (404 etc.) hands over at once. The model is chosen before anything is shown, so no half answer gets replaced.
+  - **Time limits:** no first words from any model by 20s → error; 20s silence mid-reply → error; 50s overall (under the route's 60s `maxDuration`) → the founder gets the "couldn't reach the model" trailer, never a dead request. Losers' `response` promises are caught (no unhandled rejection).
+- Tests: `chat-orc.test.ts` hedge winner + loser aborted, no hedge when fast, stall → next model, all stall → error + all aborted, deadline, mid-reply stall, Flash-Lite-first/minimal/no-Pro. 853 unit tests green; `tsc`, lint (changed files), `next build` clean. Repo-wide lint errors that predate this (HomeSections, company-memo) are untouched.
+- Not measured live (no key in the dev container; Google/Vercel docs hosts blocked). Watch the `[streamOrcReply]` warnings in Vercel logs: frequent "also asking" lines mean Flash-Lite is stalling often.
+- Ops note: logs show functions in `fra1` although `vercel.json` pins `dub1`; check the project's function region (DB is eu-west-1).
