@@ -2,7 +2,7 @@
  * Chat-first Orc: prompt, plan protocol, streaming fallback, markdown safety, plan → mission mapping.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { buildOrcSystemPrompt, extractPlan, validatePlan, visibleText, streamOrcReply } from '@/lib/chat/orc'
+import { buildOrcSystemPrompt, capabilityReply, extractPlan, isCapabilityQuestion, validatePlan, visibleText, streamOrcReply } from '@/lib/chat/orc'
 import { renderMarkdown } from '@/lib/chat/markdown'
 
 vi.mock('@/lib/supabase', () => ({ createServerSupabaseClient: vi.fn() }))
@@ -23,6 +23,26 @@ describe('buildOrcSystemPrompt', () => {
     const p = buildOrcSystemPrompt({})
     expect(p).toMatch(/never claim you sent, posted, paid or booked/i)
     expect(p).toMatch(/Most messages need no departments/)
+  })
+})
+
+describe('capability fast path', () => {
+  it('matches the suggestion chip and plain "what can you do", not a real task', () => {
+    for (const q of ['What can you do?', 'what can you do', 'What can you do for me?', 'Who are you?', 'How can you help?', 'help']) {
+      expect(isCapabilityQuestion(q)).toBe(true)
+    }
+    for (const q of ['What can you do about our churn?', 'Help me plan this week', 'Who are you targeting?', 'Draft a launch post']) {
+      expect(isCapabilityQuestion(q)).toBe(false)
+    }
+  })
+
+  it('answers from company context without a plan or invented figures', () => {
+    const reply = capabilityReply({ companyName: 'Acme', founderName: 'Joy' })
+    expect(reply).toContain('chief of staff for Joy at Acme')
+    expect(reply).toContain('Marketing:')
+    expect(reply).toContain('Nothing is sent, posted, paid, or booked')
+    expect(reply).not.toMatch(/<plan>|<facts>/)
+    expect(capabilityReply({})).toContain("I'm Orc, your chief of staff.")
   })
 })
 

@@ -9,7 +9,7 @@ import { requireUser } from '@/lib/auth/guard'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { checkTokenBudget } from '@/lib/engine/budget'
 import { logUsage } from '@/lib/usage-logger'
-import { buildOrcSystemPrompt, extractBlocks, streamOrcReply, TRAILER } from '@/lib/chat/orc'
+import { buildOrcSystemPrompt, capabilityReply, extractBlocks, isCapabilityQuestion, streamOrcReply, TRAILER } from '@/lib/chat/orc'
 import { listFacts } from '@/lib/facts/store'
 import { formatFactsForPrompt } from '@/lib/facts/facts'
 import { addMessage, createChat, getOwnedChat, loadCompanyContext, loadHistory } from '@/lib/chat/store'
@@ -39,14 +39,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'A message is required.', code: 'VALIDATION_ERROR' }, { status: 400 })
   }
 
+  // Capabilities ("what can you do?") are a fixed answer. Gemini 3.8 Flash thinks before the
+  // first token and cannot turn that off, so this path never calls the model.
+  const capability = isCapabilityQuestion(body.message)
+
   // Everything Orc needs before it can start typing, fetched in parallel (latency matters here).
   const [budget, owned, history, ctx, facts] = await Promise.all([
-    checkTokenBudget(userId),
+    capability ? Promise.resolve({ allowed: true }) : checkTokenBudget(userId),
     body.chat_id ? getOwnedChat(body.chat_id, userId) : Promise.resolve(null),
-    body.chat_id ? loadHistory(body.chat_id, userId) : Promise.resolve([]),
+    !capability && body.chat_id ? loadHistory(body.chat_id, userId) : Promise.resolve([]),
     loadCompanyContext(userId),
-    // Facts sharpen the answer but must never block it.
-    listFacts(userId).catch((err) => { console.error('[POST /api/chat] facts unavailable:', err); return [] }),
+    // Facts sharpen the answer but must never block it. Unused on the capabilities fast path.
+    capability
+      ? Promise.resolve([])
+      : listFacts(userId).catch((err) => { console.error('[POST /api/chat] facts unavailable:', err); return [] }),
   ])
   if (!budget.allowed) {
     return NextResponse.json({ success: false, error: 'Daily free usage reached. It resets tomorrow.', code: 'TOKEN_BUDGET' }, { status: 429 })
@@ -65,7 +71,12 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let full = ''
       try {
-        const gen = streamOrcReply({ system, history: turns })
+        const gen = capability
+          ? (async function* () {
+              yield capabilityReply(ctx)
+              return { model: 'local', tokens: 0 }
+            })()
+          : streamOrcReply({ system, history: turns })
         let step = await gen.next()
         while (!step.done) {
           full += step.value
@@ -84,10 +95,12 @@ export async function POST(req: NextRequest) {
           content: reply || (plan ? `Here's how I'd run "${plan.title}".` : proposed.length ? 'Want me to remember this?' : ''),
           meta,
         })
-        logUsage({
-          userId, model: `gemini/${model}`, provider: 'gemini', keyType: 'system',
-          promptTokens: 0, completionTokens: tokens, totalTokens: tokens,
-        }).catch(() => {})
+        if (model !== 'local') {
+          logUsage({
+            userId, model: `gemini/${model}`, provider: 'gemini', keyType: 'system',
+            promptTokens: 0, completionTokens: tokens, totalTokens: tokens,
+          }).catch(() => {})
+        }
         controller.enqueue(enc.encode(TRAILER + JSON.stringify({ chat_id: finalChatId, message_id: saved.id, plan, facts: proposed })))
       } catch (err) {
         console.error('[POST /api/chat] reply failed:', err)
