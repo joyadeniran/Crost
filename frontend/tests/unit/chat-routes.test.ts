@@ -25,11 +25,13 @@ vi.mock('@/lib/chat/store', () => store)
 
 let streamChunks: string[] = []
 let streamFails = false
+let streamCalls = 0
 vi.mock('@/lib/chat/orc', async (orig) => {
   const real = await orig<typeof import('@/lib/chat/orc')>()
   return {
     ...real,
     streamOrcReply: async function* () {
+      streamCalls += 1
       if (streamFails) throw new Error('model down')
       for (const c of streamChunks) yield c
       return { model: 'gemini-test', tokens: 10 }
@@ -62,6 +64,7 @@ beforeEach(() => {
   budget.mockResolvedValue({ allowed: true })
   streamChunks = ['Hi ', 'there.']
   streamFails = false
+  streamCalls = 0
 })
 
 describe('POST /api/chat', () => {
@@ -85,14 +88,28 @@ describe('POST /api/chat', () => {
   })
 
   it('creates a chat, streams the reply and saves both messages', async () => {
-    const res = await chatPOST(req('http://x/api/chat', { message: 'What can you do?' }))
+    const res = await chatPOST(req('http://x/api/chat', { message: 'How is the pipeline looking?' }))
     expect(res.status).toBe(200)
     expect(res.headers.get('X-Chat-Id')).toBe('11111111-1111-4111-8111-111111111111')
     const { reply, trailer } = await readAll(res)
     expect(reply).toBe('Hi there.')
     expect(trailer).toMatchObject({ message_id: 'msg-assistant', plan: null })
-    expect(store.addMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({ role: 'user', content: 'What can you do?', userId: 'user-1' }))
+    expect(store.addMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({ role: 'user', content: 'How is the pipeline looking?', userId: 'user-1' }))
     expect(store.addMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({ role: 'assistant', content: 'Hi there.' }))
+  })
+
+  it('answers "what can you do" locally, without the model, budget check, or history load', async () => {
+    store.loadCompanyContext.mockResolvedValueOnce({ companyName: 'Acme', founderName: 'Joy' })
+    const res = await chatPOST(req('http://x/api/chat', { message: 'What can you do for me?' }))
+    expect(res.status).toBe(200)
+    const { reply, trailer } = await readAll(res)
+    expect(streamCalls).toBe(0)
+    expect(budget).not.toHaveBeenCalled()
+    expect(store.loadHistory).not.toHaveBeenCalled()
+    expect(reply).toContain('chief of staff for Joy at Acme')
+    expect(reply).toContain('Marketing:')
+    expect(trailer).toMatchObject({ message_id: 'msg-assistant', plan: null, facts: [] })
+    expect(store.addMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({ role: 'assistant', content: reply, meta: {} }))
   })
 
   it('stores a proposed plan in the assistant message meta and strips it from the text', async () => {

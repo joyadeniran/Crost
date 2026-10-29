@@ -1,8 +1,10 @@
 // lib/chat/orc.ts — Orc as a chat assistant.
 //
-// One fast path for every message: build a small system prompt, stream Gemini's reply. Orc answers,
-// drafts and thinks out loud in chat itself. Only when real work is needed does it append a
-// <plan>…</plan> block, which the UI shows as a card the founder can run (lib/chat/mission.ts).
+// Most messages: build a small system prompt and stream Gemini's reply. Orc answers, drafts and
+// thinks out loud in chat itself. Only when real work is needed does it append a <plan>…</plan>
+// block, which the UI shows as a card the founder can run (lib/chat/mission.ts).
+// "What can you do?" / "Who are you?" skip the model (capabilityReply): Gemini 3.8 Flash thinks
+// before the first token and cannot turn that off.
 // Server-side ONLY.
 
 import { BETA_DEPARTMENT_SLUGS, type BetaDepartmentSlug } from '@/lib/beta-departments'
@@ -14,6 +16,45 @@ export const DEPARTMENT_CAPABILITIES: Record<BetaDepartmentSlug, string> = {
   engineering: 'technical plans, specs, architecture notes, API designs, scripts and code',
   sales: 'pitches, outreach sequences, lead research, pipeline plans, proposals',
   operations: 'processes, checklists, budgets, vendor comparisons, timelines, risk reviews',
+}
+
+const DEPARTMENT_LABEL: Record<BetaDepartmentSlug, string> = {
+  marketing: 'Marketing',
+  engineering: 'Engineering',
+  sales: 'Sales',
+  operations: 'Operations',
+}
+
+/**
+ * Identity / capabilities questions have a fixed answer. Gemini 3.8 Flash cannot turn thinking
+ * off, so sending these to the model makes the founder wait on a reasoning pass before the
+ * first word. Match the whole message only — "what can you do about churn?" is a real ask.
+ */
+const CAPABILITY_QUESTION =
+  /^(?:what (?:can|do) you do(?: for (?:me|us))?|who are you|what are you|how (?:can|do) you help(?: me| us)?|what(?:'s| is) your (?:job|role)|help)$/i
+
+export function isCapabilityQuestion(input: string): boolean {
+  return CAPABILITY_QUESTION.test(input.trim().replace(/[.!?\s]+$/g, ''))
+}
+
+/** Instant reply for isCapabilityQuestion. No model, no plan, no invented company facts. */
+export function capabilityReply(ctx: CompanyContext): string {
+  const company = ctx.companyName?.trim()
+  const founder = ctx.founderName?.trim()
+  const intro = company
+    ? `I'm Orc, chief of staff${founder ? ` for ${founder}` : ''} at ${company}.`
+    : `I'm Orc, your chief of staff.`
+  const team = BETA_DEPARTMENT_SLUGS.map((s) => `- ${DEPARTMENT_LABEL[s]}: ${DEPARTMENT_CAPABILITIES[s]}`)
+  return [
+    intro,
+    '',
+    'Right here in chat I can answer questions, give advice, and draft small things — a post, an email, a few bullets — without spinning up a mission.',
+    '',
+    'When you want a real deliverable, I put a short plan together and the team does the work:',
+    ...team,
+    '',
+    'Nothing is sent, posted, paid, or booked until you approve it. What should we work on?',
+  ].join('\n')
 }
 
 export interface CompanyContext {
