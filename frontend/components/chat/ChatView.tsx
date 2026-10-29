@@ -310,12 +310,33 @@ function FactsCard({ facts, saved, chatId, messageId }: { facts: Fact[]; saved: 
 
 type Progress = {
   status: string
-  tasks: Array<{ task_id: string; label: string; dept_slug: string; status: string; question?: string | null }>
+  tasks: Array<{ task_id: string; label: string; dept_slug: string; status: string; started_at?: string | null; question?: string | null }>
   approvals_pending: number
   artifacts: number
 }
 
 const DONE = new Set(['completed', 'failed', 'cancelled', 'error'])
+const WORKING = new Set(['running', 'dispatched'])
+const TASK_DONE = new Set(['completed', 'failed', 'failed_permanent', 'rejected', 'skipped', 'expired'])
+
+/** "0:42", "2:05" — how long a step has been working. */
+function elapsed(fromIso: string | null | undefined, now: number): string {
+  const s = fromIso ? Math.max(0, Math.floor((now - new Date(fromIso).getTime()) / 1000)) : 0
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** Current time, re-rendering every second while `on` (drives the step timers; no network). */
+function useTicker(on: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!on) return
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [on])
+  return now
+}
+
 const TASK_TEXT: Record<string, string> = {
   planned: 'Queued', pending: 'Queued', pending_dependency: 'Waiting on a step', approved: 'Queued',
   dispatched: 'Working', running: 'Working', completed: 'Done', failed: 'Failed', failed_permanent: 'Failed',
@@ -340,10 +361,14 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
 
   const finished = p && DONE.has(p.status)
   const doneCount = p?.tasks.filter((t) => t.status === 'completed').length ?? 0
+  const anyWorking = !finished && !!p?.tasks.some((t) => WORKING.has(t.status))
+  // Every step is done but the goal isn't closed yet: Orc is writing the mission report.
+  const reporting = !!p && !finished && p.tasks.length > 0 && p.tasks.every((t) => TASK_DONE.has(t.status))
+  const now = useTicker(anyWorking)
 
   return (
     <div className="card mission-card">
-      <div className="eyebrow">{finished ? (p!.status === 'completed' ? 'Mission complete' : 'Mission stopped') : 'Mission running'}</div>
+      <div className="eyebrow">{!finished && <span className="live-dot" />}{finished ? (p!.status === 'completed' ? 'Mission complete' : 'Mission stopped') : 'Mission running'}</div>
       <div className="card-title">{title}</div>
       {p ? (
         <ul className="mission-steps">
@@ -352,7 +377,11 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
               <span className="dot" />
               <span className="dept-tag">{DEPT_LABEL[t.dept_slug] ?? t.dept_slug}</span>
               <span className="step-label">{t.label}</span>
-              <span className="step-state">{TASK_TEXT[t.status] ?? t.status}</span>
+              <span className="step-state">
+                {WORKING.has(t.status) && !finished
+                  ? <><span className="live-dot" />Working · {elapsed(t.started_at, now)}</>
+                  : (TASK_TEXT[t.status] ?? t.status)}
+              </span>
               {t.status === 'needs_data' && (
                 <StepQuestion goalId={goalId} taskId={t.task_id} question={t.question} onResumed={() => {
                   setP((prev) => prev && { ...prev, tasks: prev.tasks.map((x) => (x.task_id === t.task_id ? { ...x, status: 'planned', question: null } : x)) })
@@ -365,6 +394,7 @@ function MissionCard({ goalId, title }: { goalId: string; title: string }) {
       ) : (
         <div className="typing"><span /><span /><span /></div>
       )}
+      {reporting && <div className="mission-reporting"><span className="live-dot" />Orc is writing the mission report…</div>}
       <div className="card-actions">
         {p && p.approvals_pending > 0 && (
           <Link className="pill-btn solid" href="/app/notifications">Review {p.approvals_pending} approval{p.approvals_pending > 1 ? 's' : ''}</Link>

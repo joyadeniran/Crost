@@ -2266,3 +2266,13 @@ The beta is open signup, so the landing CTA is now a single "Try the beta" butto
 - Tests: `chat-orc.test.ts` hedge winner + loser aborted, no hedge when fast, stall → next model, all stall → error + all aborted, deadline, mid-reply stall, Flash-Lite-first/minimal/no-Pro. 853 unit tests green; `tsc`, lint (changed files), `next build` clean. Repo-wide lint errors that predate this (HomeSections, company-memo) are untouched.
 - Not measured live (no key in the dev container; Google/Vercel docs hosts blocked). Watch the `[streamOrcReply]` warnings in Vercel logs: frequent "also asking" lines mean Flash-Lite is stalling often.
 - Ops note: logs show functions in `fra1` although `vercel.json` pins `dub1`; check the project's function region (DB is eu-west-1).
+
+---
+
+## Session v15.4 — Missions: faster department calls, visible progress
+**Date**: 2026-10-29 **Status**: ✅ COMPLETE (pushed to main → Vercel deploy)
+**Why:** A one-step mission ("5 one-liners") took 4m13s: 2m24s in the department's Gemini call, then 1m49s writing the mission report, while the card showed a static "Working" (the animated step dot is hidden on phones).
+
+- `lib/gemini-client.ts` `callGemini` (every engine call: department work, plans, reports): asks for `thinkingLevel: 'low'` (Flash-Lite: `'minimal'`), retried on the same model without it if rejected; each call is abandoned after 60s (`GEMINI_CALL_TIMEOUT_MS`, request aborted) so `callLLM` falls back to the next model instead of the task sitting "running".
+- Mission card (`ChatView.tsx` `MissionCard`): pulsing amber dot on "Mission running" and on each working step (shown on phones too), a live "Working · 0:42" timer from `goal_tasks.assigned_at` (ticks locally, no extra polling), and "Orc is writing the mission report…" once every step is done but the goal hasn't closed. `GET /api/goals/[id]/status` now returns `started_at` per step (additive).
+- Tests: `gemini-client.test.ts` +4 (thinking levels, rejected-setting retry, stall timeout, other errors pass through), new `goal-status-route.test.ts` (started_at, owner scoping, 404). 859 unit tests green; `tsc`, lint (changed files), `next build` clean.
